@@ -209,8 +209,9 @@ const AdminLayout = () => {
           <div className="space-y-1 px-2">
             {navItems.map((item) => {
               const Icon = item.icon;
-              const isActive = location.pathname === item.to || 
-                (item.to === '/admin' && location.pathname === '/admin');
+              const isActive = item.to === '/admin' 
+  ? location.pathname === '/admin' || location.pathname === '/admin/'
+  : location.pathname === item.to;
               
               return (
                 <NavLink
