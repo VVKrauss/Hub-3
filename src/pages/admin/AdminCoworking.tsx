@@ -1,14 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+// src/pages/admin/AdminCoworking.tsx - ИСПРАВЛЕННАЯ ВЕРСИЯ
+import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Search, Edit, Trash2, ChevronUp, ChevronDown, Save, X, Upload } from 'lucide-react';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../../lib/supabase';
+import { toast } from 'react-hot-toast';
 import ReactCrop, { Crop, PixelCrop, centerCrop, makeAspectCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
-import { canvasPreview } from './canvasPreview';
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
 
 type CoworkingService = {
   id: string;
@@ -24,9 +20,12 @@ type CoworkingService = {
 };
 
 type CoworkingHeader = {
-  id: string;
+  id?: string;
   title: string;
   description: string;
+  address?: string;
+  phone?: string;
+  working_hours?: string;
 };
 
 function centerAspectCrop(
@@ -52,8 +51,15 @@ function centerAspectCrop(
 const AdminCoworking = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [services, setServices] = useState<CoworkingService[]>([]);
-  const [headerData, setHeaderData] = useState<CoworkingHeader>({ id: '', title: '', description: '' });
+  const [headerData, setHeaderData] = useState<CoworkingHeader>({ 
+    title: '', 
+    description: '',
+    address: '',
+    phone: '',
+    working_hours: ''
+  });
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editData, setEditData] = useState<Partial<CoworkingService> | null>(null);
   const [newService, setNewService] = useState<Omit<CoworkingService, 'id' | 'order'>>({
@@ -90,6 +96,7 @@ const AdminCoworking = () => {
     try {
       setLoading(true);
       
+      // Загружаем услуги коворкинга (эта таблица осталась)
       const { data: servicesData, error: servicesError } = await supabase
         .from('coworking_info_table')
         .select('*')
@@ -98,17 +105,43 @@ const AdminCoworking = () => {
       if (servicesError) throw servicesError;
       setServices(servicesData || []);
       
-      const { data: headerData, error: headerError } = await supabase
-        .from('site_settings') .select('coworking_header_settings')
-        .select('*')
-        .maybeSingle();
+      // Загружаем заголовок из консолидированной таблицы site_settings
+      const { data: settingsData, error: settingsError } = await supabase
+        .from('site_settings')
+        .select('coworking_header_settings')
+        .single();
 
-      if (headerError) throw headerError;
-      setHeaderData(headerData || { id: '', title: '', description: '' });
+      if (settingsError) {
+        console.error('Error fetching settings:', settingsError);
+        // Если нет записи, создаем дефолтную структуру
+        if (settingsError.code === 'PGRST116') {
+          const defaultHeader: CoworkingHeader = {
+            title: 'Коворкинг пространство',
+            description: 'Комфортные рабочие места для исследователей и стартапов',
+            address: 'Сараевская, 48',
+            phone: '+381',
+            working_hours: '10:00-18:00'
+          };
+          setHeaderData(defaultHeader);
+          return;
+        }
+        throw settingsError;
+      }
+      
+      // Извлекаем данные заголовка коворкинга из консолидированной структуры
+      const headerFromSettings = settingsData?.coworking_header_settings || {};
+      setHeaderData({
+        title: headerFromSettings.title || '',
+        description: headerFromSettings.description || '',
+        address: headerFromSettings.address || '',
+        phone: headerFromSettings.phone || '',
+        working_hours: headerFromSettings.working_hours || ''
+      });
       
     } catch (err) {
       console.error('Error fetching data:', err);
       setError('Не удалось загрузить данные');
+      toast.error('Не удалось загрузить данные');
     } finally {
       setLoading(false);
     }
@@ -118,66 +151,82 @@ const AdminCoworking = () => {
     if (e.target.files && e.target.files.length > 0) {
       setCrop(undefined);
       const reader = new FileReader();
-      reader.addEventListener('load', () => {
-        setImgSrc(reader.result?.toString() || '');
-      });
+      reader.addEventListener('load', () =>
+        setImgSrc(reader.result?.toString() || ''),
+      );
       reader.readAsDataURL(e.target.files[0]);
     }
   };
 
   const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const { width, height } = e.currentTarget;
-    const newCrop = centerAspectCrop(width, height, 1);
-    setCrop(newCrop);
+    setCrop(centerAspectCrop(width, height, 16 / 9));
+  };
+
+  const canvasPreview = async (
+    image: HTMLImageElement,
+    canvas: HTMLCanvasElement,
+    crop: PixelCrop,
+  ) => {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const pixelRatio = window.devicePixelRatio;
+    const scaleX = image.naturalWidth / image.width;
+    const scaleY = image.naturalHeight / image.height;
+
+    canvas.width = Math.floor(crop.width * scaleX * pixelRatio);
+    canvas.height = Math.floor(crop.height * scaleY * pixelRatio);
+
+    ctx.scale(pixelRatio, pixelRatio);
+    ctx.imageSmoothingQuality = 'high';
+
+    const cropX = crop.x * scaleX;
+    const cropY = crop.y * scaleY;
+
+    ctx.save();
+    ctx.drawImage(
+      image,
+      cropX,
+      cropY,
+      crop.width * scaleX,
+      crop.height * scaleY,
+      0,
+      0,
+      crop.width,
+      crop.height,
+    );
+    ctx.restore();
   };
 
   const uploadImage = async () => {
-    if (!previewCanvasRef.current || !completedCrop || !imgRef.current) return;
+    if (!previewCanvasRef.current || !completedCrop) return;
 
-    setUploading(true);
     try {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+      setUploading(true);
 
-      canvas.width = 500;
-      canvas.height = 500;
-
-      const scaleX = imgRef.current.naturalWidth / imgRef.current.width;
-      const scaleY = imgRef.current.naturalHeight / imgRef.current.height;
-
-      const cropX = completedCrop.x * scaleX;
-      const cropY = completedCrop.y * scaleY;
-      const cropWidth = completedCrop.width * scaleX;
-      const cropHeight = completedCrop.height * scaleY;
-
-      ctx.drawImage(
-        imgRef.current,
-        cropX, cropY,
-        cropWidth, cropHeight,
-        0, 0,
-        500,
-        500
-      );
-
-      canvas.toBlob(async (blob) => {
+      previewCanvasRef.current.toBlob(async (blob) => {
         if (!blob) return;
 
-        const fileExt = 'jpg';
-        const fileName = `${Math.random()}.${fileExt}`;
-        const filePath = `coworking/${fileName}`;
+        const timestamp = Date.now();
+        const fileName = `coworking-${timestamp}.jpg`;
 
-        const { error: uploadError } = await supabase.storage
+        const { data: uploadData, error: uploadError } = await supabase.storage
           .from('images')
-          .upload(filePath, blob);
+          .upload(`coworking/${fileName}`, blob, {
+            contentType: 'image/jpeg',
+            upsert: false
+          });
 
         if (uploadError) throw uploadError;
 
-        const { data: { publicUrl } } = supabase.storage
+        const { data: publicUrlData } = supabase.storage
           .from('images')
-          .getPublicUrl(filePath);
+          .getPublicUrl(`coworking/${fileName}`);
 
-        if (editData?.id) {
+        const publicUrl = publicUrlData.publicUrl;
+
+        if (editData) {
           setEditData({ ...editData, image_url: publicUrl });
         } else {
           setNewService({ ...newService, image_url: publicUrl });
@@ -185,44 +234,51 @@ const AdminCoworking = () => {
 
         setImgSrc('');
         setUploading(false);
+        toast.success('Изображение успешно загружено');
       }, 'image/jpeg', 0.9);
     } catch (err) {
       console.error('Error uploading image:', err);
       setError('Ошибка при загрузке изображения');
       setUploading(false);
+      toast.error('Ошибка при загрузке изображения');
     }
   };
 
   const handleSaveHeader = async () => {
     try {
-      const dataToSave = { ...headerData };
+      setSaving(true);
       
-      if (!dataToSave.id) {
-        dataToSave.id = crypto.randomUUID();
+      // Получаем ID записи site_settings
+      const { data: currentSettings, error: fetchError } = await supabase
+        .from('site_settings')
+        .select('id')
+        .single();
+      
+      if (fetchError) {
+        console.error('Error fetching site settings ID:', fetchError);
+        throw fetchError;
       }
+      
+      // Обновляем заголовок коворкинга в консолидированной таблице
+      const { error } = await supabase
+        .from('site_settings')
+        .update({ 
+          coworking_header_settings: headerData 
+        })
+        .eq('id', currentSettings.id);
 
-      if (headerData.id) {
-        const { error } = await supabase
-          .from('site_settings') .select('coworking_header_settings')
-          .update(dataToSave)
-          .eq('id', headerData.id);
-        
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('site_settings')      .select('coworking_header_settings')
-          .insert([dataToSave]);
-        
-        if (error) throw error;
-      }
+      if (error) throw error;
       
-      setHeaderData(dataToSave);
+      toast.success('Заголовок успешно сохранен');
       setError(null);
     } catch (err) {
       console.error('Error saving header:', err);
       setError('Ошибка при сохранении заголовка');
+      toast.error('Ошибка при сохранении заголовка');
+    } finally {
+      setSaving(false);
     }
-  };   
+  };
 
   const handleSaveService = async () => {
     try {
@@ -234,33 +290,41 @@ const AdminCoworking = () => {
         .eq('id', editData.id);
 
       if (error) throw error;
+      
       await fetchData();
       setEditData(null);
       setShowForm(false);
+      toast.success('Услуга успешно обновлена');
     } catch (err) {
       console.error('Error saving service:', err);
       setError('Ошибка при сохранении');
+      toast.error('Ошибка при сохранении');
     }
   };
 
   const handleAddService = async () => {
     try {
-      if (!newService.name || newService.price <= 0) return;
+      if (!newService.name || newService.price <= 0) {
+        toast.error('Заполните название и цену');
+        return;
+      }
 
       const maxOrder = services.reduce((max, service) => 
-        service.order > max ? service.order : max, 0);
+        service.order > max ? service.order : max, 0
+      );
 
-      const { data, error } = await supabase
+      const serviceToAdd = {
+        ...newService,
+        order: maxOrder + 1
+      };
+
+      const { error } = await supabase
         .from('coworking_info_table')
-        .insert([{
-          ...newService,
-          order: maxOrder + 1
-        }])
-        .select();
+        .insert([serviceToAdd]);
 
       if (error) throw error;
-      
-      setServices(prev => [...prev, ...(data || [])]);
+
+      await fetchData();
       setNewService({
         name: '',
         description: '',
@@ -272,13 +336,17 @@ const AdminCoworking = () => {
         main_service: true
       });
       setShowForm(false);
+      toast.success('Услуга успешно добавлена');
     } catch (err) {
       console.error('Error adding service:', err);
-      setError('Ошибка при добавлении услуги');
+      setError('Ошибка при добавлении');
+      toast.error('Ошибка при добавлении');
     }
   };
 
   const handleDeleteService = async (id: string) => {
+    if (!confirm('Удалить услугу?')) return;
+
     try {
       const { error } = await supabase
         .from('coworking_info_table')
@@ -286,489 +354,501 @@ const AdminCoworking = () => {
         .eq('id', id);
 
       if (error) throw error;
-      setServices(prev => prev.filter(service => service.id !== id));
+      
+      await fetchData();
+      toast.success('Услуга удалена');
     } catch (err) {
       console.error('Error deleting service:', err);
-      setError('Ошибка при удалении услуги');
+      setError('Ошибка при удалении');
+      toast.error('Ошибка при удалении');
     }
   };
 
-  const handleMoveService = async (id: string, direction: 'up' | 'down') => {
+  const moveService = async (id: string, direction: 'up' | 'down') => {
+    const currentIndex = services.findIndex(s => s.id === id);
+    if (currentIndex === -1) return;
+
+    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (newIndex < 0 || newIndex >= services.length) return;
+
     try {
-      const index = services.findIndex(s => s.id === id);
-      if (index === -1) return;
+      const updates = [
+        {
+          id: services[currentIndex].id,
+          order: services[newIndex].order
+        },
+        {
+          id: services[newIndex].id,
+          order: services[currentIndex].order
+        }
+      ];
 
-      const newIndex = direction === 'up' ? index - 1 : index + 1;
-      if (newIndex < 0 || newIndex >= services.length) return;
+      for (const update of updates) {
+        const { error } = await supabase
+          .from('coworking_info_table')
+          .update({ order: update.order })
+          .eq('id', update.id);
 
-      const tempOrder = services[index].order;
-      const updatedServices = [...services];
-      
-      updatedServices[index].order = updatedServices[newIndex].order;
-      updatedServices[newIndex].order = tempOrder;
+        if (error) throw error;
+      }
 
-      setServices(updatedServices.sort((a, b) => a.order - b.order));
-
-      await supabase
-        .from('coworking_info_table')
-        .update({ order: updatedServices[index].order })
-        .eq('id', updatedServices[index].id);
-
-      await supabase
-        .from('coworking_info_table')
-        .update({ order: updatedServices[newIndex].order })
-        .eq('id', updatedServices[newIndex].id);
-
+      await fetchData();
     } catch (err) {
       console.error('Error moving service:', err);
-      setError('Ошибка при изменении порядка');
+      setError('Ошибка при перемещении');
+      toast.error('Ошибка при перемещении');
     }
   };
 
-const formatPrice = (service: CoworkingService) => {
-  const currencySymbol = service.currency === 'euro' ? '€' : 
-                        service.currency === 'кофе' ? '☕' : 'RSD';
-  return `${service.price} ${currencySymbol}/${service.period}`;
-};
+  const filteredServices = services.filter(service =>
+    service.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    service.description.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 w-64 bg-gray-200 dark:bg-dark-700 rounded"></div>
-          <div className="h-12 bg-gray-200 dark:bg-dark-700 rounded"></div>
-          <div className="h-64 bg-gray-200 dark:bg-dark-700 rounded"></div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="p-6">
-        <div className="text-red-600 dark:text-red-400 p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
-          {error}
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
-          Управление услугами коворкинга
-        </h2>
-        <button
-          onClick={() => {
-            setEditData(null);
-            setNewService({
-              name: '',
-              description: '',
-              price: 0,
-              currency: 'euro',
-              period: 'час',
-              active: true,
-              image_url: '',
-              main_service: true
-            });
-            setShowForm(true);
-          }}
-          className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
-        >
-          <Plus size={18} />
-          Добавить услугу
-        </button>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-dark-900 dark:via-dark-900 dark:to-dark-800 py-8 font-sans">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Заголовок */}
+        <div className="mb-12 text-center">
+          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-primary-600 via-primary-500 to-secondary-500 bg-clip-text text-transparent mb-4 font-heading">
+            Управление коворкингом
+          </h1>
+          <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto leading-relaxed">
+            Настройте информацию о коворкинг пространстве и услугах
+          </p>
+        </div>
 
-      {/* Header Section */}
-      <div className="bg-white dark:bg-dark-800 rounded-lg shadow overflow-hidden mb-8">
-        <div className="p-6 border-b border-gray-200 dark:border-dark-700">
-          <h3 className="font-medium mb-4 text-gray-900 dark:text-white">
-            Заголовок страницы
-          </h3>
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <p className="text-red-600 dark:text-red-400">{error}</p>
+          </div>
+        )}
+
+        {/* Header Settings */}
+        <div className="bg-white dark:bg-dark-800 rounded-2xl shadow-lg p-8 border border-gray-100 dark:border-gray-700 mb-8">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white font-heading">
+              Настройки заголовка
+            </h2>
+            <button
+              onClick={handleSaveHeader}
+              disabled={saving}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+            >
+              {saving ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  Сохранение...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  Сохранить заголовок
+                </>
+              )}
+            </button>
+          </div>
           
-          <div className="grid grid-cols-1 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Заголовок</label>
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                Заголовок
+              </label>
               <input
                 type="text"
                 value={headerData.title}
                 onChange={(e) => setHeaderData({...headerData, title: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-dark-700 rounded-lg focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-800"
+                className="w-full p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
+                placeholder="Название коворкинг пространства"
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Описание</label>
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                Адрес
+              </label>
+              <input
+                type="text"
+                value={headerData.address || ''}
+                onChange={(e) => setHeaderData({...headerData, address: e.target.value})}
+                className="w-full p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
+                placeholder="Адрес коворкинга"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                Телефон
+              </label>
+              <input
+                type="text"
+                value={headerData.phone || ''}
+                onChange={(e) => setHeaderData({...headerData, phone: e.target.value})}
+                className="w-full p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
+                placeholder="+381 XX XXX XXXX"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                Часы работы
+              </label>
+              <input
+                type="text"
+                value={headerData.working_hours || ''}
+                onChange={(e) => setHeaderData({...headerData, working_hours: e.target.value})}
+                className="w-full p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
+                placeholder="10:00-18:00"
+              />
+            </div>
+            
+            <div className="md:col-span-2">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                Описание
+              </label>
               <textarea
                 value={headerData.description}
                 onChange={(e) => setHeaderData({...headerData, description: e.target.value})}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-dark-700 rounded-lg focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-800"
+                rows={4}
+                className="w-full p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
+                placeholder="Описание коворкинг пространства"
               />
             </div>
           </div>
-          
-          <div className="mt-6 flex justify-end">
+        </div>
+
+        {/* Services Management */}
+        <div className="bg-white dark:bg-dark-800 rounded-2xl shadow-lg p-8 border border-gray-100 dark:border-gray-700">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white font-heading">
+              Управление услугами
+            </h2>
             <button
-              onClick={handleSaveHeader}
-              className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
+              onClick={() => setShowForm(true)}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
             >
-              <Save size={18} className="inline mr-2" />
-              Сохранить заголовок
+              <Plus className="w-4 h-4" />
+              Добавить услугу
             </button>
           </div>
-        </div>
-      </div>
 
-      {/* Search and Services Table */}
-      <div className="bg-white dark:bg-dark-800 rounded-lg shadow overflow-hidden mb-8">
-        <div className="p-4 border-b border-gray-200 dark:border-dark-700">
-          <div className="relative w-64">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 dark:text-gray-500" />
+          {/* Search */}
+          <div className="relative mb-6">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
               type="text"
               placeholder="Поиск услуг..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 rounded-md border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700"
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             />
           </div>
-        </div>
 
-        {/* Edit/Add Form */}
-        {showForm && (
-          <div className="p-6 border-b border-gray-200 dark:border-dark-700 bg-gray-50 dark:bg-dark-700/30">
-            <h3 className="font-medium mb-4 text-gray-900 dark:text-white">
-              {editData ? 'Редактирование услуги' : 'Добавление новой услуги'}
-            </h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Название</label>
-                <input
-                  type="text"
-                  value={editData ? editData.name || '' : newService.name}
-                  onChange={(e) => editData ? 
-                    setEditData({...editData, name: e.target.value}) : 
-                    setNewService({...newService, name: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-dark-700 rounded-lg focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-800"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Цена</label>
-                <input
-                  type="number"
-                  value={editData ? editData.price || 0 : newService.price}
-                  onChange={(e) => editData ? 
-                    setEditData({...editData, price: Number(e.target.value)}) : 
-                    setNewService({...newService, price: Number(e.target.value)})}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-dark-700 rounded-lg focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-800"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Валюта</label>
-               <select
-                  value={editData ? editData.currency || 'euro' : newService.currency}
-                  onChange={(e) => editData ? 
-                    setEditData({...editData, currency: e.target.value as 'euro' | 'кофе' | 'RSD'}) : 
-                    setNewService({...newService, currency: e.target.value as 'euro' | 'кофе' | 'RSD'})}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-dark-700 rounded-lg focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-800"
+          {/* Services List */}
+          <div className="space-y-4">
+            {filteredServices.map((service, index) => (
+              <div key={service.id} className="border border-gray-200 dark:border-gray-600 rounded-lg p-6">
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        {service.name}
+                      </h3>
+                      <span className={`px-2 py-1 text-xs rounded-full ${
+                        service.active 
+                          ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+                          : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
+                      }`}>
+                        {service.active ? 'Активна' : 'Неактивна'}
+                      </span>
+                      {service.main_service && (
+                        <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400 rounded-full">
+                          Основная
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-gray-600 dark:text-gray-400 mb-2">{service.description}</p>
+                    <p className="text-lg font-semibold text-primary-600">
+                      {service.price} {service.currency} / {service.period}
+                    </p>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 ml-4">
+                    <button
+                  onClick={editData ? handleSaveService : handleAddService}
+                  className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
                 >
-                  <option value="euro">Евро (€)</option>
-                  <option value="кофе">Кофе (☕)</option>
-                  <option value="RSD">Серб. динар (RSD)</option>
-                </select>
+                  {editData ? 'Сохранить изменения' : 'Добавить услугу'}
+                </button>
               </div>
-              
-              <div>
-                <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Период</label>
-              <select
-                    value={editData ? editData.period || 'час' : newService.period}
-                    onChange={(e) => editData ? 
-                      setEditData({...editData, period: e.target.value as 'час' | 'день' | 'месяц' | 'Страница'}) : 
-                      setNewService({...newService, period: e.target.value as 'час' | 'день' | 'месяц' | 'Страница'})}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-dark-700 rounded-lg focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-800"
-                  >
-                    <option value="час">Час</option>
-                    <option value="день">День</option>
-                    <option value="месяц">Месяц</option>
-                    <option value="Страница">Страница</option>
-                  </select>
-              </div>
-              
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Описание</label>
-                <textarea
-                  value={editData ? editData.description || '' : newService.description}
-                  onChange={(e) => editData ? 
-                    setEditData({...editData, description: e.target.value}) : 
-                    setNewService({...newService, description: e.target.value})}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-dark-700 rounded-lg focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-800"
-                />
-              </div>
-              
-              {/* Main Service Toggle */}
-              <div className="md:col-span-2">
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={editData ? editData.main_service !== false : newService.main_service !== false}
-                    onChange={(e) => editData ? 
-                      setEditData({...editData, main_service: e.target.checked}) : 
-                      setNewService({...newService, main_service: e.target.checked})}
-                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-600 dark:bg-dark-700"
-                  />
-                  <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                    Основная услуга (если выключено - будет отображаться как дополнительная)
-                  </span>
-                </label>
-              </div>
-              
-              {/* Image Upload Section */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
-                  Изображение
-                </label>
-                
-                {((editData?.image_url) || newService.image_url) && !imgSrc && (
-                  <div className="mb-4">
-                    <img 
-                      src={editData ? editData.image_url : newService.image_url} 
-                      alt="Current service" 
-                      className="h-32 w-32 object-cover rounded-lg"
-                    />
-                  </div>
-                )}
-                
-                {imgSrc ? (
-                  <div className="space-y-4">
-                    <div className="flex flex-col items-center">
-                      <ReactCrop
-                        crop={crop}
-                        onChange={c => setCrop(c)}
-                        onComplete={c => setCompletedCrop(c)}
-                        aspect={1}
-                        className="max-h-64"
-                      >
-                        <img
-                          ref={imgRef}
-                          alt="Crop me"
-                          src={imgSrc}
-                          onLoad={onImageLoad}
-                          className="max-h-64"
-                        />
-                      </ReactCrop>
-                    </div>
-                    
-                    {completedCrop && (
-                      <div className="mt-4">
-                        <h4 className="text-sm font-medium mb-2">Предпросмотр:</h4>
-                        <canvas
-                          ref={previewCanvasRef}
-                          style={{
-                            display: 'block',
-                            objectFit: 'contain',
-                            width: 150,
-                            height: 150,
-                          }}
-                        />
-                      </div>
-                    )}
-                    
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => setImgSrc('')}
-                        className="px-4 py-2 border border-gray-300 dark:border-dark-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-700 transition-colors"
-                      >
-                        Отмена
-                      </button>
-                      <button
-                        onClick={uploadImage}
-                        disabled={!completedCrop || uploading}
-                        className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors disabled:opacity-50"
-                      >
-                        {uploading ? 'Загрузка...' : 'Сохранить изображение'}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-4">
-                    <label className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-dark-700 hover:bg-gray-200 dark:hover:bg-dark-600 rounded-lg cursor-pointer transition-colors">
-                      <Upload size={18} />
-                      Загрузить новое изображение
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        onChange={onSelectFile} 
-                        className="hidden"
-                      />
-                    </label>
-                    
-                    {((editData?.image_url) || newService.image_url) && (
-                      <button
-                        onClick={() => editData ? 
-                          setEditData({...editData, image_url: ''}) : 
-                          setNewService({...newService, image_url: ''})}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        Удалить изображение
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-              
-              <div>
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={editData ? editData.active !== false : newService.active}
-                    onChange={(e) => editData ? 
-                      setEditData({...editData, active: e.target.checked}) : 
-                      setNewService({...newService, active: e.target.checked})}
-                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-600 dark:bg-dark-700"
-                  />
-                  <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Активна</span>
-                </label>
-              </div>
-            </div>
-            
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setEditData(null);
-                  setShowForm(false);
-                  setImgSrc('');
-                }}
-                className="px-4 py-2 border border-gray-300 dark:border-dark-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-700 transition-colors"
-              >
-                Отмена
-              </button>
-              <button
-                onClick={editData ? handleSaveService : handleAddService}
-                disabled={!editData?.name && !newService.name}
-                className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors disabled:opacity-50"
-              >
-                <Save size={18} className="inline mr-2" />
-                {editData ? 'Сохранить' : 'Добавить'}
-              </button>
             </div>
           </div>
         )}
-
-        {/* Services Table */}
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-dark-700">
-            <thead className="bg-gray-50 dark:bg-dark-700">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Порядок</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Название</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Описание</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Тип</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Стоимость</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Статус</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Действия</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white dark:bg-dark-800 divide-y divide-gray-200 dark:divide-dark-700">
-              {services.filter(service => 
-                service.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                service.description.toLowerCase().includes(searchQuery.toLowerCase())
-              ).map((service) => (
-                <tr key={service.id} className="hover:bg-gray-50 dark:hover:bg-dark-700/50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex flex-col items-center">
-                      <button 
-                        onClick={() => handleMoveService(service.id, 'up')} 
-                        className="text-gray-500 hover:text-primary-600 p-1"
-                        disabled={service.order === 1}
-                      >
-                        <ChevronUp size={18} />
-                      </button>
-                      <span className="text-sm font-medium">{service.order}</span>
-                      <button 
-                        onClick={() => handleMoveService(service.id, 'down')}
-                        className="text-gray-500 hover:text-primary-600 p-1"
-                        disabled={service.order === services.length}
-                      >
-                        <ChevronDown size={18} />
-                      
-                      </button>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      {service.image_url && (
-                        <img 
-                          src={service.image_url} 
-                          alt={service.name} 
-                          className="h-10 w-10 rounded-full object-cover mr-3"
-                        />
-                      )}
-                      <span className="text-sm font-medium text-gray-900 dark:text-white">
-                        {service.name}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
-                    <div className="line-clamp-2">{service.description}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 text-xs rounded-full ${
-                      service.main_service ? 
-                        'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' : 
-                        'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'
-                    }`}>
-                      {service.main_service ? 'Основная' : 'Дополнительная'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                    {formatPrice(service)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 text-xs rounded-full ${
-                      service.active ? 
-                        'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 
-                        'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                    }`}>
-                      {service.active ? 'Активна' : 'Неактивна'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <div className="flex justify-end gap-3">
-                      <button
-                        onClick={() => {
-                          setEditData(service);
-                          setShowForm(true);
-                          setImgSrc('');
-                        }}
-                        className="text-primary-600 hover:text-primary-700"
-                        title="Редактировать"
-                      >
-                        <Edit size={18} />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteService(service.id)}
-                        className="text-red-600 hover:text-red-700"
-                        title="Удалить"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       </div>
     </div>
   );
 };
 
 export default AdminCoworking;
+                      onClick={() => moveService(service.id, 'up')}
+                      disabled={index === 0}
+                      className="p-2 text-gray-400 hover:text-gray-600 disabled:opacity-50"
+                    >
+                      <ChevronUp className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => moveService(service.id, 'down')}
+                      disabled={index === services.length - 1}
+                      className="p-2 text-gray-400 hover:text-gray-600 disabled:opacity-50"
+                    >
+                      <ChevronDown className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setEditData(service)}
+                      className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteService(service.id)}
+                      className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                
+                {service.image_url && (
+                  <div className="mt-4">
+                    <img 
+                      src={service.image_url} 
+                      alt={service.name}
+                      className="w-32 h-20 object-cover rounded-lg"
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Add/Edit Service Modal */}
+        {(showForm || editData) && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                  {editData ? 'Редактировать услугу' : 'Добавить услугу'}
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowForm(false);
+                    setEditData(null);
+                    setImgSrc('');
+                  }}
+                  className="p-2 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Название услуги
+                  </label>
+                  <input
+                    type="text"
+                    value={editData ? editData.name || '' : newService.name}
+                    onChange={(e) => editData 
+                      ? setEditData({...editData, name: e.target.value})
+                      : setNewService({...newService, name: e.target.value})
+                    }
+                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="Например: Рабочее место"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Описание
+                  </label>
+                  <textarea
+                    value={editData ? editData.description || '' : newService.description}
+                    onChange={(e) => editData 
+                      ? setEditData({...editData, description: e.target.value})
+                      : setNewService({...newService, description: e.target.value})
+                    }
+                    rows={3}
+                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="Описание услуги"
+                  />
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Цена
+                    </label>
+                    <input
+                      type="number"
+                      value={editData ? editData.price || 0 : newService.price}
+                      onChange={(e) => editData 
+                        ? setEditData({...editData, price: Number(e.target.value)})
+                        : setNewService({...newService, price: Number(e.target.value)})
+                      }
+                      className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Валюта
+                    </label>
+                    <select
+                      value={editData ? editData.currency || 'euro' : newService.currency}
+                      onChange={(e) => editData 
+                        ? setEditData({...editData, currency: e.target.value as any})
+                        : setNewService({...newService, currency: e.target.value as any})
+                      }
+                      className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="euro">€</option>
+                      <option value="RSD">RSD</option>
+                      <option value="кофе">☕</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Период
+                    </label>
+                    <select
+                      value={editData ? editData.period || 'час' : newService.period}
+                      onChange={(e) => editData 
+                        ? setEditData({...editData, period: e.target.value as any})
+                        : setNewService({...newService, period: e.target.value as any})
+                      }
+                      className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="час">час</option>
+                      <option value="день">день</option>
+                      <option value="месяц">месяц</option>
+                      <option value="Страница">за страницу</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={editData ? editData.active ?? true : newService.active}
+                      onChange={(e) => editData 
+                        ? setEditData({...editData, active: e.target.checked})
+                        : setNewService({...newService, active: e.target.checked})
+                      }
+                      className="mr-2"
+                    />
+                    Активная услуга
+                  </label>
+
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={editData ? editData.main_service ?? true : newService.main_service}
+                      onChange={(e) => editData 
+                        ? setEditData({...editData, main_service: e.target.checked})
+                        : setNewService({...newService, main_service: e.target.checked})
+                      }
+                      className="mr-2"
+                    />
+                    Основная услуга
+                  </label>
+                </div>
+
+                {/* Image Upload */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Изображение
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={onSelectFile}
+                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                  
+                  {imgSrc && (
+                    <div className="mt-4 space-y-4">
+                      <ReactCrop
+                        crop={crop}
+                        onChange={(_, percentCrop) => setCrop(percentCrop)}
+                        onComplete={(c) => setCompletedCrop(c)}
+                        aspect={16 / 9}
+                      >
+                        <img
+                          ref={imgRef}
+                          alt="Crop me"
+                          src={imgSrc}
+                          style={{ transform: `scale(1) rotate(0deg)` }}
+                          onLoad={onImageLoad}
+                        />
+                      </ReactCrop>
+                      {completedCrop && (
+                        <>
+                          <div>
+                            <canvas
+                              ref={previewCanvasRef}
+                              style={{
+                                border: '1px solid black',
+                                objectFit: 'contain',
+                                width: completedCrop.width,
+                                height: completedCrop.height,
+                              }}
+                            />
+                          </div>
+                          <button
+                            onClick={uploadImage}
+                            disabled={uploading}
+                            className="w-full px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+                          >
+                            {uploading ? 'Загрузка...' : 'Загрузить изображение'}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {(editData?.image_url || newService.image_url) && (
+                    <div className="mt-4">
+                      <img 
+                        src={editData?.image_url || newService.image_url} 
+                        alt="Current image"
+                        className="w-full h-32 object-cover rounded-lg"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowForm(false);
+                    setEditData(null);
+                    setImgSrc('');
+                  }}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                >
+                  Отмена
+                </button>
+                <button
