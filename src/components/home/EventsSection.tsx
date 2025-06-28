@@ -45,27 +45,61 @@ const EventsSection = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        // Fetch settings
-        const { data: settingsData, error: settingsError } = await supabase
-          .from('homepage_settings')
-          .select('*')
+        
+        // Fetch settings from site_settings table
+        const { data: siteSettingsData, error: settingsError } = await supabase
+          .from('site_settings')
+          .select('homepage_settings')
           .single();
 
-        if (settingsError) throw settingsError;
-        setSettings(settingsData);
+        let eventsCount = 3; // дефолтное значение
 
-        // Fetch upcoming events - исправленная фильтрация
+        if (settingsError) {
+          console.error('Error fetching settings:', settingsError);
+          // Если нет настроек, используем дефолтные значения
+          setSettings({
+            events_count: 3,
+            show_title: true,
+            show_date: true,
+            show_time: true,
+            show_language: true,
+            show_type: true,
+            show_age: true,
+            show_image: true,
+            show_price: true
+          });
+        } else {
+          // Извлекаем настройки из jsonb поля или используем дефолтные
+          const homepageSettings = siteSettingsData?.homepage_settings || {};
+          eventsCount = homepageSettings.events_count || 3;
+          
+          setSettings({
+            events_count: eventsCount,
+            show_title: homepageSettings.show_title !== false,
+            show_date: homepageSettings.show_date !== false,
+            show_time: homepageSettings.show_time !== false,
+            show_language: homepageSettings.show_language !== false,
+            show_type: homepageSettings.show_type !== false,
+            show_age: homepageSettings.show_age !== false,
+            show_image: homepageSettings.show_image !== false,
+            show_price: homepageSettings.show_price !== false
+          });
+        }
+
+        // Fetch upcoming events
         const now = new Date().toISOString();
+        
         const { data: eventsData, error: eventsError } = await supabase
           .from('events')
           .select('*')
           .eq('status', 'active')
           .gte('end_at', now)  // Фильтруем по времени окончания события
           .order('start_at', { ascending: true })  // Сортируем по времени начала
-          .limit(settingsData?.events_count || 3);
+          .limit(eventsCount);
 
         if (eventsError) throw eventsError;
         setEvents(eventsData || []);
+        
       } catch (err) {
         console.error('Error fetching data:', err);
         setError('Failed to load events');
