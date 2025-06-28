@@ -129,7 +129,7 @@ const AdminRent = () => {
     const { error } = await supabase
       .from('site_settings')
       .update({ rent_info_settings: editData })
-      .eq('id', currentSettings.id);
+      .eq('id', currentSettings.id); 
 
     if (error) throw error;
     await fetchSettings();
