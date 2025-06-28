@@ -1,12 +1,10 @@
-// src/pages/admin/AdminCoworking.tsx - ИСПРАВЛЕННАЯ ВЕРСИЯ
-import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Search, Edit, Trash2, ChevronUp, ChevronDown, Save, X, Upload } from 'lucide-react';
+// src/pages/admin/AdminCoworking.tsx - ИСПРАВЛЕННАЯ ВЕРСИЯ БЕЗ ОШИБОК
+import React, { useState, useEffect } from 'react';
+import { Plus, Search, Edit, Trash2, ChevronUp, ChevronDown, Save, X, Building } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-hot-toast';
-import ReactCrop, { Crop, PixelCrop, centerCrop, makeAspectCrop } from 'react-image-crop';
-import 'react-image-crop/dist/ReactCrop.css';
 
-type CoworkingService = {
+interface CoworkingService {
   id: string;
   name: string;
   description: string;
@@ -17,38 +15,18 @@ type CoworkingService = {
   image_url: string;
   order: number;
   main_service: boolean;
-};
+}
 
-type CoworkingHeader = {
+interface CoworkingHeader {
   id?: string;
   title: string;
   description: string;
   address?: string;
   phone?: string;
   working_hours?: string;
-};
-
-function centerAspectCrop(
-  mediaWidth: number,
-  mediaHeight: number,
-  aspect: number,
-) {
-  return centerCrop(
-    makeAspectCrop(
-      {
-        unit: '%',
-        width: 90,
-      },
-      aspect,
-      mediaWidth,
-      mediaHeight,
-    ),
-    mediaWidth,
-    mediaHeight,
-  );
 }
 
-const AdminCoworking = () => {
+const AdminCoworking: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [services, setServices] = useState<CoworkingService[]>([]);
   const [headerData, setHeaderData] = useState<CoworkingHeader>({ 
@@ -74,29 +52,15 @@ const AdminCoworking = () => {
   });
   const [showForm, setShowForm] = useState(false);
 
-  // Image crop states
-  const [imgSrc, setImgSrc] = useState('');
-  const [crop, setCrop] = useState<Crop>();
-  const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
-  const [uploading, setUploading] = useState(false);
-  const imgRef = useRef<HTMLImageElement>(null);
-  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
-
   useEffect(() => {
     fetchData();
   }, []);
-
-  useEffect(() => {
-    if (completedCrop?.width && completedCrop?.height && imgRef.current && previewCanvasRef.current) {
-      canvasPreview(imgRef.current, previewCanvasRef.current, completedCrop);
-    }
-  }, [completedCrop]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
       
-      // Загружаем услуги коворкинга (эта таблица осталась)
+      // Загружаем услуги коворкинга
       const { data: servicesData, error: servicesError } = await supabase
         .from('coworking_info_table')
         .select('*')
@@ -128,7 +92,7 @@ const AdminCoworking = () => {
         throw settingsError;
       }
       
-      // Извлекаем данные заголовка коворкинга из консолидированной структуры
+      // Извлекаем данные заголовка коворкинга
       const headerFromSettings = settingsData?.coworking_header_settings || {};
       setHeaderData({
         title: headerFromSettings.title || '',
@@ -144,103 +108,6 @@ const AdminCoworking = () => {
       toast.error('Не удалось загрузить данные');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const onSelectFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setCrop(undefined);
-      const reader = new FileReader();
-      reader.addEventListener('load', () =>
-        setImgSrc(reader.result?.toString() || ''),
-      );
-      reader.readAsDataURL(e.target.files[0]);
-    }
-  };
-
-  const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    const { width, height } = e.currentTarget;
-    setCrop(centerAspectCrop(width, height, 16 / 9));
-  };
-
-  const canvasPreview = async (
-    image: HTMLImageElement,
-    canvas: HTMLCanvasElement,
-    crop: PixelCrop,
-  ) => {
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const pixelRatio = window.devicePixelRatio;
-    const scaleX = image.naturalWidth / image.width;
-    const scaleY = image.naturalHeight / image.height;
-
-    canvas.width = Math.floor(crop.width * scaleX * pixelRatio);
-    canvas.height = Math.floor(crop.height * scaleY * pixelRatio);
-
-    ctx.scale(pixelRatio, pixelRatio);
-    ctx.imageSmoothingQuality = 'high';
-
-    const cropX = crop.x * scaleX;
-    const cropY = crop.y * scaleY;
-
-    ctx.save();
-    ctx.drawImage(
-      image,
-      cropX,
-      cropY,
-      crop.width * scaleX,
-      crop.height * scaleY,
-      0,
-      0,
-      crop.width,
-      crop.height,
-    );
-    ctx.restore();
-  };
-
-  const uploadImage = async () => {
-    if (!previewCanvasRef.current || !completedCrop) return;
-
-    try {
-      setUploading(true);
-
-      previewCanvasRef.current.toBlob(async (blob) => {
-        if (!blob) return;
-
-        const timestamp = Date.now();
-        const fileName = `coworking-${timestamp}.jpg`;
-
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('images')
-          .upload(`coworking/${fileName}`, blob, {
-            contentType: 'image/jpeg',
-            upsert: false
-          });
-
-        if (uploadError) throw uploadError;
-
-        const { data: publicUrlData } = supabase.storage
-          .from('images')
-          .getPublicUrl(`coworking/${fileName}`);
-
-        const publicUrl = publicUrlData.publicUrl;
-
-        if (editData) {
-          setEditData({ ...editData, image_url: publicUrl });
-        } else {
-          setNewService({ ...newService, image_url: publicUrl });
-        }
-
-        setImgSrc('');
-        setUploading(false);
-        toast.success('Изображение успешно загружено');
-      }, 'image/jpeg', 0.9);
-    } catch (err) {
-      console.error('Error uploading image:', err);
-      setError('Ошибка при загрузке изображения');
-      setUploading(false);
-      toast.error('Ошибка при загрузке изображения');
     }
   };
 
@@ -297,7 +164,6 @@ const AdminCoworking = () => {
       toast.success('Услуга успешно обновлена');
     } catch (err) {
       console.error('Error saving service:', err);
-      setError('Ошибка при сохранении');
       toast.error('Ошибка при сохранении');
     }
   };
@@ -339,7 +205,6 @@ const AdminCoworking = () => {
       toast.success('Услуга успешно добавлена');
     } catch (err) {
       console.error('Error adding service:', err);
-      setError('Ошибка при добавлении');
       toast.error('Ошибка при добавлении');
     }
   };
@@ -359,7 +224,6 @@ const AdminCoworking = () => {
       toast.success('Услуга удалена');
     } catch (err) {
       console.error('Error deleting service:', err);
-      setError('Ошибка при удалении');
       toast.error('Ошибка при удалении');
     }
   };
@@ -395,7 +259,6 @@ const AdminCoworking = () => {
       await fetchData();
     } catch (err) {
       console.error('Error moving service:', err);
-      setError('Ошибка при перемещении');
       toast.error('Ошибка при перемещении');
     }
   };
@@ -435,9 +298,12 @@ const AdminCoworking = () => {
         {/* Header Settings */}
         <div className="bg-white dark:bg-dark-800 rounded-2xl shadow-lg p-8 border border-gray-100 dark:border-gray-700 mb-8">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white font-heading">
-              Настройки заголовка
-            </h2>
+            <div className="flex items-center gap-3">
+              <Building className="w-6 h-6 text-primary-600" />
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white font-heading">
+                Настройки заголовка
+              </h2>
+            </div>
             <button
               onClick={handleSaveHeader}
               disabled={saving}
@@ -583,21 +449,6 @@ const AdminCoworking = () => {
                   
                   <div className="flex items-center gap-2 ml-4">
                     <button
-                  onClick={editData ? handleSaveService : handleAddService}
-                  className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-                >
-                  {editData ? 'Сохранить изменения' : 'Добавить услугу'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-export default AdminCoworking;
                       onClick={() => moveService(service.id, 'up')}
                       disabled={index === 0}
                       className="p-2 text-gray-400 hover:text-gray-600 disabled:opacity-50"
@@ -652,7 +503,6 @@ export default AdminCoworking;
                   onClick={() => {
                     setShowForm(false);
                     setEditData(null);
-                    setImgSrc('');
                   }}
                   className="p-2 text-gray-400 hover:text-gray-600"
                 >
@@ -774,70 +624,6 @@ export default AdminCoworking;
                     Основная услуга
                   </label>
                 </div>
-
-                {/* Image Upload */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Изображение
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={onSelectFile}
-                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  />
-                  
-                  {imgSrc && (
-                    <div className="mt-4 space-y-4">
-                      <ReactCrop
-                        crop={crop}
-                        onChange={(_, percentCrop) => setCrop(percentCrop)}
-                        onComplete={(c) => setCompletedCrop(c)}
-                        aspect={16 / 9}
-                      >
-                        <img
-                          ref={imgRef}
-                          alt="Crop me"
-                          src={imgSrc}
-                          style={{ transform: `scale(1) rotate(0deg)` }}
-                          onLoad={onImageLoad}
-                        />
-                      </ReactCrop>
-                      {completedCrop && (
-                        <>
-                          <div>
-                            <canvas
-                              ref={previewCanvasRef}
-                              style={{
-                                border: '1px solid black',
-                                objectFit: 'contain',
-                                width: completedCrop.width,
-                                height: completedCrop.height,
-                              }}
-                            />
-                          </div>
-                          <button
-                            onClick={uploadImage}
-                            disabled={uploading}
-                            className="w-full px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
-                          >
-                            {uploading ? 'Загрузка...' : 'Загрузить изображение'}
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {(editData?.image_url || newService.image_url) && (
-                    <div className="mt-4">
-                      <img 
-                        src={editData?.image_url || newService.image_url} 
-                        alt="Current image"
-                        className="w-full h-32 object-cover rounded-lg"
-                      />
-                    </div>
-                  )}
-                </div>
               </div>
 
               <div className="flex justify-end gap-3 mt-6">
@@ -845,10 +631,24 @@ export default AdminCoworking;
                   onClick={() => {
                     setShowForm(false);
                     setEditData(null);
-                    setImgSrc('');
                   }}
                   className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
                 >
                   Отмена
                 </button>
                 <button
+                  onClick={editData ? handleSaveService : handleAddService}
+                  className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+                >
+                  {editData ? 'Сохранить изменения' : 'Добавить услугу'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default AdminCoworking;
