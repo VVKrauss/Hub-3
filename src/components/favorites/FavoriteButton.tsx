@@ -7,7 +7,7 @@ interface FavoriteButtonProps {
   onClick: () => void;
   className?: string;
   size?: 'sm' | 'md' | 'lg';
-  loading?: boolean; 
+  loading?: boolean;  
 }
 
 const FavoriteButton: React.FC<FavoriteButtonProps> = ({
