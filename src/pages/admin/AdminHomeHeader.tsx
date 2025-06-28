@@ -1,7 +1,256 @@
-import { useState, useEffect, useRef } from 'react';
+{/* Slideshow Settings */}
+        {headerData.style === 'slideshow' && (
+          <div className="bg-white dark:bg-dark-800 rounded-xl shadow-sm border border-dark-200 dark:border-dark-700 p-6 mb-8">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-semibold text-dark-900 dark:text-white">Управление слайдшоу</h2>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.onchange = async (e) => {
+                      const file = (e.target as HTMLInputElement).files?.[0];
+                      if (file) await handleImageUpload(file, 'slide');
+                    };
+                    input.click();
+                  }}
+                  className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg flex items-center gap-2 transition-colors"
+                >
+                  <Upload className="w-4 h-4" />
+                  Загрузить изображение
+                </button>
+                <button
+                  onClick={addSlide}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center gap-2 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Добавить слайд
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              {headerData.slideshow.slides.length > 0 ? (
+                <div className="space-y-4">
+                  {headerData.slideshow.slides.map((slide, index) => (
+                    <div key={slide.id} className="border border-dark-300 dark:border-dark-600 rounded-lg p-4">
+                      <div className="flex flex-col md:flex-row gap-4">
+                        <div className="w-full md:w-32 h-20 bg-dark-100 dark:bg-dark-700 rounded-lg flex items-center justify-center overflow-hidden relative group">
+                          {slide.image ? (
+                            <>
+                              <img src={slide.image} alt="Slide preview" className="w-full h-full object-cover" />
+                              <button
+                                onClick={() => {
+                                  const input = document.createElement('input');
+                                  input.type = 'file';
+                                  input.accept = 'image/*';
+                                  input.onchange = async (e) => {
+                                    const file = (e.target as HTMLInputElement).files?.[0];
+                                    if (file) {
+                                      // Заменяем изображение слайда
+                                      const compressedFile = await compressImage(file);
+                                      const timestamp = Date.now();
+                                      const fileExt = file.name.split('.').pop();
+                                      const fileName = `slide_${timestamp}.${fileExt}`;
+                                      const filePath = `images/${fileName}`;
+
+                                      const { error: uploadError } = await supabase.storage
+                                        .from('images')
+                                        .upload(filePath, compressedFile);
+
+                                      if (!uploadError) {
+                                        const imageUrl = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/images/${filePath}`;
+                                        const newSlides = headerData.slideshow.slides.map(s => 
+                                          s.id === slide.id ? { ...s, image: imageUrl } : s
+                                        );
+                                        setHeaderData(prev => ({
+                                          ...prev,
+                                          slideshow: { ...prev.slideshow, slides: newSlides }
+                                        }));
+                                        toast.success('Изображение обновлено');
+                                      }
+                                    }
+                                  };
+                                  input.click();
+                                }}
+                                className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
+                              >
+                                <Edit className="w-5 h-5" />
+                              </button>
+                            </>
+                          ) : (
+                            <ImageIcon className="w-8 h-8 text-dark-400" />
+                          )}
+                        </div>
+
+                        <div className="flex-1 space-y-3">
+                          <div>
+                            <input
+                              type="text"
+                              value={slide.title}
+                              onChange={(e) => {
+                                const newSlides = headerData.slideshow.slides.map(s => 
+                                  s.id === slide.id ? { ...s, title: e.target.value } : s
+                                );
+                                setHeaderData(prev => ({
+                                  ...prev,
+                                  slideshow: { ...prev.slideshow, slides: newSlides }
+                                }));
+                              }}
+                              className="w-full p-2 border border-dark-300 dark:border-dark-600 rounded-md dark:bg-dark-800 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                              placeholder="Введите заголовок слайда"
+                            />
+                          </div>
+                          <div>
+                            <input
+                              type="text"
+                              value={slide.subtitle}
+                              onChange={(e) => {
+                                const newSlides = headerData.slideshow.slides.map(s => 
+                                  s.id === slide.id ? { ...s, subtitle: e.target.value } : s
+                                );
+                                setHeaderData(prev => ({
+                                  ...prev,
+                                  slideshow: { ...prev.slideshow, slides: newSlides }
+                                }));
+                              }}
+                              className="w-full p-2 border border-dark-300 dark:border-dark-600 rounded-md dark:bg-dark-800 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                              placeholder="Введите подзаголовок"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2 self-center md:self-start">
+                          <button
+                            onClick={() => moveSlide(slide.id, 'up')}
+                            disabled={index === 0}
+                            className="p-2 hover:bg-dark-200 dark:hover:bg-dark-600 rounded-md disabled:opacity-50"
+                            title="Переместить вверх"
+                          >
+                            <ArrowUp className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={() => moveSlide(slide.id, 'down')}
+                            disabled={index === headerData.slideshow.slides.length - 1}
+                            className="p-2 hover:bg-dark-200 dark:hover:bg-dark-600 rounded-md disabled:opacity-50"
+                            title="Переместить вниз"
+                          >
+                            <ArrowDown className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={() => deleteSlide(slide.id)}
+                            className="p-2 hover:bg-red-100 dark:hover:bg-red-900/20 text-red-500 rounded-md"
+                            title="Удалить слайд"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 bg-dark-50 dark:bg-dark-700 rounded-lg border-2 border-dashed border-dark-300 dark:border-dark-600">
+                  <ImageIcon className="mx-auto h-12 w-12 text-dark-400" />
+                  <h3 className="mt-2 text-sm font-medium text-dark-900 dark:text-white">Нет добавленных слайдов</h3>
+                  <p className="mt-1 text-sm text-dark-500 dark:text-dark-400">
+                    Нажмите кнопку "Загрузить изображение" чтобы начать
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Info Section */}
+        <div className="bg-white dark:bg-dark-800 rounded-xl shadow-sm border border-dark-200 dark:border-dark-700 p-6 mb-6">
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary-100 dark:bg-primary-900/30 rounded-lg text-primary-600 dark:text-primary-400">
+                <Home className="w-5 h-5" />
+              </div>
+              <h2 className="text-xl font-semibold text-dark-900 dark:text-white">Настройки блока "О нас"</h2>
+            </div>
+            <label className="inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={infoSection.enabled}
+                onChange={(e) => setInfoSection(prev => ({
+                  ...prev,
+                  enabled: e.target.checked
+                }))}
+                className="sr-only peer"
+              />
+              <div className="relative w-11 h-6 bg-dark-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-dark-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-dark-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-dark-600 peer-checked:bg-primary-600"></div>
+              <span className="ms-3 text-sm font-medium text-dark-700 dark:text-dark-300">
+                {infoSection.enabled ? 'Включено' : 'Отключено'}
+              </span>
+            </label>
+          </div>
+
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-2">
+                Заголовок
+              </label>
+              <input
+                type="text"
+                value={infoSection.title}
+                onChange={(e) => setInfoSection(prev => ({ ...prev, title: e.target.value }))}
+                className="w-full p-3 border border-dark-300 dark:border-dark-600 rounded-lg dark:bg-dark-800 dark:text-white focus:ring-2 focus:ring-primary-500"
+                placeholder="Введите заголовок"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-2">
+                Описание
+              </label>
+              <textarea
+                value={infoSection.description}
+                onChange={(e) => setInfoSection(prev => ({ ...prev, description: e.target.value }))}
+                rows={4}
+                className="w-full p-3 border border-dark-300 dark:border-dark-600 rounded-lg dark:bg-dark-800 dark:text-white focus:ring-2 focus:ring-primary-500"
+                placeholder="Введите описание"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-2">
+                Изображение
+              </label>
+              <div className="flex items-center gap-4">
+                <div className="w-32 h-20 border border-dark-300 dark:border-dark-600 rounded-lg overflow-hidden">
+                  <img 
+                    src={infoSection.image} 
+                    alt="Info section preview" 
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <button
+                  onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.onchange = async (e) => {
+                      const file = (e.target as HTMLInputElement).files?.[0];
+                      if (file) await handleImageUpload(file, 'info');
+                    };
+                    input.click();
+                  }}
+                  className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg flex items-center gap-2 transition-colors"
+                >
+                  <Upload className="w-4 h-4" />
+                  Загрузить изображение
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { toast } from 'react-hot-toast';
-import { Plus, X, ArrowUp, ArrowDown, Edit, Trash2, Image as ImageIcon, Save, Eye, Home, Clock, Users, Check, Calendar } from 'lucide-react';
+import { Plus, X, ArrowUp, ArrowDown, Edit, Trash2, Image as ImageIcon, Save, Eye, Home, Clock, Users, Check, Calendar, Upload } from 'lucide-react';
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
@@ -138,6 +387,140 @@ const AdminHomeHeader = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Функция сжатия изображения
+  const compressImage = async (file: File): Promise<File> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          // Рассчитываем новые размеры с сохранением пропорций
+          let width = img.width;
+          let height = img.height;
+          
+          if (width > 1000) {
+            const ratio = 1000 / width;
+            width = 1000;
+            height = height * ratio;
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            // Сначала пробуем качество 0.7
+            canvas.toBlob((blob) => {
+              if (blob && blob.size > 1000000) {
+                // Если размер больше 1MB, уменьшаем качество
+                canvas.toBlob((smallerBlob) => {
+                  if (smallerBlob) {
+                    const compressedFile = new File([smallerBlob], file.name, {
+                      type: 'image/jpeg',
+                      lastModified: Date.now()
+                    });
+                    resolve(compressedFile);
+                  } else {
+                    resolve(file); // fallback
+                  }
+                }, 'image/jpeg', 0.5);
+              } else if (blob) {
+                const compressedFile = new File([blob], file.name, {
+                  type: 'image/jpeg',
+                  lastModified: Date.now()
+                });
+                resolve(compressedFile);
+              } else {
+                resolve(file); // fallback
+              }
+            }, 'image/jpeg', 0.7);
+          } else {
+            resolve(file); // fallback
+          }
+        };
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Функция загрузки изображения
+  const handleImageUpload = async (file: File, type: 'slide' | 'info' | 'rent' | 'coworking') => {
+    try {
+      setCurrentUploadType(type);
+      
+      // Сжимаем изображение перед загрузкой
+      const compressedFile = await compressImage(file);
+      
+      // Загружаем сжатое изображение
+      await uploadAndSetImage(compressedFile, type);
+      
+      toast.success('Изображение успешно загружено и сжато');
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      toast.error('Ошибка при загрузке изображения');
+    }
+  };
+
+  // Функция загрузки и установки изображения
+  const uploadAndSetImage = async (file: File, type: 'slide' | 'info' | 'rent' | 'coworking') => {
+    try {
+      const timestamp = Date.now();
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${type}_${timestamp}.${fileExt}`;
+      const filePath = `images/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('images')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const imageUrl = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/images/${filePath}`;
+
+      if (type === 'slide') {
+        setHeaderData(prev => ({
+          ...prev,
+          slideshow: {
+            ...prev.slideshow,
+            slides: [
+              ...prev.slideshow.slides,
+              {
+                id: crypto.randomUUID(),
+                image: imageUrl,
+                title: 'Новый слайд',
+                subtitle: 'Описание слайда'
+              }
+            ]
+          }
+        }));
+      } else if (type === 'info') {
+        setInfoSection(prev => ({
+          ...prev,
+          image: imageUrl
+        }));
+      } else if (type === 'rent') {
+        setRentSection(prev => ({
+          ...prev,
+          image: imageUrl
+        }));
+      } else if (type === 'coworking') {
+        setCoworkingSection(prev => ({
+          ...prev,
+          image: imageUrl
+        }));
+      }
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      throw error;
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -397,6 +780,66 @@ const AdminHomeHeader = () => {
                   className="w-full p-2.5 border border-dark-300 dark:border-dark-600 rounded-lg dark:bg-dark-700 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   placeholder="Введите подзаголовок"
                 />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-2">
+                    Логотип (светлая тема)
+                  </label>
+                  <div className="p-4 border border-dark-300 dark:border-dark-600 rounded-lg bg-white flex flex-col items-center">
+                    <img
+                      src={headerData.centered.logoLight}
+                      alt="Light Logo Preview"
+                      className="h-20 w-auto object-contain mb-3"
+                    />
+                    <button
+                      onClick={() => {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = 'image/*';
+                        input.onchange = async (e) => {
+                          const file = (e.target as HTMLInputElement).files?.[0];
+                          if (file) await handleImageUpload(file, 'info');
+                        };
+                        input.click();
+                      }}
+                      className="px-3 py-1.5 text-sm bg-dark-100 hover:bg-dark-200 text-dark-800 rounded-lg flex items-center gap-1"
+                    >
+                      <Edit className="w-4 h-4" />
+                      Изменить
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-2">
+                    Логотип (тёмная тема)
+                  </label>
+                  <div className="p-4 border border-dark-300 dark:border-dark-600 rounded-lg bg-dark-900 flex flex-col items-center">
+                    <img
+                      src={headerData.centered.logoDark}
+                      alt="Dark Logo Preview"
+                      className="h-20 w-auto object-contain mb-3"
+                    />
+                    <button
+                      onClick={() => {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = 'image/*';
+                        input.onchange = async (e) => {
+                          const file = (e.target as HTMLInputElement).files?.[0];
+                          if (file) await handleImageUpload(file, 'info');
+                        };
+                        input.click();
+                      }}
+                      className="px-3 py-1.5 text-sm bg-dark-700 hover:bg-dark-600 text-white rounded-lg flex items-center gap-1"
+                    >
+                      <Edit className="w-4 h-4" />
+                      Изменить
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -756,12 +1199,129 @@ const AdminHomeHeader = () => {
                 Описание
               </label>
               <textarea
+                value={rentSection.description}
+                onChange={(e) => setRentSection(prev => ({ ...prev, description: e.target.value }))}
+                rows={4}
+                className="w-full p-3 border border-dark-300 dark:border-dark-600 rounded-lg dark:bg-dark-800 dark:text-white focus:ring-2 focus:ring-primary-500"
+                placeholder="Введите описание"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-2">
+                Изображение
+              </label>
+              <div className="flex items-center gap-4">
+                <div className="w-32 h-20 border border-dark-300 dark:border-dark-600 rounded-lg overflow-hidden">
+                  <img 
+                    src={rentSection.image} 
+                    alt="Rent section preview" 
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <button
+                  onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.onchange = async (e) => {
+                      const file = (e.target as HTMLInputElement).files?.[0];
+                      if (file) await handleImageUpload(file, 'rent');
+                    };
+                    input.click();
+                  }}
+                  className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg flex items-center gap-2 transition-colors"
+                >
+                  <Upload className="w-4 h-4" />
+                  Загрузить изображение
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Coworking Section */}
+        <div className="bg-white dark:bg-dark-800 rounded-xl shadow-sm border border-dark-200 dark:border-dark-700 p-6 mb-6">
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary-100 dark:bg-primary-900/30 rounded-lg text-primary-600 dark:text-primary-400">
+                <Users className="w-5 h-5" />
+              </div>
+              <h2 className="text-xl font-semibold text-dark-900 dark:text-white">Настройки блока "Коворкинг"</h2>
+            </div>
+            <label className="inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={coworkingSection.enabled}
+                onChange={(e) => setCoworkingSection(prev => ({
+                  ...prev,
+                  enabled: e.target.checked
+                }))}
+                className="sr-only peer"
+              />
+              <div className="relative w-11 h-6 bg-dark-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-dark-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-dark-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-dark-600 peer-checked:bg-primary-600"></div>
+              <span className="ms-3 text-sm font-medium text-dark-700 dark:text-dark-300">
+                {coworkingSection.enabled ? 'Включено' : 'Отключено'}
+              </span>
+            </label>
+          </div>
+
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-2">
+                Заголовок
+              </label>
+              <input
+                type="text"
+                value={coworkingSection.title}
+                onChange={(e) => setCoworkingSection(prev => ({ ...prev, title: e.target.value }))}
+                className="w-full p-3 border border-dark-300 dark:border-dark-600 rounded-lg dark:bg-dark-800 dark:text-white focus:ring-2 focus:ring-primary-500"
+                placeholder="Введите заголовок"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-2">
+                Описание
+              </label>
+              <textarea
                 value={coworkingSection.description}
                 onChange={(e) => setCoworkingSection(prev => ({ ...prev, description: e.target.value }))}
                 rows={4}
                 className="w-full p-3 border border-dark-300 dark:border-dark-600 rounded-lg dark:bg-dark-800 dark:text-white focus:ring-2 focus:ring-primary-500"
                 placeholder="Введите описание"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-2">
+                Изображение
+              </label>
+              <div className="flex items-center gap-4">
+                <div className="w-32 h-20 border border-dark-300 dark:border-dark-600 rounded-lg overflow-hidden">
+                  <img 
+                    src={coworkingSection.image} 
+                    alt="Coworking section preview" 
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <button
+                  onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.onchange = async (e) => {
+                      const file = (e.target as HTMLInputElement).files?.[0];
+                      if (file) await handleImageUpload(file, 'coworking');
+                    };
+                    input.click();
+                  }}
+                  className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg flex items-center gap-2 transition-colors"
+                >
+                  <Upload className="w-4 h-4" />
+                  Загрузить изображение
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -771,12 +1331,6 @@ const AdminHomeHeader = () => {
           type="file"
           accept="image/*"
           className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) {
-              // Обработка загрузки файла
-            }
-          }}
         />
       </div>
     </div>
