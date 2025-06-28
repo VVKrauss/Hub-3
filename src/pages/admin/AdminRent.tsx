@@ -16,6 +16,8 @@ import {
   MapPin,
   Info
 } from 'lucide-react';
+import Cropper from 'react-cropper';
+import 'cropperjs/dist/cropper.css';
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
@@ -68,6 +70,10 @@ const AdminRent = () => {
   
   // Photo management states
   const [isUploading, setIsUploading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [croppedImage, setCroppedImage] = useState<string | null>(null);
+  const [showCropper, setShowCropper] = useState(false);
+  const cropperRef = useRef<Cropper>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -78,7 +84,8 @@ const AdminRent = () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('rent_info_settings')
+        .from('site_settings') 
+        .select('rent_info_settings')
         .select('*')
         .single();
 
@@ -97,7 +104,8 @@ const AdminRent = () => {
     try {
       setSaving(true);
       const { error } = await supabase
-        .from('rent_info_settings')
+        .from('site_settings') 
+        .select('rent_info_settings')
         .update(editData)
         .eq('id', data?.id);
 
@@ -173,32 +181,46 @@ const AdminRent = () => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
       
-      // Check file size (max 5MB)
+      // Check file size (max 5MB before compression)
       if (file.size > 5 * 1024 * 1024) {
         toast.error('Файл слишком большой. Максимальный размер 5MB.');
         return;
       }
       
-      await uploadPhoto(file);
+      setSelectedFile(file);
+      setShowCropper(true);
     }
   };
 
-  const uploadPhoto = async (file: File) => {
+  const handleCropComplete = () => {
+    if (cropperRef.current && cropperRef.current.cropper) {
+      const croppedCanvas = cropperRef.current.cropper.getCroppedCanvas();
+      setCroppedImage(croppedCanvas.toDataURL('image/jpeg', 0.8));
+    }
+  };
+
+  const uploadPhoto = async () => {
+    if (!croppedImage || !selectedFile) return;
+    
     try {
       setIsUploading(true);
       
+      // Convert data URL to Blob
+      const blob = await fetch(croppedImage).then(res => res.blob());
+      
       // Generate unique filename
       const timestamp = Date.now();
-      const fileExt = file.name.split('.').pop();
+      const fileExt = selectedFile.name.split('.').pop();
       const filename = `${timestamp}.${fileExt}`;
       const filePath = `rent_photos/${filename}`;
       
       // Upload to Supabase Storage in images bucket with rent_photos folder
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('images')
-        .upload(filePath, file, {
+        .upload(filePath, blob, {
           cacheControl: '3600',
           upsert: false,
+          contentType: 'image/jpeg',
         });
       
       if (uploadError) throw uploadError;
@@ -216,11 +238,7 @@ const AdminRent = () => {
       }));
       
       toast.success('Фото успешно загружено');
-      
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      resetPhotoUpload();
     } catch (err) {
       console.error('Error uploading photo:', err);
       toast.error('Ошибка при загрузке фото');
@@ -254,6 +272,15 @@ const AdminRent = () => {
     } catch (err) {
       console.error('Error deleting photo:', err);
       toast.error('Ошибка при удалении фото');
+    }
+  };
+
+  const resetPhotoUpload = () => {
+    setSelectedFile(null);
+    setCroppedImage(null);
+    setShowCropper(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -375,44 +402,90 @@ const AdminRent = () => {
             
             {/* Photo Upload Section */}
             <div className="mb-8">
-              <div className="p-8 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700/30 dark:to-gray-600/30 hover:border-primary-400 dark:hover:border-primary-500 transition-all duration-200">
-                <div className="text-center">
-                  <div className="flex justify-center mb-4">
-                    <div className="p-4 bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-900/30 dark:to-primary-800/30 rounded-full">
-                      {isUploading ? (
-                        <Loader2 className="w-8 h-8 text-primary-600 dark:text-primary-400 animate-spin" />
-                      ) : (
-                        <ImageIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
-                      )}
-                    </div>
+              {showCropper ? (
+                <div className="space-y-6 p-6 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-600 rounded-xl border border-gray-200 dark:border-gray-700">
+                  <h4 className="font-semibold text-gray-900 dark:text-white">Обрезка изображения</h4>
+                  
+                  <div className="h-64 w-full relative rounded-lg overflow-hidden">
+                    <Cropper
+                      src={selectedFile ? URL.createObjectURL(selectedFile) : ''}
+                      style={{ height: '100%', width: '100%' }}
+                      initialAspectRatio={16 / 9}
+                      guides={true}
+                      ref={cropperRef}
+                      crop={handleCropComplete}
+                      viewMode={1}
+                      minCropBoxHeight={100}
+                      minCropBoxWidth={100}
+                      responsive={true}
+                      autoCropArea={1}
+                      checkOrientation={false}
+                    />
                   </div>
-                  {isUploading ? (
+                  
+                  {croppedImage && (
                     <div>
-                      <p className="text-primary-600 dark:text-primary-400 font-semibold mb-2">
-                        Загрузка фотографии...
-                      </p>
-                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 max-w-xs mx-auto">
-                        <div className="bg-primary-500 h-2 rounded-full animate-pulse"></div>
+                      <h5 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Предпросмотр:</h5>
+                      <div className="flex justify-center">
+                        <img 
+                          src={croppedImage} 
+                          alt="Cropped preview" 
+                          className="max-h-40 rounded-lg border-2 border-gray-200 dark:border-gray-600 shadow-lg"
+                        />
                       </div>
                     </div>
-                  ) : (
-                    <div>
-                      <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="text-primary-600 dark:text-primary-400 font-semibold hover:text-primary-700 dark:hover:text-primary-300 transition-colors duration-200"
-                      >
-                        Нажмите для загрузки фото
-                      </button>
-                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                        или перетащите файл сюда
-                      </p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                        JPG, PNG (максимум 5MB)
-                      </p>
-                    </div>
                   )}
+                  
+                  <div className="flex gap-3 justify-center">
+                    <button
+                      onClick={resetPhotoUpload}
+                      className="flex items-center gap-2 px-6 py-3 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                    >
+                      <X className="w-5 h-5" />
+                      Отмена
+                    </button>
+                    <button
+                      onClick={uploadPhoto}
+                      disabled={isUploading || !croppedImage}
+                      className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 disabled:transform-none"
+                    >
+                      {isUploading ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          Загрузка...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-5 h-5" />
+                          Загрузить фото
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="p-8 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700/30 dark:to-gray-600/30 hover:border-primary-400 dark:hover:border-primary-500 transition-all duration-200">
+                  <div className="text-center">
+                    <div className="flex justify-center mb-4">
+                      <div className="p-4 bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-900/30 dark:to-primary-800/30 rounded-full">
+                        <ImageIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="text-primary-600 dark:text-primary-400 font-semibold hover:text-primary-700 dark:hover:text-primary-300 transition-colors duration-200"
+                    >
+                      Нажмите для загрузки фото
+                    </button>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                      или перетащите файл сюда
+                    </p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                      JPG, PNG (максимум 5MB)
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
             
             {/* Current Photos */}
