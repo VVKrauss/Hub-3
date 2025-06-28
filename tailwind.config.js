@@ -1,0 +1,110 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        primary: {
+          DEFAULT: '#af5adc',
+          light: '#cba2ce', // ваш secondary как light-вариант primary
+          50: '#f5e9fa',
+          100: '#ebd4f5',
+          200: '#d7a9eb',
+          300: '#c37de0',
+          400: '#af5adc',
+          500: '#9b37d7',
+          600: '#7d2cb0',
+          700: '#5e2188',
+          800: '#3f1661',
+          900: '#210b39',
+          950: '#120520',
+        },
+        secondary: {
+          DEFAULT: '#cba2ce',
+          light: '#e5d1e6',
+          dark: '#b28fb5',
+          50: '#f5eef5',
+          100: '#ebdceb',
+          200: '#d7b9d7',
+          300: '#c396c3',
+          400: '#af73af',
+          500: '#9b509b',
+          600: '#7c407c',
+          700: '#5d305d',
+          800: '#3e203e',
+          900: '#1f101f',
+        },
+        dark: {
+          DEFAULT: '#303136',
+          50: '#f8f8f9',
+          100: '#f0f1f2',
+          200: '#e1e2e5',
+          300: '#d1d3d8',
+          400: '#b2b5bc',
+          500: '#9396a0',
+          600: '#757884',
+          700: '#585a63',
+          800: '#3a3b42',
+          900: '#303136',
+        },
+        light: {
+          DEFAULT: '#ffffff',
+          50: '#ffffff',
+          100: '#fefefe',
+          200: '#fdfdfd',
+          300: '#fbfbfb',
+          400: '#f8f8f8',
+          500: '#f5f5f5',
+          600: '#e0e0e0',
+          700: '#cbcbcb',
+          800: '#b6b6b6',
+          900: '#a1a1a1',
+        },
+        success: {
+          50: '#f0fdf4',
+          500: '#22c55e',
+          700: '#15803d',
+        },
+        warning: {
+          50: '#fffbeb',
+          500: '#f59e0b',
+          700: '#b45309',
+        },
+        error: {
+          50: '#fef2f2',
+          500: '#ef4444',
+          700: '#b91c1c',
+        },
+      },
+      fontFamily: {
+        sans: ['Comfortaa', 'system-ui', 'sans-serif'],
+        heading: ['Comfortaa', 'system-ui', 'sans-serif'],
+      },
+      spacing: {
+        '72': '18rem',
+        '84': '21rem',
+        '96': '24rem',
+        '128': '32rem',
+      },
+      height: {
+        'hero': '500px',
+      },
+      animation: {
+        'fade-in': 'fadeIn 0.5s ease-in-out',
+        'slide-up': 'slideUp 0.5s ease-out',
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        slideUp: {
+          '0%': { transform: 'translateY(20px)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' },
+        },
+      },
+    },
+  },
+  plugins: [],
+};
