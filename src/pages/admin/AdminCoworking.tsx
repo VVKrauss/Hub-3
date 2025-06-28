@@ -99,7 +99,7 @@ const AdminCoworking = () => {
       setServices(servicesData || []);
       
       const { data: headerData, error: headerError } = await supabase
-        .from('coworking_header')
+        .from('site_settings') .select('coworking_header_settings')
         .select('*')
         .maybeSingle();
 
@@ -203,14 +203,14 @@ const AdminCoworking = () => {
 
       if (headerData.id) {
         const { error } = await supabase
-          .from('coworking_header')
+          .from('site_settings') .select('coworking_header_settings')
           .update(dataToSave)
           .eq('id', headerData.id);
         
         if (error) throw error;
       } else {
         const { error } = await supabase
-          .from('coworking_header')
+          .from('site_settings')      .select('coworking_header_settings')
           .insert([dataToSave]);
         
         if (error) throw error;
@@ -222,7 +222,7 @@ const AdminCoworking = () => {
       console.error('Error saving header:', err);
       setError('Ошибка при сохранении заголовка');
     }
-  };
+  };   
 
   const handleSaveService = async () => {
     try {
