@@ -1,5 +1,5 @@
 // src/components/admin/AdminLayout.tsx
-import { Outlet, NavLink, useNavigate, Link } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { createClient } from '@supabase/supabase-js';
 import { useState, useEffect } from 'react';
 import { 
@@ -34,6 +34,7 @@ const supabase = createClient(
 
 const AdminLayout = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -56,7 +57,7 @@ const AdminLayout = () => {
 
   const navItems = [
     // Основные разделы
-    { to: '/admin', icon: LayoutDashboard, label: 'Главная страница', shortLabel: 'Главная' },
+    { to: '/admin', icon: LayoutDashboard, label: 'Главная страница', shortLabel: 'Главная', end: true },
     { to: '/admin/events', icon: Calendar, label: 'Мероприятия', shortLabel: 'События' },
     { to: '/admin/speakers', icon: Users, label: 'Спикеры', shortLabel: 'Спикеры' },
     { to: '/admin/attendance', icon: Users, label: 'Посещения', shortLabel: 'Посещения' },
@@ -209,18 +210,16 @@ const AdminLayout = () => {
           <div className="space-y-1 px-2">
             {navItems.map((item) => {
               const Icon = item.icon;
-              const isActive = item.to === '/admin' 
-                ? location.pathname === '/admin' || location.pathname === '/admin/'
-                : location.pathname === item.to;
               
               return (
                 <NavLink
                   key={item.to}
                   to={item.to}
+                  end={item.end} // Используем проп end для точного совпадения пути
                   onClick={isMobile ? closeMobileMenu : undefined}
-                  className={({ isActive: navIsActive }) => `
+                  className={({ isActive }) => `
                     group relative flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200
-                    ${navIsActive || isActive
+                    ${isActive
                       ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
                       : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-700'
                     }
