@@ -114,24 +114,33 @@ const AdminRent = () => {
   };
 
   const handleSave = async () => {
-    try {
-      setSaving(true);
-      const { error } = await supabase
-        .from('rent_info_settings')
-        .update(editData)
-        .eq('id', data?.id);
+  try {
+    setSaving(true);
+    
+    // Получаем текущие настройки
+    const { data: currentSettings, error: fetchError } = await supabase
+      .from('site_settings')
+      .select('id')
+      .single();
+    
+    if (fetchError) throw fetchError;
+    
+    // Обновляем только поле rent_info_settings
+    const { error } = await supabase
+      .from('site_settings')
+      .update({ rent_info_settings: editData })
+      .eq('id', currentSettings.id);
 
-      if (error) throw error;
-      await fetchSettings();
-      toast.success('Настройки успешно сохранены');
-    } catch (err) {
-      console.error('Error saving settings:', err);
-      toast.error('Ошибка при сохранении настроек');
-    } finally {
-      setSaving(false);
-    }
-  };
-
+    if (error) throw error;
+    await fetchSettings();
+    toast.success('Настройки успешно сохранены');
+  } catch (err) {
+    console.error('Error saving settings:', err);
+    toast.error('Ошибка при сохранении настроек');
+  } finally {
+    setSaving(false);
+  }
+};
   const handleAddPriceItem = () => {
     if (!newPriceItem.name || newPriceItem.price <= 0) return;
     
