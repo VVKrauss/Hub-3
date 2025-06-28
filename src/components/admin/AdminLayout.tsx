@@ -210,8 +210,8 @@ const AdminLayout = () => {
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = item.to === '/admin' 
-  ? location.pathname === '/admin' || location.pathname === '/admin/'
-  : location.pathname === item.to;
+                ? location.pathname === '/admin' || location.pathname === '/admin/'
+                : location.pathname === item.to;
               
               return (
                 <NavLink
