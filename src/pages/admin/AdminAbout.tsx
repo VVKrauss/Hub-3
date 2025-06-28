@@ -81,12 +81,26 @@ const AdminRent = () => {
   }, []);
 
   const fetchSettings = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('rent_info_settings')
-        .select('*')
-        .single();
+  try {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('site_settings')  // ✅ КОНСОЛИДИРОВАННАЯ ТАБЛИЦА
+      .select('rent_info_settings')
+      .single();
+
+    if (error) throw error;
+    
+    // Извлекаем данные аренды из консолидированной структуры
+    const rentData = data?.rent_info_settings || {};
+    setData(rentData);
+    setEditData(rentData);
+  } catch (err) {
+    console.error('Error fetching settings:', err);
+    toast.error('Не удалось загрузить настройки');
+  } finally {
+    setLoading(false);
+  }
+};
 
       if (error) throw error;
       setData(data);
