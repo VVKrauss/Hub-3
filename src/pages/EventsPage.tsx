@@ -16,7 +16,7 @@ import {
   Loader2,
   AlertCircle,
   Grid3X3,
-  List,
+  List,  
   Star,
   ExternalLink,
   Eye,
