@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MessageCircle, AtSign, Phone, MapPin } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { getNavigationItems, getFooterSettings } from '../../api/settings';
 import Logo from '../ui/Logo';
 
 interface FooterSettings {
@@ -40,35 +40,34 @@ export function Footer() {
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const { data, error } = await supabase
-          .from('site_settings')
-          .select('footer_settings, navigation_items')
-          .single();
-        
-        if (error && error.code !== 'PGRST116') {
-          console.error('Error fetching footer settings:', error);
-          return;
+        // Загружаем настройки футера
+        const footerResponse = await getFooterSettings();
+        if (footerResponse.data) {
+          setFooterSettings({
+            ...footerSettings,
+            ...footerResponse.data
+          });
         }
 
-        if (data) {
-          // Загружаем настройки футера
-          if (data.footer_settings) {
-            setFooterSettings({
-              ...footerSettings,
-              ...data.footer_settings
-            });
-          }
-
-          // Загружаем элементы навигации
-          if (data.navigation_items) {
-            const visibleItems = data.navigation_items
-              .filter((item: NavItem) => item.visible)
-              .sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
-            setNavItems(visibleItems);
-          }
+        // Загружаем элементы навигации
+        const navResponse = await getNavigationItems();
+        if (navResponse.data) {
+          const visibleItems = navResponse.data
+            .filter((item: NavItem) => item.visible)
+            .sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+          setNavItems(visibleItems);
         }
       } catch (error) {
         console.error('Error fetching footer data:', error);
+        // Устанавливаем значения по умолчанию
+        setNavItems([
+          { id: '1', label: 'Главная', path: '/', visible: true },
+          { id: '2', label: 'События', path: '/events', visible: true },
+          { id: '3', label: 'Спикеры', path: '/speakers', visible: true },
+          { id: '4', label: 'О нас', path: '/about', visible: true },
+          { id: '5', label: 'Коворкинг', path: '/coworking', visible: true },
+          { id: '6', label: 'Аренда', path: '/rent', visible: true }
+        ]);
       }
     };
 

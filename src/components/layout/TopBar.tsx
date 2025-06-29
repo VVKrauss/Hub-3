@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Menu, X, Sun, Moon, LogIn } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../contexts/ThemeContext';
+import { getNavigationItems, getTopbarSettings } from '../../api/settings';
 import Logo from '../ui/Logo';
 import LoginModal from '../auth/LoginModal';
 import UserProfileDropdown from '../ui/UserProfileDropdown';
@@ -81,7 +82,9 @@ const TopBar = () => {
         .eq('id', userId)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.warn('Error fetching user profile:', error);
+      }
 
       const { data: { session } } = await supabase.auth.getSession();
       
@@ -108,32 +111,29 @@ const TopBar = () => {
 
   const fetchNavItems = async () => {
     try {
-      const { data, error } = await supabase
-        .from('site_settings')
-        .select('navigation_items')
-        .single();
-
-      if (error) throw error;
-
-      if (data?.navigation_items) {
-        setNavItems(data.navigation_items);
+      const response = await getNavigationItems();
+      if (response.data) {
+        setNavItems(response.data);
       }
     } catch (error) {
       console.error('Error fetching navigation items:', error);
+      // Устанавливаем навигацию по умолчанию
+      setNavItems([
+        { id: '1', label: 'Главная', path: '/', visible: true },
+        { id: '2', label: 'События', path: '/events', visible: true },
+        { id: '3', label: 'Спикеры', path: '/speakers', visible: true },
+        { id: '4', label: 'О нас', path: '/about', visible: true },
+        { id: '5', label: 'Коворкинг', path: '/coworking', visible: true },
+        { id: '6', label: 'Аренда', path: '/rent', visible: true }
+      ]);
     }
   };
 
   const fetchTopbarSettings = async () => {
     try {
-      const { data, error } = await supabase
-        .from('site_settings')
-        .select('topbar_settings')
-        .single();
-
-      if (error) throw error;
-
-      if (data?.topbar_settings?.height) {
-        setTopbarHeight(data.topbar_settings.height);
+      const response = await getTopbarSettings();
+      if (response.data?.height) {
+        setTopbarHeight(response.data.height);
       }
     } catch (error) {
       console.error('Error fetching topbar settings:', error);
