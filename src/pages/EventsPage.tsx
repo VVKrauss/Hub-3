@@ -1,6 +1,5 @@
 // src/pages/EventsPageUpdated.tsx
 // Полная обновленная версия EventsPage для работы с новой БД структурой
-// ЧАСТЬ 1: Импорты, типы и состояние компонента
 
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
