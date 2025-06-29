@@ -677,11 +677,30 @@ const EventsPageUpdated = () => {
   return (
     <Layout>
       <div className="min-h-screen">
-        <PageHeader 
+        {/* <PageHeader 
           title={pageSettings.title}
           description={pageSettings.metaDescription}
           backgroundImage={pageSettings.heroImage}
+        /> */}
+
+        
+<div className="relative h-[400px] overflow-hidden">
+  <div className="flex h-full transition-transform duration-500">
+    {featuredEvents.slice(0, 5).map((event, index) => (
+      <div key={index} className="min-w-full h-full">
+        <img 
+          src={event.image_url || '/default-event.jpg'} 
+          alt={event.title}
+          className="w-full h-full object-cover"
         />
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-6">
+          <h2 className="text-white text-2xl font-bold">{event.title}</h2>
+          <p className="text-white/80">{formatDate(event.start_date)}</p>
+        </div>
+      </div>
+    ))}
+  </div>
+</div>
 
         <div className="max-w-7xl mx-auto px-4 py-12">
           {/* Рекомендуемые события */}
