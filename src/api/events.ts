@@ -4,19 +4,22 @@
 import { supabase, createApiResponse, createPaginatedResponse, type ApiResponse, type PaginatedResponse } from '../lib/supabase';
 import type { 
   ShEvent, 
+  EventWithDetails, 
   ShEventSpeaker,
   ShEventSchedule,
   ShEventTicketType,
-  ShRegistration,
-  EventWithDetails,
-  EventFilters 
+  EventFilters,
+  ShEventType,
+  ShEventStatus,
+  ShAgeCategory,
+  ShPaymentType
 } from '../types/database';
 
 // Получение списка событий с фильтрацией и пагинацией
 export const getEvents = async (
   filters: EventFilters = {},
   page: number = 1,
-  limit: number = 10
+  limit: number = 20
 ): Promise<PaginatedResponse<EventWithDetails>> => {
   try {
     let query = supabase
@@ -28,14 +31,14 @@ export const getEvents = async (
           role,
           display_order,
           bio_override,
-          sh_speakers (
+          speaker:sh_speakers (
             id,
             name,
             slug,
             bio,
             field_of_expertise,
             avatar_url,
-            is_featured
+            status
           )
         ),
         sh_event_schedule (
@@ -46,7 +49,8 @@ export const getEvents = async (
           end_time,
           date,
           location_override,
-          display_order
+          display_order,
+          speaker_id
         ),
         sh_event_ticket_types (
           id,
@@ -96,7 +100,7 @@ export const getEvents = async (
     }
     
     if (filters.search) {
-      query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
+      query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%,short_description.ilike.%${filters.search}%`);
     }
 
     // Применяем пагинацию
@@ -111,7 +115,7 @@ export const getEvents = async (
 
     if (error) throw error;
 
-    // Добавляем подсчет регистраций и доступных мест
+    // Добавляем счетчик регистраций для каждого события
     const eventsWithCounts = await Promise.all(
       (data || []).map(async (event) => {
         const { count: registrationsCount } = await supabase
@@ -144,13 +148,10 @@ export const getEvents = async (
   }
 };
 
-// Получение конкретного события по ID или slug
-export const getEvent = async (
-  identifier: string,
-  bySlug: boolean = false
-): Promise<ApiResponse<EventWithDetails>> => {
+// Получение конкретного события по ID
+export const getEvent = async (eventId: string): Promise<ApiResponse<EventWithDetails>> => {
   try {
-    let query = supabase
+    const { data, error } = await supabase
       .from('sh_events')
       .select(`
         *,
@@ -159,21 +160,22 @@ export const getEvent = async (
           role,
           display_order,
           bio_override,
-          sh_speakers (
+          speaker:sh_speakers (
             id,
             name,
             slug,
             bio,
             field_of_expertise,
+            birth_date,
             avatar_url,
-            is_featured,
+            status,
             sh_speaker_social_links (
               id,
               platform,
               url,
               display_name,
               is_public,
-              is_primary
+              display_order
             )
           )
         ),
@@ -184,9 +186,9 @@ export const getEvent = async (
           start_time,
           end_time,
           date,
-          speaker_id,
           location_override,
-          display_order
+          display_order,
+          speaker_id
         ),
         sh_event_ticket_types (
           id,
@@ -201,19 +203,95 @@ export const getEvent = async (
           display_order
         )
       `)
+      .eq('id', eventId)
       .single();
-
-    if (bySlug) {
-      query = query.eq('slug', identifier);
-    } else {
-      query = query.eq('id', identifier);
-    }
-
-    const { data, error } = await query;
 
     if (error) throw error;
 
-    // Добавляем статистику регистраций
+    // Получаем количество регистраций
+    const { count: registrationsCount } = await supabase
+      .from('sh_registrations')
+      .select('*', { count: 'exact', head: true })
+      .eq('event_id', eventId)
+      .eq('registration_status', 'active');
+
+    const availableSpots = data.max_attendees 
+      ? Math.max(0, data.max_attendees - (registrationsCount || 0))
+      : null;
+
+    const eventWithCounts = {
+      ...data,
+      registrations_count: registrationsCount || 0,
+      available_spots: availableSpots
+    };
+
+    return createApiResponse(eventWithCounts);
+  } catch (error) {
+    return createApiResponse(null, error);
+  }
+};
+
+// Получение события по slug
+export const getEventBySlug = async (slug: string): Promise<ApiResponse<EventWithDetails>> => {
+  try {
+    const { data, error } = await supabase
+      .from('sh_events')
+      .select(`
+        *,
+        sh_event_speakers (
+          id,
+          role,
+          display_order,
+          bio_override,
+          speaker:sh_speakers (
+            id,
+            name,
+            slug,
+            bio,
+            field_of_expertise,
+            birth_date,
+            avatar_url,
+            status,
+            sh_speaker_social_links (
+              id,
+              platform,
+              url,
+              display_name,
+              is_public,
+              display_order
+            )
+          )
+        ),
+        sh_event_schedule (
+          id,
+          title,
+          description,
+          start_time,
+          end_time,
+          date,
+          location_override,
+          display_order,
+          speaker_id
+        ),
+        sh_event_ticket_types (
+          id,
+          name,
+          description,
+          price,
+          currency,
+          max_quantity,
+          min_age,
+          max_age,
+          is_active,
+          display_order
+        )
+      `)
+      .eq('slug', slug)
+      .single();
+
+    if (error) throw error;
+
+    // Получаем количество регистраций
     const { count: registrationsCount } = await supabase
       .from('sh_registrations')
       .select('*', { count: 'exact', head: true })
@@ -310,9 +388,11 @@ export const publishEvent = async (eventId: string): Promise<ApiResponse<ShEvent
   }
 };
 
-// Получение ближайших событий для главной страницы
-export const getFeaturedEvents = async (limit: number = 6): Promise<ApiResponse<EventWithDetails[]>> => {
+// Получение ближайших событий
+export const getUpcomingEvents = async (limit: number = 10): Promise<ApiResponse<EventWithDetails[]>> => {
   try {
+    const now = new Date().toISOString();
+    
     const { data, error } = await supabase
       .from('sh_events')
       .select(`
@@ -320,36 +400,40 @@ export const getFeaturedEvents = async (limit: number = 6): Promise<ApiResponse<
         sh_event_speakers (
           id,
           role,
-          sh_speakers (
+          display_order,
+          speaker:sh_speakers (
             id,
             name,
+            slug,
             avatar_url
           )
         )
       `)
+      .gte('start_at', now)
       .eq('status', 'published')
       .eq('is_public', true)
-      .gte('start_at', new Date().toISOString())
       .order('start_at', { ascending: true })
       .limit(limit);
 
     if (error) throw error;
 
-    // Добавляем подсчет регистраций
+    // Добавляем счетчик регистраций для каждого события
     const eventsWithCounts = await Promise.all(
       (data || []).map(async (event) => {
-        const { count } = await supabase
+        const { count: registrationsCount } = await supabase
           .from('sh_registrations')
           .select('*', { count: 'exact', head: true })
           .eq('event_id', event.id)
           .eq('registration_status', 'active');
 
+        const availableSpots = event.max_attendees 
+          ? Math.max(0, event.max_attendees - (registrationsCount || 0))
+          : null;
+
         return {
           ...event,
-          registrations_count: count || 0,
-          available_spots: event.max_attendees 
-            ? Math.max(0, event.max_attendees - (count || 0))
-            : null
+          registrations_count: registrationsCount || 0,
+          available_spots: availableSpots
         };
       })
     );
@@ -360,67 +444,55 @@ export const getFeaturedEvents = async (limit: number = 6): Promise<ApiResponse<
   }
 };
 
-// Получение событий конкретного спикера
-export const getSpeakerEvents = async (speakerId: string): Promise<ApiResponse<EventWithDetails[]>> => {
+// Получение рекомендуемых событий
+export const getFeaturedEvents = async (limit: number = 6): Promise<ApiResponse<EventWithDetails[]>> => {
   try {
     const { data, error } = await supabase
       .from('sh_events')
       .select(`
         *,
-        sh_event_speakers!inner (
+        sh_event_speakers (
+          id,
           role,
-          display_order
+          display_order,
+          speaker:sh_speakers (
+            id,
+            name,
+            slug,
+            avatar_url
+          )
         )
       `)
-      .eq('sh_event_speakers.speaker_id', speakerId)
+      .eq('is_featured', true)
       .eq('status', 'published')
       .eq('is_public', true)
-      .order('start_at', { ascending: false });
+      .order('start_at', { ascending: true })
+      .limit(limit);
 
     if (error) throw error;
-    return createApiResponse(data || []);
-  } catch (error) {
-    return createApiResponse(null, error);
-  }
-};
 
-// Статистика событий
-export const getEventsStats = async (): Promise<ApiResponse<{
-  total: number;
-  published: number;
-  draft: number;
-  upcoming: number;
-  past: number;
-  this_month: number;
-}>> => {
-  try {
-    const now = new Date().toISOString();
-    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+    // Добавляем счетчик регистраций для каждого события
+    const eventsWithCounts = await Promise.all(
+      (data || []).map(async (event) => {
+        const { count: registrationsCount } = await supabase
+          .from('sh_registrations')
+          .select('*', { count: 'exact', head: true })
+          .eq('event_id', event.id)
+          .eq('registration_status', 'active');
 
-    const [
-      { count: total },
-      { count: published },
-      { count: draft },
-      { count: upcoming },
-      { count: past },
-      { count: thisMonth }
-    ] = await Promise.all([
-      supabase.from('sh_events').select('*', { count: 'exact', head: true }),
-      supabase.from('sh_events').select('*', { count: 'exact', head: true }).eq('status', 'published'),
-      supabase.from('sh_events').select('*', { count: 'exact', head: true }).eq('status', 'draft'),
-      supabase.from('sh_events').select('*', { count: 'exact', head: true }).gte('start_at', now),
-      supabase.from('sh_events').select('*', { count: 'exact', head: true }).lt('start_at', now),
-      supabase.from('sh_events').select('*', { count: 'exact', head: true }).gte('created_at', startOfMonth)
-    ]);
+        const availableSpots = event.max_attendees 
+          ? Math.max(0, event.max_attendees - (registrationsCount || 0))
+          : null;
 
-    return createApiResponse({
-      total: total || 0,
-      published: published || 0,
-      draft: draft || 0,
-      upcoming: upcoming || 0,
-      past: past || 0,
-      this_month: thisMonth || 0
-    });
+        return {
+          ...event,
+          registrations_count: registrationsCount || 0,
+          available_spots: availableSpots
+        };
+      })
+    );
+
+    return createApiResponse(eventsWithCounts);
   } catch (error) {
     return createApiResponse(null, error);
   }
@@ -429,39 +501,271 @@ export const getEventsStats = async (): Promise<ApiResponse<{
 // Поиск событий
 export const searchEvents = async (
   searchQuery: string,
+  filters: EventFilters = {},
   limit: number = 20
 ): Promise<ApiResponse<EventWithDetails[]>> => {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('sh_events')
       .select(`
         *,
         sh_event_speakers (
-          sh_speakers (
+          id,
+          role,
+          display_order,
+          speaker:sh_speakers (
+            id,
             name,
+            slug,
             avatar_url
           )
         )
       `)
-      .or(`title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%,tags.cs.{${searchQuery}}`)
-      .eq('status', 'published')
-      .eq('is_public', true)
+      .or(`title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%,short_description.ilike.%${searchQuery}%`);
+
+    // Применяем дополнительные фильтры
+    if (filters.status?.length) {
+      query = query.in('status', filters.status);
+    }
+    
+    if (filters.event_type?.length) {
+      query = query.in('event_type', filters.event_type);
+    }
+    
+    if (filters.payment_type?.length) {
+      query = query.in('payment_type', filters.payment_type);
+    }
+
+    query = query
       .order('start_at', { ascending: true })
       .limit(limit);
 
+    const { data, error } = await query;
+
     if (error) throw error;
-    return createApiResponse(data || []);
+
+    // Добавляем счетчик регистраций для каждого события
+    const eventsWithCounts = await Promise.all(
+      (data || []).map(async (event) => {
+        const { count: registrationsCount } = await supabase
+          .from('sh_registrations')
+          .select('*', { count: 'exact', head: true })
+          .eq('event_id', event.id)
+          .eq('registration_status', 'active');
+
+        const availableSpots = event.max_attendees 
+          ? Math.max(0, event.max_attendees - (registrationsCount || 0))
+          : null;
+
+        return {
+          ...event,
+          registrations_count: registrationsCount || 0,
+          available_spots: availableSpots
+        };
+      })
+    );
+
+    return createApiResponse(eventsWithCounts);
   } catch (error) {
     return createApiResponse(null, error);
   }
 };
 
-// Работа со спикерами события
-export const addSpeakerToEvent = async (
+// Получение статистики событий
+export const getEventsStats = async (
+  dateFrom?: string,
+  dateTo?: string
+): Promise<ApiResponse<{
+  total: number;
+  published: number;
+  draft: number;
+  cancelled: number;
+  past: number;
+  upcoming: number;
+  featured: number;
+  totalRegistrations: number;
+  totalRevenue: number;
+  averageAttendance: number;
+}>> => {
+  try {
+    const now = new Date().toISOString();
+    
+    let query = supabase
+      .from('sh_events')
+      .select('status, start_at, end_at, is_featured, base_price, currency');
+
+    if (dateFrom) {
+      query = query.gte('start_at', dateFrom);
+    }
+    
+    if (dateTo) {
+      query = query.lte('start_at', dateTo);
+    }
+
+    const { data: events, error } = await query;
+
+    if (error) throw error;
+
+    // Получаем статистику регистраций
+    let registrationsQuery = supabase
+      .from('sh_registrations')
+      .select('total_amount, currency, event_id, registration_status');
+
+    if (dateFrom || dateTo) {
+      // Фильтруем регистрации по событиям в указанном диапазоне
+      const eventIds = events?.map(e => e.id) || [];
+      if (eventIds.length > 0) {
+        registrationsQuery = registrationsQuery.in('event_id', eventIds);
+      }
+    }
+
+    const { data: registrations, error: regError } = await registrationsQuery;
+
+    if (regError) throw regError;
+
+    const stats = {
+      total: events?.length || 0,
+      published: events?.filter(e => e.status === 'published').length || 0,
+      draft: events?.filter(e => e.status === 'draft').length || 0,
+      cancelled: events?.filter(e => e.status === 'cancelled').length || 0,
+      past: events?.filter(e => new Date(e.end_at) < new Date()).length || 0,
+      upcoming: events?.filter(e => new Date(e.start_at) > new Date()).length || 0,
+      featured: events?.filter(e => e.is_featured).length || 0,
+      totalRegistrations: registrations?.filter(r => r.registration_status === 'active').length || 0,
+      totalRevenue: registrations?.reduce((sum, r) => {
+        return r.registration_status === 'active' ? sum + (Number(r.total_amount) || 0) : sum;
+      }, 0) || 0,
+      averageAttendance: 0
+    };
+
+    // Вычисляем среднюю посещаемость
+    if (stats.total > 0) {
+      stats.averageAttendance = stats.totalRegistrations / stats.total;
+    }
+
+    return createApiResponse(stats);
+  } catch (error) {
+    return createApiResponse(null, error);
+  }
+};
+
+// Дублирование события
+export const duplicateEvent = async (
+  eventId: string,
+  newTitle: string,
+  newStartAt: string,
+  newEndAt: string
+): Promise<ApiResponse<ShEvent>> => {
+  try {
+    // Получаем оригинальное событие
+    const originalEvent = await getEvent(eventId);
+    if (originalEvent.error || !originalEvent.data) {
+      throw new Error('Событие не найдено');
+    }
+
+    // Создаем новое событие на основе оригинального
+    const { id, created_at, updated_at, published_at, slug, ...eventData } = originalEvent.data;
+    
+    const newEvent = await createEvent({
+      ...eventData,
+      title: newTitle,
+      start_at: newStartAt,
+      end_at: newEndAt,
+      slug: `${eventData.slug}-copy-${Date.now()}`,
+      status: 'draft',
+      published_at: null
+    });
+
+    if (newEvent.error || !newEvent.data) {
+      throw new Error('Ошибка при создании копии события');
+    }
+
+    // Копируем спикеров
+    if (originalEvent.data.sh_event_speakers?.length) {
+      await Promise.all(
+        originalEvent.data.sh_event_speakers.map(async (eventSpeaker) => {
+          const { id, created_at, updated_at, ...speakerData } = eventSpeaker;
+          await supabase
+            .from('sh_event_speakers')
+            .insert([{
+              ...speakerData,
+              event_id: newEvent.data!.id
+            }]);
+        })
+      );
+    }
+
+    // Копируем типы билетов
+    if (originalEvent.data.sh_event_ticket_types?.length) {
+      await Promise.all(
+        originalEvent.data.sh_event_ticket_types.map(async (ticketType) => {
+          const { id, created_at, updated_at, ...ticketData } = ticketType;
+          await supabase
+            .from('sh_event_ticket_types')
+            .insert([{
+              ...ticketData,
+              event_id: newEvent.data!.id
+            }]);
+        })
+      );
+    }
+
+    return newEvent;
+  } catch (error) {
+    return createApiResponse(null, error);
+  }
+};
+
+// Архивирование события
+export const archiveEvent = async (eventId: string): Promise<ApiResponse<ShEvent>> => {
+  try {
+    const { data, error } = await supabase
+      .from('sh_events')
+      .update({ 
+        status: 'archived',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', eventId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return createApiResponse(data);
+  } catch (error) {
+    return createApiResponse(null, error);
+  }
+};
+
+// Отмена события
+export const cancelEvent = async (
+  eventId: string,
+  reason?: string
+): Promise<ApiResponse<ShEvent>> => {
+  try {
+    const { data, error } = await supabase
+      .from('sh_events')
+      .update({ 
+        status: 'cancelled',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', eventId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return createApiResponse(data);
+  } catch (error) {
+    return createApiResponse(null, error);
+  }
+};
+
+// Управление спикерами события
+export const addEventSpeaker = async (
   eventId: string,
   speakerId: string,
   role: string = 'speaker',
-  displayOrder?: number
+  displayOrder: number = 0,
+  bioOverride?: string
 ): Promise<ApiResponse<ShEventSpeaker>> => {
   try {
     const { data, error } = await supabase
@@ -470,7 +774,8 @@ export const addSpeakerToEvent = async (
         event_id: eventId,
         speaker_id: speakerId,
         role,
-        display_order: displayOrder || 0
+        display_order: displayOrder,
+        bio_override: bioOverride
       }])
       .select()
       .single();
@@ -482,7 +787,7 @@ export const addSpeakerToEvent = async (
   }
 };
 
-export const removeSpeakerFromEvent = async (
+export const removeEventSpeaker = async (
   eventId: string,
   speakerId: string
 ): Promise<ApiResponse<boolean>> => {
@@ -500,8 +805,8 @@ export const removeSpeakerFromEvent = async (
   }
 };
 
-// Работа с расписанием события
-export const addScheduleItem = async (
+// Управление расписанием события
+export const addEventScheduleItem = async (
   scheduleData: Omit<ShEventSchedule, 'id' | 'created_at'>
 ): Promise<ApiResponse<ShEventSchedule>> => {
   try {
@@ -518,7 +823,7 @@ export const addScheduleItem = async (
   }
 };
 
-export const updateScheduleItem = async (
+export const updateEventScheduleItem = async (
   scheduleId: string,
   updates: Partial<Omit<ShEventSchedule, 'id' | 'created_at'>>
 ): Promise<ApiResponse<ShEventSchedule>> => {
@@ -537,7 +842,7 @@ export const updateScheduleItem = async (
   }
 };
 
-export const deleteScheduleItem = async (scheduleId: string): Promise<ApiResponse<boolean>> => {
+export const deleteEventScheduleItem = async (scheduleId: string): Promise<ApiResponse<boolean>> => {
   try {
     const { error } = await supabase
       .from('sh_event_schedule')
@@ -551,8 +856,8 @@ export const deleteScheduleItem = async (scheduleId: string): Promise<ApiRespons
   }
 };
 
-// Работа с типами билетов
-export const addTicketType = async (
+// Управление типами билетов
+export const addEventTicketType = async (
   ticketData: Omit<ShEventTicketType, 'id' | 'created_at' | 'updated_at'>
 ): Promise<ApiResponse<ShEventTicketType>> => {
   try {
@@ -569,7 +874,7 @@ export const addTicketType = async (
   }
 };
 
-export const updateTicketType = async (
+export const updateEventTicketType = async (
   ticketTypeId: string,
   updates: Partial<Omit<ShEventTicketType, 'id' | 'created_at'>>
 ): Promise<ApiResponse<ShEventTicketType>> => {
@@ -588,7 +893,7 @@ export const updateTicketType = async (
   }
 };
 
-export const deleteTicketType = async (ticketTypeId: string): Promise<ApiResponse<boolean>> => {
+export const deleteEventTicketType = async (ticketTypeId: string): Promise<ApiResponse<boolean>> => {
   try {
     const { error } = await supabase
       .from('sh_event_ticket_types')
@@ -602,75 +907,59 @@ export const deleteTicketType = async (ticketTypeId: string): Promise<ApiRespons
   }
 };
 
-// Дублирование события
-export const duplicateEvent = async (
-  eventId: string,
-  updates?: Partial<Pick<ShEvent, 'title' | 'slug' | 'start_at' | 'end_at'>>
-): Promise<ApiResponse<ShEvent>> => {
+// Получение событий по спикеру
+export const getEventsBySpeaker = async (speakerId: string): Promise<ApiResponse<EventWithDetails[]>> => {
   try {
-    // Получаем оригинальное событие
-    const { data: originalEvent, error: fetchError } = await supabase
-      .from('sh_events')
-      .select('*')
-      .eq('id', eventId)
-      .single();
-
-    if (fetchError) throw fetchError;
-
-    // Создаем копию с новыми данными
-    const { id, created_at, updated_at, published_at, ...eventData } = originalEvent;
-    const duplicatedEvent = {
-      ...eventData,
-      ...updates,
-      status: 'draft' as const,
-      slug: updates?.slug || `${originalEvent.slug}-copy-${Date.now()}`,
-      title: updates?.title || `${originalEvent.title} (копия)`,
-      published_at: null
-    };
-
     const { data, error } = await supabase
       .from('sh_events')
-      .insert([duplicatedEvent])
-      .select()
-      .single();
+      .select(`
+        *,
+        sh_event_speakers!inner (
+          id,
+          role,
+          display_order
+        )
+      `)
+      .eq('sh_event_speakers.speaker_id', speakerId)
+      .order('start_at', { ascending: false });
 
     if (error) throw error;
+    return createApiResponse(data || []);
+  } catch (error) {
+    return createApiResponse(null, error);
+  }
+};
 
-    // Копируем связанные данные (спикеры, расписание, типы билетов)
-    const [speakers, schedule, ticketTypes] = await Promise.all([
-      supabase.from('sh_event_speakers').select('*').eq('event_id', eventId),
-      supabase.from('sh_event_schedule').select('*').eq('event_id', eventId),
-      supabase.from('sh_event_ticket_types').select('*').eq('event_id', eventId)
-    ]);
+// Получение событий по типу
+export const getEventsByType = async (
+  eventType: ShEventType,
+  limit: number = 20
+): Promise<ApiResponse<EventWithDetails[]>> => {
+  try {
+    const { data, error } = await supabase
+      .from('sh_events')
+      .select(`
+        *,
+        sh_event_speakers (
+          id,
+          role,
+          display_order,
+          speaker:sh_speakers (
+            id,
+            name,
+            slug,
+            avatar_url
+          )
+        )
+      `)
+      .eq('event_type', eventType)
+      .eq('status', 'published')
+      .eq('is_public', true)
+      .order('start_at', { ascending: true })
+      .limit(limit);
 
-    // Копируем спикеров
-    if (speakers.data?.length) {
-      const speakersData = speakers.data.map(({ id, created_at, updated_at, ...speaker }) => ({
-        ...speaker,
-        event_id: data.id
-      }));
-      await supabase.from('sh_event_speakers').insert(speakersData);
-    }
-
-    // Копируем расписание
-    if (schedule.data?.length) {
-      const scheduleData = schedule.data.map(({ id, created_at, ...item }) => ({
-        ...item,
-        event_id: data.id
-      }));
-      await supabase.from('sh_event_schedule').insert(scheduleData);
-    }
-
-    // Копируем типы билетов
-    if (ticketTypes.data?.length) {
-      const ticketTypesData = ticketTypes.data.map(({ id, created_at, updated_at, ...ticket }) => ({
-        ...ticket,
-        event_id: data.id
-      }));
-      await supabase.from('sh_event_ticket_types').insert(ticketTypesData);
-    }
-
-    return createApiResponse(data);
+    if (error) throw error;
+    return createApiResponse(data || []);
   } catch (error) {
     return createApiResponse(null, error);
   }
