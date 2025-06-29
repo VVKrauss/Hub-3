@@ -64,20 +64,20 @@ export const createSiteSettings = async (
   }
 };
 
-// Получение или создание настроек (upsert логика)
+// Получение или создание настроек (utility функция)
 export const getOrCreateSiteSettings = async (): Promise<ApiResponse<ShSiteSettings>> => {
   try {
-    // Сначала пытаемся получить существующие настройки
     const existing = await getSiteSettings();
     
     if (existing.data) {
       return existing;
     }
 
-    // Если настроек нет, создаем с дефолтными значениями
-    const defaultSettings: Omit<ShSiteSettings, 'id' | 'created_at' | 'updated_at' | 'version'> = {
+    // Создаем настройки по умолчанию
+    const defaultSettings = {
       site_title: 'Science Hub',
       site_description: 'Место для научного сообщества',
+      is_active: true,
       navigation_items: [],
       navigation_style: {
         style: 'classic',
@@ -173,9 +173,7 @@ export const getOrCreateSiteSettings = async (): Promise<ApiResponse<ShSiteSetti
         defaultView: 'grid',
         itemsPerPage: 16,
         metaDescription: ''
-      },
-      is_active: true,
-      created_by: null
+      }
     };
 
     return await createSiteSettings(defaultSettings);
@@ -186,28 +184,21 @@ export const getOrCreateSiteSettings = async (): Promise<ApiResponse<ShSiteSetti
 
 // Обновление навигации
 export const updateNavigation = async (
-  navigationItems: any[],
-  navigationStyle?: any
+  navigationItems: any[]
 ): Promise<ApiResponse<ShSiteSettings>> => {
   try {
     const settings = await getOrCreateSiteSettings();
     if (!settings.data) throw new Error('Не удалось получить настройки');
 
-    const updates: Partial<ShSiteSettings> = {
+    return await updateSiteSettings(settings.data.id, {
       navigation_items: navigationItems
-    };
-
-    if (navigationStyle) {
-      updates.navigation_style = navigationStyle;
-    }
-
-    return await updateSiteSettings(settings.data.id, updates);
+    });
   } catch (error) {
     return createApiResponse(null, error);
   }
 };
 
-// Обновление настроек футера
+// Обновление футера
 export const updateFooterSettings = async (
   footerSettings: any
 ): Promise<ApiResponse<ShSiteSettings>> => {
@@ -225,23 +216,23 @@ export const updateFooterSettings = async (
 
 // Обновление настроек главной страницы
 export const updateHomepageSettings = async (
-  section: 'hero' | 'about' | 'events' | 'services',
-  sectionData: any
+  heroSection?: any,
+  aboutSection?: any,
+  eventsSection?: any,
+  servicesSection?: any
 ): Promise<ApiResponse<ShSiteSettings>> => {
   try {
     const settings = await getOrCreateSiteSettings();
     if (!settings.data) throw new Error('Не удалось получить настройки');
 
-    const fieldMap = {
-      hero: 'homepage_hero_section',
-      about: 'homepage_about_section',
-      events: 'homepage_events_section',
-      services: 'homepage_services_section'
-    };
+    const updates: any = {};
+    
+    if (heroSection) updates.homepage_hero_section = heroSection;
+    if (aboutSection) updates.homepage_about_section = aboutSection;
+    if (eventsSection) updates.homepage_events_section = eventsSection;
+    if (servicesSection) updates.homepage_services_section = servicesSection;
 
-    return await updateSiteSettings(settings.data.id, {
-      [fieldMap[section]]: sectionData
-    });
+    return await updateSiteSettings(settings.data.id, updates);
   } catch (error) {
     return createApiResponse(null, error);
   }
@@ -361,7 +352,7 @@ export const getPageSettings = async (
         };
         break;
       default:
-        throw new Error('Неизвестная страница');
+        throw new Error(`Неизвестная страница: ${page}`);
     }
 
     return createApiResponse(pageSettings);
@@ -370,43 +361,56 @@ export const getPageSettings = async (
   }
 };
 
-// Сброс настроек к дефолтным значениям
-export const resetSiteSettings = async (): Promise<ApiResponse<ShSiteSettings>> => {
+// Сброс настроек к значениям по умолчанию
+export const resetSettingsToDefault = async (): Promise<ApiResponse<ShSiteSettings>> => {
   try {
     // Деактивируем текущие настройки
-    await supabase
-      .from('sh_site_settings')
-      .update({ is_active: false })
-      .eq('is_active', true);
+    const currentSettings = await getSiteSettings();
+    if (currentSettings.data) {
+      await updateSiteSettings(currentSettings.data.id, { is_active: false });
+    }
 
-    // Создаем новые с дефолтными значениями
+    // Создаем новые настройки по умолчанию
     return await getOrCreateSiteSettings();
   } catch (error) {
     return createApiResponse(null, error);
   }
 };
 
-// Экспорт настроек
-export const exportSettings = async (): Promise<ApiResponse<ShSiteSettings>> => {
+// Экспорт версии настроек в JSON
+export const exportSettings = async (): Promise<ApiResponse<any>> => {
   try {
     const settings = await getSiteSettings();
-    return settings;
+    if (!settings.data) throw new Error('Настройки не найдены');
+
+    const exportData = {
+      ...settings.data,
+      exported_at: new Date().toISOString(),
+      version: settings.data.version
+    };
+
+    return createApiResponse(exportData);
   } catch (error) {
     return createApiResponse(null, error);
   }
 };
 
-// Импорт настроек
+// Импорт настроек из JSON
 export const importSettings = async (
-  settingsData: Partial<ShSiteSettings>
+  settingsData: any
 ): Promise<ApiResponse<ShSiteSettings>> => {
   try {
-    const currentSettings = await getOrCreateSiteSettings();
-    if (!currentSettings.data) throw new Error('Не удалось получить текущие настройки');
+    // Удаляем системные поля
+    const { id, created_at, updated_at, version, exported_at, ...cleanSettings } = settingsData;
 
-    const { id, created_at, updated_at, version, ...importData } = settingsData as any;
-    
-    return await updateSiteSettings(currentSettings.data.id, importData);
+    // Деактивируем текущие настройки
+    const currentSettings = await getSiteSettings();
+    if (currentSettings.data) {
+      await updateSiteSettings(currentSettings.data.id, { is_active: false });
+    }
+
+    // Создаем новые настройки
+    return await createSiteSettings(cleanSettings);
   } catch (error) {
     return createApiResponse(null, error);
   }
