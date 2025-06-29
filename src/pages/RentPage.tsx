@@ -305,14 +305,14 @@ const RentPage = () => {
       try {
         setLoading(true);
         const { data, error } = await supabase
-          .from('rent_info_settings')
-          .select('*')
+          .from('site_settings')
+          .select('rent_selection')
           .single();
 
         if (error) {
           // If no data exists, create default entry
           if (error.code === 'PGRST116') {
-            console.log('No rent info settings found, using defaults');
+            console.log('No site settings found, using defaults');
             setSettings({
               id: 1,
               title: 'Аренда пространства ScienceHub',
@@ -338,7 +338,34 @@ const RentPage = () => {
             throw error;
           }
         } else {
-          setSettings(data);
+          // Extract rent_selection data from site_settings
+          const rentData = data?.rent_selection;
+          if (rentData) {
+            setSettings(rentData);
+          } else {
+            // Use default settings if rent_selection is null or empty
+            setSettings({
+              id: 1,
+              title: 'Аренда пространства ScienceHub',
+              description: '<p>Современное пространство для проведения ваших мероприятий, встреч и презентаций. Мы предлагаем комфортную атмосферу и все необходимое оборудование для успешного проведения любых событий.</p>',
+              photos: [
+                'https://images.pexels.com/photos/1181406/pexels-photo-1181406.jpeg',
+                'https://images.pexels.com/photos/1181248/pexels-photo-1181248.jpeg'
+              ],
+              amenities: ['Wi-Fi', 'Проектор', 'Звуковая система'],
+              pricelist: [],
+              contacts: {
+                address: 'Адрес будет указан при бронировании',
+                phone: '+381 XX XXX XXXX',
+                email: 'info@sciencehub.rs'
+              },
+              main_prices: {
+                hourly: 25,
+                daily: 150
+              },
+              included_services: ['Wi-Fi', 'Проектор', 'Звуковая система', 'Кондиционер', 'Кухонная зона', 'Парковка']
+            });
+          }
         }
       } catch (err) {
         console.error('Error fetching data:', err);
