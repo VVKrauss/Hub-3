@@ -29,25 +29,7 @@ export const getEvents = async (
 
     // Применяем фильтры
     if (filters.status?.length) {
-      // Фильтруем только валидные статусы enum
-      const validStatuses = filters.status.filter(status => 
-        ['draft', 'published', 'cancelled', 'completed', 'archived'].includes(status)
-      );
-      
-      if (validStatuses.length > 0) {
-        query = query.in('status', validStatuses);
-      }
-      
-      // Обрабатываем специальные фильтры
-      if (filters.status.includes('past')) {
-        const now = new Date().toISOString();
-        query = query.lte('end_at', now);
-      }
-      
-      if (filters.status.includes('upcoming')) {
-        const now = new Date().toISOString();
-        query = query.gte('start_at', now);
-      }
+      query = query.in('status', filters.status);
     }
     
     if (filters.event_type?.length) {
@@ -539,25 +521,7 @@ export const searchEvents = async (
 
     // Применяем дополнительные фильтры
     if (filters.status?.length) {
-      // Фильтруем только валидные статусы enum
-      const validStatuses = filters.status.filter(status => 
-        ['draft', 'published', 'cancelled', 'completed', 'archived'].includes(status)
-      );
-      
-      if (validStatuses.length > 0) {
-        query = query.in('status', validStatuses);
-      }
-      
-      // Обрабатываем специальные фильтры
-      if (filters.status.includes('past')) {
-        const now = new Date().toISOString();
-        query = query.lte('end_at', now);
-      }
-      
-      if (filters.status.includes('upcoming')) {
-        const now = new Date().toISOString();
-        query = query.gte('start_at', now);
-      }
+      query = query.in('status', filters.status);
     }
     
     if (filters.event_type?.length) {
