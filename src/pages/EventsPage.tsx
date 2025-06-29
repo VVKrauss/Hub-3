@@ -46,7 +46,7 @@ interface Event {
   languages: string[];
 }
 
-const EventsPageUpdated = () => {
+const EventsPage = () => {
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('start-asc');
@@ -272,7 +272,6 @@ const EventsPageUpdated = () => {
 
   return (
     <Layout>
-      {/* Hero Slideshow Section */}
       <div className="relative">
         <EventSlideshow 
           events={upcomingEvents} 
@@ -287,10 +286,10 @@ const EventsPageUpdated = () => {
       <main className="section bg-gray-50 dark:bg-dark-800">
         <div className="container px-4">
           <div className="flex flex-col lg:flex-row gap-6">
-            {/* Main Content - Upcoming Events */}
+            {/* Основной контент - предстоящие мероприятия */}
             <div className="lg:flex-1">
               <div className="mb-6 space-y-4">
-                {/* First Row: Search and Main Filters */}
+                {/* Первая строка: поиск и основные фильтры */}
                 <div className="flex flex-col md:flex-row gap-3 justify-between">
                   <div className="flex flex-col md:flex-row gap-3 w-full">
                     <div className="relative flex-1">
@@ -409,9 +408,9 @@ const EventsPageUpdated = () => {
                   </div>
                 </div>
 
-                {/* Second Row: Favorite Filters */}
+                {/* Вторая строка: фильтры избранного и статистика */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  {/* Favorite Filters */}
+                  {/* Фильтры избранного */}
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
                       <Filter className="h-4 w-4 text-gray-500" />
@@ -450,7 +449,7 @@ const EventsPageUpdated = () => {
                 </div>
               </div>
 
-              {/* Notification for non-authenticated users */}
+              {/* Уведомление для неавторизованных пользователей */}
               {!user && (
                 <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                   <p className="text-sm text-blue-800 dark:text-blue-200">
@@ -462,7 +461,7 @@ const EventsPageUpdated = () => {
               <div className="mb-8">
                 <h2 className="text-2xl font-semibold mb-4">Предстоящие мероприятия</h2>
                 
-                {/* Active Filters */}
+                {/* Активные фильтры */}
                 {(selectedEventTypes.length > 0 || filterBy === 'favorites') && (
                   <div className="mb-4 flex flex-wrap gap-2">
                     {filterBy === 'favorites' && (
@@ -502,7 +501,7 @@ const EventsPageUpdated = () => {
                   </div>
                 )}
 
-                {/* Empty State */}
+                {/* Состояние пустого поиска/фильтра */}
                 {filteredActiveEvents.length === 0 && !loading && (
                   <div className="text-center py-12">
                     <div className="mb-4">
@@ -534,19 +533,17 @@ const EventsPageUpdated = () => {
                   </div>
                 )}
                 
-                {/* Events List */}
                 {filteredActiveEvents.length > 0 && (
                   <EventsList 
                     events={filteredActiveEvents.slice(0, visibleEvents)}
                     type="upcoming"
-                    searchQuery="" // Search filtering is now handled here
+                    searchQuery="" // Убираем searchQuery из EventsList, так как фильтрация теперь здесь
                     viewMode={viewMode}
                     showPrice={true}
                     formatTimeRange={formatTimeRange}
                   />
                 )}
                 
-                {/* Load More Button */}
                 {filteredActiveEvents.length > visibleEvents && (
                   <div className="mt-6 text-center">
                     <button
@@ -560,7 +557,7 @@ const EventsPageUpdated = () => {
               </div>
             </div>
 
-            {/* Sidebar - Past Events */}
+            {/* Боковая колонка - прошедшие мероприятия */}
             {events.past?.length > 0 && (
               <div className="lg:w-72 xl:w-80">
                 <h2 className="text-xl font-semibold mb-3 pb-2 border-b border-dark-200 dark:border-dark-700">
@@ -589,12 +586,6 @@ const EventsPageUpdated = () => {
                           <Calendar className="h-3 w-3 mr-1" />
                           <span>{event.start_at ? formatRussianDate(event.start_at) : 'Дата не указана'}</span>
                         </div>
-                        {event.start_at && event.end_at && (
-                          <div className="flex items-center text-xs text-dark-500 dark:text-dark-400 mt-1">
-                            <Clock className="h-3 w-3 mr-1" />
-                            <span>{formatTimeRange(event.start_at, event.end_at)}</span>
-                          </div>
-                        )}
                       </div>
                     </Link>
                   ))}
@@ -608,4 +599,4 @@ const EventsPageUpdated = () => {
   );
 };
 
-export default EventsPageUpdated;
+export default EventsPage;
