@@ -1,85 +1,86 @@
-// src/App.tsx - Обновленные маршруты с управлением пользователями
-
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-
-// Public pages
 import HomePage from './pages/HomePage';
 import EventsPage from './pages/EventsPage';
-import EventDetailPage from './pages/EventDetailPage';
+import EventDetailsPage from './pages/EventDetailsPage';
+import SpeakersPage from './pages/SpeakersPage';
+import SpeakerProfilePage from './pages/SpeakerProfilePage';
+import RentPage from './pages/RentPage';
+import CoworkingPage from './pages/CoworkingPage';
 import AboutPage from './pages/AboutPage';
-import ContactPage from './pages/ContactPage';
-
-// Admin pages
-import AdminLayout from './pages/admin/AdminLayout';
-import AdminDashboard from './pages/admin/AdminDashboard';
-import AdminEvents from './pages/admin/AdminEvents';
-import AdminEventDetail from './pages/admin/AdminEventDetail';
-import AdminSpeakers from './pages/admin/AdminSpeakers';
-import AdminUsersManagement from './pages/admin/AdminUsersManagement'; // Новый компонент
-import AdminSettings from './pages/admin/AdminSettings';
+import NotFoundPage from './pages/NotFoundPage';
+import AdminLayout from './components/admin/AdminLayout';
 import AdminHomeHeader from './pages/admin/AdminHomeHeader';
-
-// Layout components
-import Layout from './components/layout/Layout';
+import AdminEvents from './pages/admin/AdminEvents';
+import CreateEditEventPage from './pages/admin/CreateEditEventPage';
+import AdminSpeakers from './pages/admin/AdminSpeakers';
+import AdminRent from './pages/admin/AdminRent';
+import AdminCoworking from './pages/admin/AdminCoworking';
+import AdminAbout from './pages/admin/AdminAbout';
+import AdminNavigation from './pages/admin/AdminNavigation';
+import AdminExport from './pages/admin/AdminExport';
+import AdminEventStatistics from './pages/admin/AdminEventStatistics';
+import AdminAttendance from './pages/admin/AdminAttendance';
 import ProtectedRoute from './components/admin/ProtectedRoute';
-
-// Context providers
-import { ThemeProvider } from './contexts/ThemeContext';
+import PublicProtectedRoute from './components/auth/PublicProtectedRoute';
+import AdminCalendarPage from './pages/admin/AdminCalendarPage';
+import PostersPage from './components/posters/PostersPage';
+import AuthCallbackPage from './pages/auth/AuthCallbackPage';
+import ResetPasswordPage from './pages/auth/ResetPasswordPage';
+import ProfilePage from './pages/ProfilePage';
 
 function App() {
   return (
-    <ThemeProvider>
-      <Router>
-        <div className="App">
-          <Routes>
-            {/* Public routes */}
-            <Route path="/" element={<Layout />}>
-              <Route index element={<HomePage />} />
-              <Route path="events" element={<EventsPage />} />
-              <Route path="events/:id" element={<EventDetailPage />} />
-              <Route path="about" element={<AboutPage />} />
-              <Route path="contact" element={<ContactPage />} />
-            </Route>
+    <div className="app">
+      <Toaster position="top-center" />  
+      <Routes>
+        {/* Public routes */}
+        <Route path="/" element={<HomePage />} />
+        <Route path="/events" element={<EventsPage />} />
+        <Route path="/events/:id" element={<EventDetailsPage />} />
+        <Route path="/speakers" element={<SpeakersPage />} />
+        <Route path="/speakers/:id" element={<SpeakerProfilePage />} />
+        <Route path="/rent" element={<RentPage />} />
+        <Route path="/coworking" element={<CoworkingPage />} />
+        <Route path="/about" element={<AboutPage />} />
+        <Route path="/posters" element={<PostersPage />} />
+        
+        {/* Auth routes */}
+        <Route path="/auth/callback" element={<AuthCallbackPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        
+        {/* Protected public routes */}
+        <Route path="/profile" element={
+          <PublicProtectedRoute>
+            <ProfilePage />
+          </PublicProtectedRoute>
+        } />
+        
+        {/* Protected Admin routes */}
+        <Route path="/admin" element={
+          <ProtectedRoute>
+            <AdminLayout />
+          </ProtectedRoute>
+        }>
+          <Route index element={<AdminHomeHeader />} />
+          <Route path="events" element={<AdminEvents />} />
+          <Route path="events/new" element={<CreateEditEventPage />} />
+          <Route path="events/:id/edit" element={<CreateEditEventPage />} />
+          <Route path="speakers" element={<AdminSpeakers />} />
+          <Route path="rent" element={<AdminRent />} />
+          <Route path="coworking" element={<AdminCoworking />} />
+          <Route path="about" element={<AdminAbout />} />
+          <Route path="navigation" element={<AdminNavigation />} />
+          <Route path="export" element={<AdminExport />} />
+          <Route path="calendar" element={<AdminCalendarPage />} />
+          <Route path="event-statistics" element={<AdminEventStatistics />} />
+          <Route path="attendance" element={<AdminAttendance />} />
+        </Route>
 
-            {/* Admin routes */}
-            <Route path="/admin" element={
-              <ProtectedRoute>
-                <AdminLayout />
-              </ProtectedRoute>
-            }>
-              <Route index element={<AdminDashboard />} />
-              
-              {/* События */}
-              <Route path="events" element={<AdminEvents />} />
-              <Route path="events/:id" element={<AdminEventDetail />} />
-              
-              {/* Спикеры */}
-              <Route path="speakers" element={<AdminSpeakers />} />
-              
-              {/* Пользователи - НОВЫЙ РАЗДЕЛ */}
-              <Route path="users" element={<AdminUsersManagement />} />
-              
-              {/* Настройки */}
-              <Route path="settings" element={<AdminSettings />} />
-              <Route path="settings/home" element={<AdminHomeHeader />} />
-            </Route>
-          </Routes>
-
-          <Toaster 
-            position="top-right"
-            toastOptions={{
-              duration: 4000,
-              style: {
-                background: 'var(--toast-bg)',
-                color: 'var(--toast-color)',
-                border: '1px solid var(--toast-border)',
-              },
-            }}
-          />
-        </div>
-      </Router>
-    </ThemeProvider>
+        {/* 404 route */}
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+    </div>
   );
 }
 
