@@ -1,4 +1,4 @@
-// src/pages/EventsPageUpdated.tsx
+// src/pages/EventsPage.tsx
 // Полная обновленная версия EventsPage для работы с новой БД структурой
 
 import { useState, useEffect, useCallback } from 'react';
