@@ -1,3 +1,6 @@
+// src/pages/EventsPage.tsx
+// Полная обновленная версия EventsPage для работы с новой БД структурой
+
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
@@ -66,7 +69,6 @@ const EventsPageUpdated = () => {
   // ============ ОСНОВНОЕ СОСТОЯНИЕ ============
   const [events, setEvents] = useState<EventWithDetails[]>([]);
   const [featuredEvents, setFeaturedEvents] = useState<EventWithDetails[]>([]);
-  const [pastEvents, setPastEvents] = useState<EventWithDetails[]>([]);
   const [pageSettings, setPageSettings] = useState<EventsPageSettings>({
     title: 'Мероприятия',
     defaultView: 'grid',
@@ -135,12 +137,11 @@ const EventsPageUpdated = () => {
       setError(null);
 
       // Загружаем настройки страницы, события и статистику параллельно
-      const [settingsResponse, eventsResponse, featuredResponse, statsResponse, pastEventsResponse] = await Promise.all([
+      const [settingsResponse, eventsResponse, featuredResponse, statsResponse] = await Promise.all([
         getPageSettings('events'),
         getEvents({}, 1, 12),
         getFeaturedEvents(6),
-        getEventsStats(),
-        getEvents({ status: ['past'] }, 1, 10)
+        getEventsStats()
       ]);
 
       // Обрабатываем настройки страницы
@@ -160,11 +161,6 @@ const EventsPageUpdated = () => {
       // Обрабатываем рекомендуемые события
       if (featuredResponse.data) {
         setFeaturedEvents(featuredResponse.data);
-      }
-
-      // Обрабатываем прошедшие события
-      if (pastEventsResponse.data) {
-        setPastEvents(pastEventsResponse.data);
       }
 
       // Обрабатываем статистику
@@ -397,10 +393,6 @@ const EventsPageUpdated = () => {
             src={event.cover_image_url}
             alt={event.title}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-            onError={(e) => {
-              const target = e.target as HTMLImageElement;
-              target.src = 'https://images.pexels.com/photos/7130560/pexels-photo-7130560.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1';
-            }}
           />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center">
@@ -501,6 +493,18 @@ const EventsPageUpdated = () => {
               <span className="truncate">{event.venue_name}</span>
             </div>
           )}
+          
+          {/* Участники */}
+          {event.registration_enabled && (
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <Users className="h-4 w-4" />
+              <span>
+                {event.registrations_count || 0}
+                {event.max_attendees && ` / ${event.max_attendees}`}
+                {event.available_spots !== null && ` (свободно: ${event.available_spots})`}
+              </span>
+            </div>
+          )}
 
           {/* Возрастное ограничение */}
           <div className="flex items-center gap-2 text-sm text-gray-500">
@@ -535,10 +539,6 @@ const EventsPageUpdated = () => {
               src={event.cover_image_url}
               alt={event.title}
               className="w-full h-full object-cover"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.src = 'https://images.pexels.com/photos/7130560/pexels-photo-7130560.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1';
-              }}
             />
           ) : (
             <div className="w-full h-full bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center">
@@ -589,6 +589,13 @@ const EventsPageUpdated = () => {
                     <span>{event.venue_name}</span>
                   </div>
                 )}
+                
+                {event.registration_enabled && (
+                  <div className="flex items-center gap-1">
+                    <Users className="h-4 w-4" />
+                    <span>{event.registrations_count || 0}{event.max_attendees && `/${event.max_attendees}`}</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -624,43 +631,6 @@ const EventsPageUpdated = () => {
           </div>
         </div>
       </div>
-    </div>
-  );
-
-  // Компонент для отображения прошедших мероприятий
-  const renderPastEventCard = (event: EventWithDetails) => (
-    <div key={event.id} className="bg-white dark:bg-dark-800 rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-      <Link to={`/events/${event.slug}`} className="block">
-        {/* Изображение */}
-        <div className="h-32 overflow-hidden">
-          {event.cover_image_url ? (
-            <img
-              src={event.cover_image_url}
-              alt={event.title}
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.src = 'https://images.pexels.com/photos/7130560/pexels-photo-7130560.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1';
-              }}
-            />
-          ) : (
-            <div className="w-full h-full bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center">
-              <Calendar className="h-8 w-8 text-white" />
-            </div>
-          )}
-        </div>
-        
-        {/* Содержимое */}
-        <div className="p-3">
-          <h3 className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2">
-            {event.title}
-          </h3>
-          <div className="flex items-center gap-1 mt-1 text-xs text-gray-500 dark:text-gray-400">
-            <Calendar className="h-3 w-3" />
-            <span>{apiUtils.formatDate(event.start_at)}</span>
-          </div>
-        </div>
-      </Link>
     </div>
   );
 
@@ -706,26 +676,30 @@ const EventsPageUpdated = () => {
   return (
     <Layout>
       <div className="min-h-screen">
-        {/* Слайдшоу */}
-        {featuredEvents.length > 0 && (
-          <div className="relative h-[400px] overflow-hidden">
-            <div className="flex h-full transition-transform duration-500">
-              {featuredEvents.slice(0, 5).map((event, index) => (
-                <div key={index} className="min-w-full h-full">
-                  <img 
-                    src={event.cover_image_url || 'https://images.pexels.com/photos/7130560/pexels-photo-7130560.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1'} 
-                    alt={event.title}
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-6">
-                    <h2 className="text-white text-2xl font-bold">{event.title}</h2>
-                    <p className="text-white/80">{apiUtils.formatDate(event.start_at)}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* <PageHeader 
+          title={pageSettings.title}
+          description={pageSettings.metaDescription}
+          backgroundImage={pageSettings.heroImage}
+        /> */}
+
+        
+<div className="relative h-[400px] overflow-hidden">
+  <div className="flex h-full transition-transform duration-500">
+    {featuredEvents.slice(0, 5).map((event, index) => (
+      <div key={index} className="min-w-full h-full">
+        <img 
+          src={event.image_url || '/default-event.jpg'} 
+          alt={event.title}
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-6">
+          <h2 className="text-white text-2xl font-bold">{event.title}</h2>
+          <p className="text-white/80">{formatDate(event.start_date)}</p>
+        </div>
+      </div>
+    ))}
+  </div>
+</div>
 
         <div className="max-w-7xl mx-auto px-4 py-12">
           {/* Рекомендуемые события */}
@@ -744,6 +718,32 @@ const EventsPageUpdated = () => {
                 {featuredEvents.slice(0, 3).map(renderEventCard)}
               </div>
             </section>
+          )}
+
+          {/* Статистика */}
+          {stats.total > 0 && (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+              <div className="bg-white dark:bg-dark-800 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-primary-600">{stats.total}</div>
+                <div className="text-sm text-gray-600 dark:text-gray-300">Всего</div>
+              </div>
+              <div className="bg-white dark:bg-dark-800 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-green-600">{stats.upcoming}</div>
+                <div className="text-sm text-gray-600 dark:text-gray-300">Предстоящих</div>
+              </div>
+              <div className="bg-white dark:bg-dark-800 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-blue-600">{stats.published}</div>
+                <div className="text-sm text-gray-600 dark:text-gray-300">Опубликовано</div>
+              </div>
+              <div className="bg-white dark:bg-dark-800 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-orange-600">{stats.this_month}</div>
+                <div className="text-sm text-gray-600 dark:text-gray-300">В этом месяце</div>
+              </div>
+              <div className="bg-white dark:bg-dark-800 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-purple-600">{favorites.size}</div>
+                <div className="text-sm text-gray-600 dark:text-gray-300">Избранных</div>
+              </div>
+            </div>
           )}
 
           {/* Управление и поиск */}
@@ -1090,148 +1090,115 @@ const EventsPageUpdated = () => {
             </div>
           )}
 
-          {/* Основной контент - список событий и прошедшие события */}
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            {/* Основной список событий */}
-            <div className="lg:col-span-3">
-              <section>
-                {events.length === 0 ? (
-                  <div className="text-center py-16">
-                    <div className="max-w-md mx-auto">
-                      <Calendar className="h-20 w-20 text-gray-300 mx-auto mb-6" />
-                      <h3 className="text-2xl font-semibold text-gray-600 dark:text-gray-300 mb-4">
-                        События не найдены
-                      </h3>
-                      <p className="text-gray-500 dark:text-gray-400 mb-6">
-                        {searchQuery 
-                          ? `Не найдено событий по запросу "${searchQuery}". Попробуйте изменить критерии поиска.`
-                          : 'В ближайшее время событий не запланировано. Следите за обновлениями!'
-                        }
+          {/* Список событий */}
+          <section>
+            {events.length === 0 ? (
+              <div className="text-center py-16">
+                <div className="max-w-md mx-auto">
+                  <Calendar className="h-20 w-20 text-gray-300 mx-auto mb-6" />
+                  <h3 className="text-2xl font-semibold text-gray-600 dark:text-gray-300 mb-4">
+                    События не найдены
+                  </h3>
+                  <p className="text-gray-500 dark:text-gray-400 mb-6">
+                    {searchQuery 
+                      ? `Не найдено событий по запросу "${searchQuery}". Попробуйте изменить критерии поиска.`
+                      : 'В ближайшее время событий не запланировано. Следите за обновлениями!'
+                    }
+                  </p>
+                  {(searchQuery || Object.keys(filters).length > 0) && (
+                    <div className="space-y-3">
+                      <button
+                        onClick={clearFilters}
+                        className="btn-primary"
+                      >
+                        Показать все события
+                      </button>
+                      <p className="text-sm text-gray-500">
+                        или <Link to="/events" className="text-primary-600 hover:underline">перейти к полному списку</Link>
                       </p>
-                      {(searchQuery || Object.keys(filters).length > 0) && (
-                        <div className="space-y-3">
-                          <button
-                            onClick={clearFilters}
-                            className="btn-primary"
-                          >
-                            Показать все события
-                          </button>
-                          <p className="text-sm text-gray-500">
-                            или <Link to="/events" className="text-primary-600 hover:underline">перейти к полному списку</Link>
-                          </p>
-                        </div>
-                      )}
                     </div>
-                  </div>
-                ) : (
-                  <>
-                    {/* Результаты поиска */}
-                    <div className="flex items-center justify-between mb-6">
-                      <div>
-                        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                          {searchQuery ? `Результаты поиска "${searchQuery}"` : 'Все события'}
-                        </h2>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                          Найдено {events.length} событий
-                          {Object.keys(filters).length > 0 && ` с примененными фильтрами`}
-                        </p>
-                      </div>
-
-                      {/* Индикатор избранных */}
-                      {favorites.size > 0 && (
-                        <div className="flex items-center gap-2 text-sm text-gray-500">
-                          <Heart className="h-4 w-4 text-red-500" />
-                          <span>У вас {favorites.size} избранных событий</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Сетка или список событий */}
-                    <div className={
-                      viewMode === 'grid' 
-                        ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
-                        : 'space-y-4'
-                    }>
-                      {events.map(event => 
-                        viewMode === 'grid' 
-                          ? renderEventCard(event)
-                          : renderEventListItem(event)
-                      )}
-                    </div>
-
-                    {/* Кнопка "Загрузить еще" */}
-                    {hasMore && !searchQuery && (
-                      <div className="text-center mt-12">
-                        <button
-                          onClick={() => loadEvents(false)}
-                          disabled={loadingMore}
-                          className="btn-primary flex items-center gap-2 mx-auto px-8 py-3"
-                        >
-                          {loadingMore ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              Загрузка...
-                            </>
-                          ) : (
-                            <>
-                              <ChevronDown className="h-4 w-4" />
-                              Загрузить еще события
-                            </>
-                          )}
-                        </button>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                          Показано {events.length} из {stats.total} событий
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Информация о завершении списка */}
-                    {!hasMore && events.length > pageSettings.itemsPerPage && (
-                      <div className="text-center mt-12 py-8 border-t border-gray-200 dark:border-gray-700">
-                        <p className="text-gray-500 dark:text-gray-400">
-                          Вы просмотрели все доступные события ({events.length})
-                        </p>
-                        <button
-                          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                          className="text-primary-600 hover:text-primary-700 text-sm font-medium mt-2"
-                        >
-                          ↑ Вернуться к началу
-                        </button>
-                      </div>
-                    )}
-                  </>
-                )}
-              </section>
-            </div>
-
-            {/* Прошедшие мероприятия */}
-            <div className="lg:col-span-1">
-              <div className="bg-white dark:bg-dark-800 rounded-lg p-4 shadow-md">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                  Прошедшие мероприятия
-                </h3>
-                <div className="space-y-3">
-                  {pastEvents.length > 0 ? (
-                    pastEvents.map(renderPastEventCard)
-                  ) : (
-                    <p className="text-gray-500 dark:text-gray-400 text-center py-4">
-                      Нет прошедших мероприятий
-                    </p>
                   )}
                 </div>
-                {pastEvents.length > 0 && (
-                  <div className="mt-4 text-center">
-                    <Link 
-                      to="/events?status=past" 
-                      className="text-primary-600 hover:text-primary-700 text-sm font-medium"
+              </div>
+            ) : (
+              <>
+                {/* Результаты поиска */}
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                      {searchQuery ? `Результаты поиска "${searchQuery}"` : 'Все события'}
+                    </h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                      Найдено {events.length} событий
+                      {Object.keys(filters).length > 0 && ` с примененными фильтрами`}
+                    </p>
+                  </div>
+
+                  {/* Индикатор избранных */}
+                  {favorites.size > 0 && (
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <Heart className="h-4 w-4 text-red-500" />
+                      <span>У вас {favorites.size} избранных событий</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Сетка или список событий */}
+                <div className={
+                  viewMode === 'grid' 
+                    ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
+                    : 'space-y-4'
+                }>
+                  {events.map(event => 
+                    viewMode === 'grid' 
+                      ? renderEventCard(event)
+                      : renderEventListItem(event)
+                  )}
+                </div>
+
+                {/* Кнопка "Загрузить еще" */}
+                {hasMore && !searchQuery && (
+                  <div className="text-center mt-12">
+                    <button
+                      onClick={() => loadEvents(false)}
+                      disabled={loadingMore}
+                      className="btn-primary flex items-center gap-2 mx-auto px-8 py-3"
                     >
-                      Смотреть все прошедшие
-                    </Link>
+                      {loadingMore ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Загрузка...
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="h-4 w-4" />
+                          Загрузить еще события
+                        </>
+                      )}
+                    </button>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                      Показано {events.length} из {stats.total} событий
+                    </p>
                   </div>
                 )}
-              </div>
-            </div>
-          </div>
+
+                {/* Информация о завершении списка */}
+                {!hasMore && events.length > pageSettings.itemsPerPage && (
+                  <div className="text-center mt-12 py-8 border-t border-gray-200 dark:border-gray-700">
+                    <p className="text-gray-500 dark:text-gray-400">
+                      Вы просмотрели все доступные события ({events.length})
+                    </p>
+                    <button
+                      onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                      className="text-primary-600 hover:text-primary-700 text-sm font-medium mt-2"
+                    >
+                      ↑ Вернуться к началу
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </section>
 
           {/* Call to Action */}
           {events.length > 0 && (
