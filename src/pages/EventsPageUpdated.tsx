@@ -14,6 +14,7 @@ import {
   formatTimeRange, 
   isPastEvent 
 } from '../utils/dateTimeUtils';
+import { getSupabaseImageUrl } from '../utils/imageUtils';
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
@@ -408,7 +409,7 @@ const EventsPageUpdated = () => {
                   </div>
                 </div>
 
-                {/* Second Row: Favorite Filters and Statistics */}
+                {/* Second Row: Favorite Filters */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                   {/* Favorite Filters */}
                   <div className="flex items-center gap-4">
@@ -441,23 +442,10 @@ const EventsPageUpdated = () => {
                           }`}
                         >
                           <Heart className={`h-4 w-4 ${filterBy === 'favorites' ? 'fill-current' : ''}`} />
-                          Избранные ({favoriteEvents.length})
+                          Избранные
                         </button>
                       )}
                     </div>
-                  </div>
-
-                  {/* Statistics */}
-                  <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
-                    <span>
-                      Показано: {filteredActiveEvents.length} из {events.active?.length || 0}
-                    </span>
-                    {user && favoriteEvents.length > 0 && (
-                      <span className="flex items-center gap-1">
-                        <Heart className="h-4 w-4 text-red-500 fill-current" />
-                        {favoriteEvents.length} в избранном
-                      </span>
-                    )}
                   </div>
                 </div>
               </div>
