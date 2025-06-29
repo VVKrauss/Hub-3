@@ -66,6 +66,7 @@ const AdminUsersManagement = () => {
 
   useEffect(() => {
     fetchUsers();
+    // Убираем fetchStatistics так как она использует Admin API
   }, []);
 
   useEffect(() => {
@@ -89,8 +90,8 @@ const AdminUsersManagement = () => {
         return;
       }
 
-      // Получаем дополнительную информацию из auth.users через service key
-      const usersWithAuth = await Promise.all(
+      // Обрабатываем пользователей без Admin API
+      const usersWithRegistrations = await Promise.all(
         profiles.map(async (profile) => {
           try {
             // Получаем регистрации пользователя
@@ -120,21 +121,10 @@ const AdminUsersManagement = () => {
               qr_code: reg.qr_code
             })) || [];
 
-            // Пытаемся получить email из auth
-            let userEmail = profile.email;
-            if (!userEmail) {
-              try {
-                const { data: authUser } = await supabase.auth.admin.getUserById(profile.id);
-                userEmail = authUser.user?.email;
-              } catch (error) {
-                console.warn('Could not fetch auth user data for:', profile.id);
-              }
-            }
-
             return {
               id: profile.id,
               name: profile.name,
-              email: userEmail,
+              email: profile.email, // Используем email из profiles
               role: profile.role,
               created_at: profile.created_at,
               last_sign_in_at: profile.last_sign_in_at,
@@ -156,7 +146,7 @@ const AdminUsersManagement = () => {
         })
       );
 
-      setUsers(usersWithAuth);
+      setUsers(usersWithRegistrations);
     } catch (error) {
       console.error('Error fetching users:', error);
       toast.error('Ошибка при загрузке пользователей');
@@ -185,10 +175,11 @@ const AdminUsersManagement = () => {
 
   const updateUserRole = async (userId: string, newRole: UserRole) => {
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ role: newRole })
-        .eq('id', userId);
+      // Используем RPC функцию вместо прямого обновления
+      const { data, error } = await supabase.rpc('update_user_role', {
+        target_user_id: userId,
+        new_role: newRole
+      });
 
       if (error) throw error;
 
@@ -205,13 +196,11 @@ const AdminUsersManagement = () => {
 
   const banUser = async (userId: string, duration: number) => {
     try {
-      const bannedUntil = new Date();
-      bannedUntil.setDate(bannedUntil.getDate() + duration);
-
-      const { error } = await supabase
-        .from('profiles')
-        .update({ banned_until: bannedUntil.toISOString() })
-        .eq('id', userId);
+      // Используем RPC функцию
+      const { data, error } = await supabase.rpc('ban_user', {
+        target_user_id: userId,
+        ban_duration_days: duration
+      });
 
       if (error) throw error;
 
@@ -225,10 +214,10 @@ const AdminUsersManagement = () => {
 
   const unbanUser = async (userId: string) => {
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ banned_until: null })
-        .eq('id', userId);
+      // Используем RPC функцию
+      const { data, error } = await supabase.rpc('unban_user', {
+        target_user_id: userId
+      });
 
       if (error) throw error;
 
@@ -246,20 +235,13 @@ const AdminUsersManagement = () => {
     }
 
     try {
-      // Сначала удаляем профиль
+      // Удаляем только профиль (без Admin API)
       const { error: profileError } = await supabase
         .from('profiles')
         .delete()
         .eq('id', userId);
 
       if (profileError) throw profileError;
-
-      // Затем пытаемся удалить пользователя из auth
-      try {
-        await supabase.auth.admin.deleteUser(userId);
-      } catch (authError) {
-        console.warn('Could not delete from auth:', authError);
-      }
 
       setUsers(users.filter(user => user.id !== userId));
       toast.success('Пользователь удален');
