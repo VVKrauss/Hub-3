@@ -7,12 +7,13 @@
     - Добавляем поля для аватара и дополнительной информации
     
   2. Создаем таблицу user_registrations для связи пользователей с событиями
+    - ВАЖНО: используем TEXT для event_id так как в таблице events id имеет тип text
     
   3. Обновляем политики безопасности
 */
 
--- Добавляем недостающие поля в таблицу profiles 
-DO $$ 
+-- Добавляем недостающие поля в таблицу profiles
+DO $ 
 BEGIN
   -- Добавляем email если его нет
   IF NOT EXISTS (
@@ -61,13 +62,14 @@ BEGIN
   ) THEN
     ALTER TABLE profiles ADD COLUMN additional_info JSONB DEFAULT '{}'::jsonb;
   END IF;
-END $$;
+END $;
 
 -- Создаем таблицу для регистраций пользователей на события
+-- ВАЖНО: event_id имеет тип TEXT, как в таблице events
 CREATE TABLE IF NOT EXISTS user_registrations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
-  event_id UUID REFERENCES events(id) ON DELETE CASCADE,
+  event_id TEXT REFERENCES events(id) ON DELETE CASCADE, -- TEXT вместо UUID!
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'cancelled', 'completed')),
   payment_status TEXT NOT NULL DEFAULT 'pending' CHECK (payment_status IN ('pending', 'paid', 'failed')),
   registration_date TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -137,12 +139,12 @@ USING (user_id = auth.uid());
 
 -- Функция для обновления updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER AS $
 BEGIN
   NEW.updated_at = now();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$ LANGUAGE plpgsql;
 
 -- Триггер для обновления updated_at в user_registrations
 DROP TRIGGER IF EXISTS update_user_registrations_updated_at ON user_registrations;
@@ -153,7 +155,7 @@ EXECUTE FUNCTION update_updated_at_column();
 
 -- Функция для синхронизации данных пользователя с auth.users
 CREATE OR REPLACE FUNCTION sync_user_auth_data()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER AS $
 BEGIN
   -- Обновляем email и другие данные из auth.users
   UPDATE profiles SET
@@ -164,7 +166,7 @@ BEGIN
   
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Триггер для синхронизации данных при обновлении auth.users
 DROP TRIGGER IF EXISTS on_auth_user_updated ON auth.users;
@@ -175,7 +177,7 @@ EXECUTE FUNCTION sync_user_auth_data();
 
 -- Обновляем функцию создания нового пользователя
 CREATE OR REPLACE FUNCTION handle_new_user()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER AS $
 BEGIN
   INSERT INTO public.profiles (id, name, email, role, email_confirmed_at)
   VALUES (
@@ -187,7 +189,7 @@ BEGIN
   );
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Создаем индексы для оптимизации
 CREATE INDEX IF NOT EXISTS idx_profiles_role ON profiles(role);
@@ -199,7 +201,7 @@ CREATE INDEX IF NOT EXISTS idx_user_registrations_status ON user_registrations(s
 
 -- Функция для получения статистики пользователей (доступна только админам)
 CREATE OR REPLACE FUNCTION get_user_statistics()
-RETURNS JSON AS $$
+RETURNS JSON AS $
 DECLARE
   result JSON;
 BEGIN
@@ -241,14 +243,14 @@ BEGIN
   
   RETURN result;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- RPC функция для обновления роли пользователя (только для админов)
 CREATE OR REPLACE FUNCTION update_user_role(
   target_user_id UUID,
   new_role TEXT
 )
-RETURNS BOOLEAN AS $$
+RETURNS BOOLEAN AS $
 BEGIN
   -- Проверяем права доступа
   IF NOT EXISTS (
@@ -270,14 +272,14 @@ BEGIN
   
   RETURN FOUND;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- RPC функция для блокировки пользователя
 CREATE OR REPLACE FUNCTION ban_user(
   target_user_id UUID,
   ban_duration_days INTEGER DEFAULT 7
 )
-RETURNS BOOLEAN AS $$
+RETURNS BOOLEAN AS $
 BEGIN
   -- Проверяем права доступа
   IF NOT EXISTS (
@@ -299,11 +301,11 @@ BEGIN
   
   RETURN FOUND;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- RPC функция для разблокировки пользователя
 CREATE OR REPLACE FUNCTION unban_user(target_user_id UUID)
-RETURNS BOOLEAN AS $$
+RETURNS BOOLEAN AS $
 BEGIN
   -- Проверяем права доступа
   IF NOT EXISTS (
@@ -320,4 +322,4 @@ BEGIN
   
   RETURN FOUND;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$ LANGUAGE plpgsql SECURITY DEFINER;
