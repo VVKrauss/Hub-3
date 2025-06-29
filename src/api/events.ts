@@ -31,6 +31,7 @@ export const getEvents = async (
           role,
           display_order,
           bio_override,
+          speaker_id,
           speaker:sh_speakers (
             id,
             name,
@@ -160,6 +161,7 @@ export const getEvent = async (eventId: string): Promise<ApiResponse<EventWithDe
           role,
           display_order,
           bio_override,
+          speaker_id,
           speaker:sh_speakers (
             id,
             name,
@@ -243,6 +245,7 @@ export const getEventBySlug = async (slug: string): Promise<ApiResponse<EventWit
           role,
           display_order,
           bio_override,
+          speaker_id,
           speaker:sh_speakers (
             id,
             name,
@@ -401,6 +404,7 @@ export const getUpcomingEvents = async (limit: number = 10): Promise<ApiResponse
           id,
           role,
           display_order,
+          speaker_id,
           speaker:sh_speakers (
             id,
             name,
@@ -455,6 +459,7 @@ export const getFeaturedEvents = async (limit: number = 6): Promise<ApiResponse<
           id,
           role,
           display_order,
+          speaker_id,
           speaker:sh_speakers (
             id,
             name,
@@ -513,6 +518,7 @@ export const searchEvents = async (
           id,
           role,
           display_order,
+          speaker_id,
           speaker:sh_speakers (
             id,
             name,
@@ -917,7 +923,8 @@ export const getEventsBySpeaker = async (speakerId: string): Promise<ApiResponse
         sh_event_speakers!inner (
           id,
           role,
-          display_order
+          display_order,
+          speaker_id
         )
       `)
       .eq('sh_event_speakers.speaker_id', speakerId)
@@ -944,6 +951,7 @@ export const getEventsByType = async (
           id,
           role,
           display_order,
+          speaker_id,
           speaker:sh_speakers (
             id,
             name,
