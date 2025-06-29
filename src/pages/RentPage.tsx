@@ -309,8 +309,37 @@ const RentPage = () => {
           .select('*')
           .single();
 
-        if (error) throw error;
-        setSettings(data);
+        if (error) {
+          // If no data exists, create default entry
+          if (error.code === 'PGRST116') {
+            console.log('No rent info settings found, using defaults');
+            setSettings({
+              id: 1,
+              title: 'Аренда пространства ScienceHub',
+              description: '<p>Современное пространство для проведения ваших мероприятий, встреч и презентаций. Мы предлагаем комфортную атмосферу и все необходимое оборудование для успешного проведения любых событий.</p>',
+              photos: [
+                'https://images.pexels.com/photos/1181406/pexels-photo-1181406.jpeg',
+                'https://images.pexels.com/photos/1181248/pexels-photo-1181248.jpeg'
+              ],
+              amenities: ['Wi-Fi', 'Проектор', 'Звуковая система'],
+              pricelist: [],
+              contacts: {
+                address: 'Адрес будет указан при бронировании',
+                phone: '+381 XX XXX XXXX',
+                email: 'info@sciencehub.rs'
+              },
+              main_prices: {
+                hourly: 25,
+                daily: 150
+              },
+              included_services: ['Wi-Fi', 'Проектор', 'Звуковая система', 'Кондиционер', 'Кухонная зона', 'Парковка']
+            });
+          } else {
+            throw error;
+          }
+        } else {
+          setSettings(data);
+        }
       } catch (err) {
         console.error('Error fetching data:', err);
         setError('Не удалось загрузить информацию о пространстве');
