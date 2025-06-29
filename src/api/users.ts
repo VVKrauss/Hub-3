@@ -6,7 +6,9 @@ import type {
   ShUser, 
   ShUserSession,
   ShUserConnection,
-  UserFilters
+  UserFilters,
+  ShUserRole,
+  ShUserStatus
 } from '../types/database';
 
 // Получение списка пользователей с фильтрацией и пагинацией
@@ -188,7 +190,7 @@ export const restoreUser = async (userId: string): Promise<ApiResponse<ShUser>> 
 // Изменение роли пользователя
 export const updateUserRole = async (
   userId: string,
-  role: 'admin' | 'moderator' | 'member' | 'guest'
+  role: ShUserRole
 ): Promise<ApiResponse<ShUser>> => {
   try {
     const { data, error } = await supabase
@@ -212,7 +214,7 @@ export const updateUserRole = async (
 // Изменение статуса пользователя
 export const updateUserStatus = async (
   userId: string,
-  status: 'active' | 'inactive' | 'banned' | 'pending'
+  status: ShUserStatus
 ): Promise<ApiResponse<ShUser>> => {
   try {
     const { data, error } = await supabase
@@ -393,4 +395,286 @@ export const getUsersStats = async (): Promise<ApiResponse<{
     ] = await Promise.all([
       supabase.from('sh_users').select('*', { count: 'exact', head: true }).is('deleted_at', null),
       supabase.from('sh_users').select('*', { count: 'exact', head: true }).eq('status', 'active').is('deleted_at', null),
-      supabase.from('sh_users').
+      supabase.from('sh_users').select('*', { count: 'exact', head: true }).eq('status', 'inactive').is('deleted_at', null),
+      supabase.from('sh_users').select('*', { count: 'exact', head: true }).eq('status', 'banned').is('deleted_at', null),
+      supabase.from('sh_users').select('*', { count: 'exact', head: true }).eq('status', 'pending').is('deleted_at', null),
+      supabase.from('sh_users').select('*', { count: 'exact', head: true }).eq('role', 'admin').is('deleted_at', null),
+      supabase.from('sh_users').select('*', { count: 'exact', head: true }).eq('role', 'moderator').is('deleted_at', null),
+      supabase.from('sh_users').select('*', { count: 'exact', head: true }).eq('role', 'member').is('deleted_at', null),
+      supabase.from('sh_users').select('*', { count: 'exact', head: true }).eq('role', 'guest').is('deleted_at', null),
+      supabase.from('sh_users').select('*', { count: 'exact', head: true }).gte('created_at', startOfMonth).is('deleted_at', null),
+      supabase.from('sh_user_sessions').select('*', { count: 'exact', head: true }).eq('is_active', true)
+    ]);
+
+    const stats = {
+      total: total || 0,
+      active: active || 0,
+      inactive: inactive || 0,
+      banned: banned || 0,
+      pending: pending || 0,
+      admins: admins || 0,
+      moderators: moderators || 0,
+      members: members || 0,
+      guests: guests || 0,
+      new_this_month: newThisMonth || 0,
+      online_sessions: onlineSessions || 0
+    };
+
+    return createApiResponse(stats);
+  } catch (error) {
+    return createApiResponse(null, error);
+  }
+};
+
+// Получение пользователей по роли
+export const getUsersByRole = async (
+  role: ShUserRole,
+  limit: number = 50
+): Promise<ApiResponse<ShUser[]>> => {
+  try {
+    const { data, error } = await supabase
+      .from('sh_users')
+      .select('*')
+      .eq('role', role)
+      .eq('status', 'active')
+      .is('deleted_at', null)
+      .order('name', { ascending: true })
+      .limit(limit);
+
+    if (error) throw error;
+    return createApiResponse(data || []);
+  } catch (error) {
+    return createApiResponse(null, error);
+  }
+};
+
+// Проверка существования пользователя по email
+export const checkUserExists = async (email: string): Promise<ApiResponse<boolean>> => {
+  try {
+    const { data, error } = await supabase
+      .from('sh_users')
+      .select('id')
+      .eq('email', email)
+      .is('deleted_at', null)
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows found
+
+    return createApiResponse(!!data);
+  } catch (error) {
+    return createApiResponse(null, error);
+  }
+};
+
+// Получение пользователя по QR токену
+export const getUserByQRToken = async (qrToken: string): Promise<ApiResponse<ShUser>> => {
+  try {
+    const { data, error } = await supabase
+      .from('sh_users')
+      .select('*')
+      .eq('qr_token', qrToken)
+      .is('deleted_at', null)
+      .single();
+
+    if (error) throw error;
+    return createApiResponse(data);
+  } catch (error) {
+    return createApiResponse(null, error);
+  }
+};
+
+// Обновление последнего входа пользователя
+export const updateLastSignIn = async (userId: string): Promise<ApiResponse<boolean>> => {
+  try {
+    const { error } = await supabase
+      .from('sh_users')
+      .update({ 
+        last_sign_in_at: new Date().toISOString(),
+        sign_in_count: supabase.sql`sign_in_count + 1`,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
+
+    if (error) throw error;
+    return createApiResponse(true);
+  } catch (error) {
+    return createApiResponse(null, error);
+  }
+};
+
+// Обновление настроек уведомлений пользователя
+export const updateUserNotificationSettings = async (
+  userId: string,
+  emailNotifications: boolean,
+  pushNotifications: boolean
+): Promise<ApiResponse<ShUser>> => {
+  try {
+    const { data, error } = await supabase
+      .from('sh_users')
+      .update({
+        email_notifications: emailNotifications,
+        push_notifications: pushNotifications,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId)
+      .is('deleted_at', null)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return createApiResponse(data);
+  } catch (error) {
+    return createApiResponse(null, error);
+  }
+};
+
+// Обновление дополнительной информации пользователя
+export const updateUserAdditionalInfo = async (
+  userId: string,
+  additionalInfo: Record<string, any>
+): Promise<ApiResponse<ShUser>> => {
+  try {
+    const { data, error } = await supabase
+      .from('sh_users')
+      .update({
+        additional_info: additionalInfo,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId)
+      .is('deleted_at', null)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return createApiResponse(data);
+  } catch (error) {
+    return createApiResponse(null, error);
+  }
+};
+
+// Подтверждение email пользователя
+export const confirmUserEmail = async (userId: string): Promise<ApiResponse<ShUser>> => {
+  try {
+    const { data, error } = await supabase
+      .from('sh_users')
+      .update({
+        email_confirmed: true,
+        email_confirmed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return createApiResponse(data);
+  } catch (error) {
+    return createApiResponse(null, error);
+  }
+};
+
+// Подтверждение телефона пользователя
+export const confirmUserPhone = async (userId: string): Promise<ApiResponse<ShUser>> => {
+  try {
+    const { data, error } = await supabase
+      .from('sh_users')
+      .update({
+        phone_confirmed: true,
+        phone_confirmed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return createApiResponse(data);
+  } catch (error) {
+    return createApiResponse(null, error);
+  }
+};
+
+// Получение связей пользователя (подписки, друзья и т.д.)
+export const getUserConnections = async (
+  userId: string,
+  connectionType?: string
+): Promise<ApiResponse<ShUserConnection[]>> => {
+  try {
+    let query = supabase
+      .from('sh_user_connections')
+      .select(`
+        *,
+        connected_user:sh_users!sh_user_connections_connected_user_id_fkey (
+          id,
+          name,
+          email,
+          avatar_url,
+          status
+        )
+      `)
+      .eq('user_id', userId);
+
+    if (connectionType) {
+      query = query.eq('connection_type', connectionType);
+    }
+
+    query = query.order('created_at', { ascending: false });
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+    return createApiResponse(data || []);
+  } catch (error) {
+    return createApiResponse(null, error);
+  }
+};
+
+// Создание связи между пользователями
+export const createUserConnection = async (
+  userId: string,
+  connectedUserId: string,
+  connectionType: string = 'follow'
+): Promise<ApiResponse<ShUserConnection>> => {
+  try {
+    const { data, error } = await supabase
+      .from('sh_user_connections')
+      .insert([{
+        user_id: userId,
+        connected_user_id: connectedUserId,
+        connection_type: connectionType
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return createApiResponse(data);
+  } catch (error) {
+    return createApiResponse(null, error);
+  }
+};
+
+// Удаление связи между пользователями
+export const deleteUserConnection = async (
+  userId: string,
+  connectedUserId: string,
+  connectionType?: string
+): Promise<ApiResponse<boolean>> => {
+  try {
+    let query = supabase
+      .from('sh_user_connections')
+      .delete()
+      .eq('user_id', userId)
+      .eq('connected_user_id', connectedUserId);
+
+    if (connectionType) {
+      query = query.eq('connection_type', connectionType);
+    }
+
+    const { error } = await query;
+
+    if (error) throw error;
+    return createApiResponse(true);
+  } catch (error) {
+    return createApiResponse(null, error);
+  }
+};
