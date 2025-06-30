@@ -393,8 +393,67 @@ const EventsPage = () => {
     return colors[type] || 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300';
   };
 
-  // ============ ОСНОВНЫЕ ФУНКЦИИ ЗАГРУЗКИ ============
+
+
+
+  // ===============================================
+
+
+// ============ ОСНОВНЫЕ ФУНКЦИИ ЗАГРУЗКИ ============
   
+  // Загружаем активные события для слайдшоу отдельно (всегда только активные)
+  const loadActiveEventsForSlider = async () => {
+    try {
+      console.log('Loading active events for slider...'); // Отладка
+      
+      // Загружаем активные события с изображениями для слайдшоу
+      const response = await getEvents({ 
+        status: ['active'] as ShEventStatus[]
+      }, 1, 20); // Больше событий для выбора лучших
+      
+      if (!response.error && response.data) {
+        console.log('Loaded events for slider:', response.data.length); // Отладка
+        
+        // Фильтруем события с изображениями и сортируем по featured
+        const eventsWithImages = response.data
+          .filter(event => event.cover_image_url)
+          .sort((a, b) => {
+            // Сначала рекомендуемые события
+            if (a.is_featured && !b.is_featured) return -1;
+            if (!a.is_featured && b.is_featured) return 1;
+            // Потом по дате
+            return new Date(a.start_at).getTime() - new Date(b.start_at).getTime();
+          })
+          .slice(0, 10); // Берем максимум 10 лучших событий
+        
+        console.log('Filtered events with images:', eventsWithImages.length); // Отладка
+        setActiveEventsForSlider(eventsWithImages);
+      } else {
+        console.error('Error loading events for slider:', response.error);
+      }
+    } catch (err) {
+      console.error('Error loading active events for slider:', err);
+    }
+  };
+
+  // Загружаем прошедшие события для сайдбара
+  const loadPastEvents = async () => {
+    try {
+      setLoadingPast(true);
+      const response = await getEvents({ 
+        status: ['past'] as ShEventStatus[] 
+      }, 1, 10);
+      
+      if (!response.error && response.data) {
+        setPastEvents(response.data);
+      }
+    } catch (err) {
+      console.error('Error loading past events:', err);
+    } finally {
+      setLoadingPast(false);
+    }
+  };
+
   const loadInitialData = async () => {
     try {
       setLoading(true);
@@ -451,40 +510,6 @@ const EventsPage = () => {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить данные');
     } finally {
       setLoading(false);
-    }
-  };
-
-  // Загружаем активные события для слайдшоу отдельно (всегда только активные)
-  const loadActiveEventsForSlider = async () => {
-    try {
-      const response = await getEvents({ 
-        status: ['active'] as ShEventStatus[],
-        is_featured: true 
-      }, 1, 10);
-      
-      if (!response.error && response.data) {
-        setActiveEventsForSlider(response.data);
-      }
-    } catch (err) {
-      console.error('Error loading active events for slider:', err);
-    }
-  };
-
-  // Загружаем прошедшие события для сайдбара
-  const loadPastEvents = async () => {
-    try {
-      setLoadingPast(true);
-      const response = await getEvents({ 
-        status: ['past'] as ShEventStatus[] 
-      }, 1, 10);
-      
-      if (!response.error && response.data) {
-        setPastEvents(response.data);
-      }
-    } catch (err) {
-      console.error('Error loading past events:', err);
-    } finally {
-      setLoadingPast(false);
     }
   };
 
@@ -770,6 +795,85 @@ const EventsPage = () => {
     );
   };
 
+
+
+
+
+
+  // ==============================================
+
+  
+  {/* Место проведения */}
+            {(event.venue_name || event.venue_address) && (
+              <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                <MapPin className="w-4 h-4 mr-2 flex-shrink-0" />
+                <span>
+                  {event.location_type === 'online' ? 'Онлайн' : (event.venue_name || event.venue_address)}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Теги и метки */}
+          <div className="flex flex-wrap gap-2 mb-4">
+            {/* Тип события */}
+            {event.event_type && (
+              <span className={`px-2 py-1 text-xs font-medium rounded-full ${getEventTypeColor(event.event_type)}`}>
+                {EVENT_TYPE_LABELS[event.event_type]}
+              </span>
+            )}
+
+            {/* Возрастная категория */}
+            {event.age_category && (
+              <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                {AGE_CATEGORY_LABELS[event.age_category]}
+              </span>
+            )}
+
+            {/* Цена */}
+            {event.payment_type === 'free' ? (
+              <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+                Бесплатно
+              </span>
+            ) : event.base_price && (
+              <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                от {event.base_price} {event.currency}
+              </span>
+            )}
+          </div>
+
+          {/* Действия */}
+          <div className="flex items-center justify-between">
+            <Link
+              to={`/events/${event.id}`}
+              className="inline-flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              Подробнее
+              <ExternalLink className="w-3 h-3 ml-2" />
+            </Link>
+
+            <div className="flex items-center gap-2">
+              {/* Кнопка поделиться */}
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigator.share && navigator.share({
+                    title: event.title,
+                    url: window.location.origin + `/events/${event.id}`
+                  });
+                }}
+                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                title="Поделиться"
+              >
+                <Share2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // ============ КОМПОНЕНТ СПИСОЧНОГО ПРЕДСТАВЛЕНИЯ ============
   
   const EventListItem = ({ event, isFavorite, onToggleFavorite }: {
@@ -922,6 +1026,7 @@ const EventsPage = () => {
                 onClick={() => {
                   setError(null);
                   loadInitialData();
+                  loadActiveEventsForSlider();
                 }}
                 className="inline-flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
               >
@@ -938,7 +1043,7 @@ const EventsPage = () => {
     <Layout>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         {/* Hero слайдшоу с активными событиями - на всю ширину экрана */}
-        <div className="w-full bg-white dark:bg-gray-800">
+        <div className="w-full">
           <EventsHeroSlider events={activeEventsForSlider} />
         </div>
 
@@ -1018,8 +1123,7 @@ const EventsPage = () => {
                 </div>
               </div>
             </div>
-
-            {/* Панель фильтров */}
+{/* Панель фильтров */}
             {showFilters && (
               <div className="mt-4 p-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
