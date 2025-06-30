@@ -825,6 +825,32 @@ const CreateEditEventPage = () => {
 
         console.log('sh_events update result:', error);
 
+        // If main update "succeeded" but we suspect it didn't work, let's test individual fields
+        if (!error) {
+          console.log('Testing individual field updates...');
+          
+          // Test 1: Try updating just event_type
+          const { error: typeError } = await supabase
+            .from('sh_events')
+            .update({ event_type: eventData.event_type })
+            .eq('id', id);
+          console.log('event_type update result:', typeError);
+          
+          // Test 2: Try updating just status  
+          const { error: statusError } = await supabase
+            .from('sh_events')
+            .update({ status: eventData.status })
+            .eq('id', id);
+          console.log('status update result:', statusError);
+          
+          // Test 3: Try updating just title (should work)
+          const { error: titleError } = await supabase
+            .from('sh_events')
+            .update({ title: eventData.title + ' (updated)' })
+            .eq('id', id);
+          console.log('title update result:', titleError);
+        }
+
         // If update failed due to enum or other constraint, try with minimal data
         if (error) {
           console.log('Main update failed, trying with minimal data...');
@@ -872,6 +898,21 @@ const CreateEditEventPage = () => {
           console.error('Full error details:', JSON.stringify(error, null, 2));
         } else {
           console.log('Event updated successfully');
+          
+          // Verify what was actually saved by re-querying immediately
+          console.log('Verifying saved data...');
+          const { data: verifyData, error: verifyError } = await supabase
+            .from('sh_events')
+            .select('event_type, status, title, updated_at')
+            .eq('id', id)
+            .single();
+            
+          console.log('Verification query result:', { verifyData, verifyError });
+          if (verifyData) {
+            console.log('DB shows event_type:', verifyData.event_type);
+            console.log('DB shows status:', verifyData.status);
+            console.log('DB shows updated_at:', verifyData.updated_at);
+          }
         }
       } else {
         // Create new event
