@@ -4,8 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "clean": "rm -rf dist",
+    "dev": "npm run clean && vite",
+    "build": "npm run clean && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
