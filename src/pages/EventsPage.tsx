@@ -1277,7 +1277,7 @@ const EventsPage = () => {
               </section>
 
               {/* Call to Action */}
-              {events.length > 0 && (
+              {/* {events.length > 0 && (
                 <section className="mt-16 bg-gradient-to-r from-primary-600 to-secondary-600 rounded-xl p-8 text-white text-center">
                   <h2 className="text-2xl font-bold mb-4">
                     Не нашли подходящее событие?
@@ -1298,7 +1298,8 @@ const EventsPage = () => {
                     </Link>
                   </div>
                 </section>
-              )}
+              )} */}
+              
             </main>
           </div>
         </div>
