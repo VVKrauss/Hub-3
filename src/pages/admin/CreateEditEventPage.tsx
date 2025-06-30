@@ -266,6 +266,8 @@ const CreateEditEventPage = () => {
           tags: data.tags || [],
           gallery_images: data.gallery_images || [],
           meta_keywords: data.meta_keywords || [],
+          meta_title: data.meta_title || '',
+          meta_description: data.meta_description || '',
           speakers: data.speakers || [],
           festival_program: data.festival_program || []
         });
@@ -1336,14 +1338,14 @@ const CreateEditEventPage = () => {
                   <input
                     type="text"
                     name="meta_title"
-                    value={event.meta_title}
+                    value={event.meta_title || ''}
                     onChange={handleInputChange}
                     maxLength={60}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white"
                     placeholder="Заголовок для поисковых систем"
                   />
                   <p className="text-sm text-gray-500 mt-1">
-                    {event.meta_title.length}/60 (рекомендуется до 60 символов)
+                    {(event.meta_title || '').length}/60 (рекомендуется до 60 символов)
                   </p>
                 </div>
 
@@ -1354,7 +1356,7 @@ const CreateEditEventPage = () => {
                   </label>
                   <textarea
                     name="meta_description"
-                    value={event.meta_description}
+                    value={event.meta_description || ''}
                     onChange={handleInputChange}
                     maxLength={160}
                     rows={3}
@@ -1362,7 +1364,7 @@ const CreateEditEventPage = () => {
                     placeholder="Описание для поисковых систем"
                   />
                   <p className="text-sm text-gray-500 mt-1">
-                    {event.meta_description.length}/160 (рекомендуется до 160 символов)
+                    {(event.meta_description || '').length}/160 (рекомендуется до 160 символов)
                   </p>
                 </div>
 
@@ -1373,7 +1375,7 @@ const CreateEditEventPage = () => {
                   </label>
                   <input
                     type="text"
-                    value={event.meta_keywords.join(', ')}
+                    value={(event.meta_keywords || []).join(', ')}
                     onChange={handleKeywordsChange}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white"
                     placeholder="наука, образование, лекция (через запятую)"
