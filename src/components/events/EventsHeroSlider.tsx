@@ -97,13 +97,13 @@ const EventsHeroSlider: React.FC<EventsHeroSliderProps> = ({
         <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl">
             {/* Заголовок */}
-            <h1 className="text-4xl md:text-5xl font-bold text-white mb-4 leading-tight">
+            <h1 className="text-2xl md:text-3xl font-bold text-white mb-4 leading-tight">
               {currentEvent.title}
             </h1>
 
             {/* Краткое описание - показываем только если есть */}
             {currentEvent.short_description && (
-              <p className="text-xl text-gray-200 mb-6 line-clamp-2">
+              <p className="text-base text-gray-200 mb-6 line-clamp-2">
                 {currentEvent.short_description}
               </p>
             )}
