@@ -391,6 +391,39 @@ const CreateEditEventPage = () => {
     };
   };
 
+  // Convert new event format back to old format for fallback
+  const convertNewEventToOld = (newEvent: any): any => {
+    return {
+      id: newEvent.id,
+      title: newEvent.title,
+      short_description: newEvent.short_description,
+      description: newEvent.description,
+      event_type: newEvent.event_type,
+      status: newEvent.status,
+      age_category: newEvent.age_category,
+      languages: [newEvent.language_code],
+      start_at: newEvent.start_at,
+      end_at: newEvent.end_at,
+      location: newEvent.location_type === 'physical' ? newEvent.venue_name : null,
+      video_url: newEvent.online_meeting_url || newEvent.video_url,
+      bg_image: newEvent.cover_image_url,
+      photo_gallery: Array.isArray(newEvent.gallery_images) ? 
+        newEvent.gallery_images.join(',') : '',
+      payment_type: newEvent.payment_type,
+      price: newEvent.base_price,
+      currency: newEvent.currency,
+      price_comment: newEvent.price_description,
+      registration_enabled: newEvent.registration_enabled,
+      registration_deadline: newEvent.registration_end_at,
+      max_registrations: newEvent.max_attendees,
+      registration_limit_per_user: newEvent.attendee_limit_per_registration,
+      created_at: newEvent.created_at,
+      updated_at: newEvent.updated_at,
+      speakers: newEvent.speakers || [],
+      festival_program: newEvent.festival_program || []
+    };
+  };
+
   // Load speakers list
   useEffect(() => {
     loadSpeakers();
@@ -572,15 +605,21 @@ const CreateEditEventPage = () => {
 
     try {
       setSaving(true);
+      console.log('Starting event save process...');
       
       // Check if slug is unique
       if (!id || slugManuallyEdited) {
-        const { data: existingEvent } = await supabase
+        const { data: existingEvent, error: slugError } = await supabase
           .from('sh_events')
           .select('id')
           .eq('slug', event.slug)
           .neq('id', id || '')
           .single();
+
+        if (slugError && slugError.code !== 'PGRST116') {
+          console.error('Error checking slug uniqueness:', slugError);
+          throw new Error('Ошибка проверки уникальности slug');
+        }
 
         if (existingEvent) {
           setErrors(prev => ({ ...prev, slug: true }));
@@ -604,41 +643,120 @@ const CreateEditEventPage = () => {
         ...(id ? {} : { created_at: new Date().toISOString() })
       };
 
+      console.log('Event data to save:', eventData);
+
       let savedEventId = id;
+      let saveError = null;
 
       if (id) {
-        const { error } = await supabase
+        // Update existing event
+        console.log('Updating existing event with ID:', id);
+        
+        // Try new table first
+        let { error } = await supabase
           .from('sh_events')
           .update(eventData)
           .eq('id', id);
 
-        if (error) throw error;
+        // If sh_events doesn't exist, try old events table
+        if (error && (error.code === 'PGRST106' || error.message?.includes('relation "sh_events" does not exist'))) {
+          console.log('sh_events table not found, falling back to events table');
+          
+          // Convert data back to old format for fallback
+          const oldEventData = convertNewEventToOld(eventData);
+          
+          const fallbackResult = await supabase
+            .from('events')
+            .update(oldEventData)
+            .eq('id', id);
+            
+          error = fallbackResult.error;
+        }
+
+        saveError = error;
+        if (error) {
+          console.error('Update error:', error);
+        } else {
+          console.log('Event updated successfully');
+        }
       } else {
-        const { data: newEvent, error } = await supabase
+        // Create new event
+        console.log('Creating new event...');
+        
+        // Try new table first
+        let result = await supabase
           .from('sh_events')
           .insert([eventData])
           .select('id')
           .single();
 
-        if (error) throw error;
-        savedEventId = newEvent.id;
+        // If sh_events doesn't exist, try old events table
+        if (result.error && (result.error.code === 'PGRST106' || result.error.message?.includes('relation "sh_events" does not exist'))) {
+          console.log('sh_events table not found, falling back to events table');
+          
+          // Convert data back to old format for fallback
+          const oldEventData = convertNewEventToOld(eventData);
+          
+          result = await supabase
+            .from('events')
+            .insert([oldEventData])
+            .select('id')
+            .single();
+        }
+
+        saveError = result.error;
+        if (result.error) {
+          console.error('Insert error:', result.error);
+        } else {
+          console.log('New event created:', result.data);
+          if (result.data) {
+            savedEventId = result.data.id;
+          }
+        }
       }
 
-      // Save festival program to sh_event_schedule if it exists
-      if (festival_program && festival_program.length > 0 && savedEventId) {
-        await saveFestivalProgramToSchedule(savedEventId, festival_program);
+      if (saveError) {
+        console.error('Save error:', saveError);
+        throw saveError;
       }
 
-      // Save speakers to sh_event_speakers if they exist
-      if (speakers && speakers.length > 0 && savedEventId) {
-        await saveEventSpeakers(savedEventId, speakers);
+      console.log('Event saved successfully, ID:', savedEventId);
+
+      // Only save additional data if we have a valid event ID
+      if (savedEventId) {
+        console.log('Saving additional data...');
+        
+        // Save festival program to sh_event_schedule if it exists
+        if (festival_program && festival_program.length > 0) {
+          try {
+            console.log('Saving festival program...');
+            await saveFestivalProgramToSchedule(savedEventId, festival_program);
+            console.log('Festival program saved successfully');
+          } catch (error) {
+            console.warn('Failed to save festival program:', error);
+            // Don't fail the entire save for this
+          }
+        }
+
+        // Save speakers to sh_event_speakers if they exist
+        if (speakers && speakers.length > 0) {
+          try {
+            console.log('Saving event speakers...');
+            await saveEventSpeakers(savedEventId, speakers);
+            console.log('Event speakers saved successfully');
+          } catch (error) {
+            console.warn('Failed to save event speakers:', error);
+            // Don't fail the entire save for this
+          }
+        }
       }
       
+      console.log('Save process completed successfully');
       toast.success(id ? 'Мероприятие обновлено' : 'Мероприятие создано');
       navigate('/admin/events');
     } catch (error) {
       console.error('Error saving event:', error);
-      toast.error(`Ошибка при сохранении мероприятия: ${error.message}`);
+      toast.error(`Ошибка при сохранении мероприятия: ${error?.message || 'Неизвестная ошибка'}`);
     } finally {
       setSaving(false);
     }
@@ -646,72 +764,71 @@ const CreateEditEventPage = () => {
 
   // Helper function to save festival program to sh_event_schedule
   const saveFestivalProgramToSchedule = async (eventId: string, program: FestivalProgramItem[]) => {
-    try {
-      // First, delete existing schedule items for this event
-      await supabase
+    // First, delete existing schedule items for this event
+    const { error: deleteError } = await supabase
+      .from('sh_event_schedule')
+      .delete()
+      .eq('event_id', eventId);
+
+    if (deleteError) {
+      console.warn('Error deleting old schedule:', deleteError);
+    }
+
+    // Convert festival program items to schedule format
+    const scheduleItems = program.map((item, index) => ({
+      event_id: eventId,
+      title: item.title,
+      description: item.description || null,
+      start_time: item.start_time,
+      end_time: item.end_time,
+      date: new Date(event.start_at).toISOString().split('T')[0], // Use event date
+      speaker_id: item.lecturer_id || null,
+      display_order: index,
+      created_at: new Date().toISOString()
+    }));
+
+    // Insert new schedule items
+    if (scheduleItems.length > 0) {
+      const { error } = await supabase
         .from('sh_event_schedule')
-        .delete()
-        .eq('event_id', eventId);
+        .insert(scheduleItems);
 
-      // Convert festival program items to schedule format
-      const scheduleItems = program.map((item, index) => ({
-        event_id: eventId,
-        title: item.title,
-        description: item.description || null,
-        start_time: item.start_time,
-        end_time: item.end_time,
-        date: new Date(event.start_at).toISOString().split('T')[0], // Use event date
-        speaker_id: item.lecturer_id || null,
-        display_order: index,
-        created_at: new Date().toISOString()
-      }));
-
-      // Insert new schedule items
-      if (scheduleItems.length > 0) {
-        const { error } = await supabase
-          .from('sh_event_schedule')
-          .insert(scheduleItems);
-
-        if (error) {
-          console.warn('Failed to save festival program to schedule:', error);
-          // Don't throw error, just log it as this is not critical
-        }
+      if (error) {
+        throw error;
       }
-    } catch (error) {
-      console.warn('Error saving festival program:', error);
     }
   };
 
   // Helper function to save event speakers
   const saveEventSpeakers = async (eventId: string, speakerIds: string[]) => {
-    try {
-      // First, delete existing speakers for this event
-      await supabase
+    // First, delete existing speakers for this event
+    const { error: deleteError } = await supabase
+      .from('sh_event_speakers')
+      .delete()
+      .eq('event_id', eventId);
+
+    if (deleteError) {
+      console.warn('Error deleting old speakers:', deleteError);
+    }
+
+    // Insert new speakers
+    const eventSpeakers = speakerIds.map((speakerId, index) => ({
+      event_id: eventId,
+      speaker_id: speakerId,
+      role: 'speaker',
+      display_order: index,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }));
+
+    if (eventSpeakers.length > 0) {
+      const { error } = await supabase
         .from('sh_event_speakers')
-        .delete()
-        .eq('event_id', eventId);
+        .insert(eventSpeakers);
 
-      // Insert new speakers
-      const eventSpeakers = speakerIds.map((speakerId, index) => ({
-        event_id: eventId,
-        speaker_id: speakerId,
-        role: 'speaker',
-        display_order: index,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }));
-
-      if (eventSpeakers.length > 0) {
-        const { error } = await supabase
-          .from('sh_event_speakers')
-          .insert(eventSpeakers);
-
-        if (error) {
-          console.warn('Failed to save event speakers:', error);
-        }
+      if (error) {
+        throw error;
       }
-    } catch (error) {
-      console.warn('Error saving event speakers:', error);
     }
   };
 
