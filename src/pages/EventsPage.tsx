@@ -393,7 +393,7 @@ const EventsPage = () => {
     return colors[type] || 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300';
   };
 
-  // ============ ОСНОВНЫЕ ФУНКЦИИ ЗАГРУЗКИ ============
+ // ============ ОСНОВНЫЕ ФУНКЦИИ ЗАГРУЗКИ ============
   
   // Загружаем активные события для слайдшоу отдельно (всегда только активные)
   const loadActiveEventsForSlider = async () => {
@@ -653,203 +653,96 @@ const EventsPage = () => {
     isFavorite: boolean;
     onToggleFavorite: (id: string) => void;
   }) => {
+    const handleShare = async (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const shareData = {
+        title: event.title,
+        text: event.short_description || event.title,
+        url: window.location.origin + `/events/${event.id}`
+      };
+
+      try {
+        if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+          await navigator.share(shareData);
+        } else {
+          // Fallback для браузеров без Web Share API
+          await navigator.clipboard.writeText(shareData.url);
+          // Можно добавить toast уведомление о копировании
+          alert('Ссылка скопирована в буфер обмена!');
+        }
+      } catch (err) {
+        console.log('Error sharing:', err);
+        // Fallback на копирование в буфер
+        try {
+          await navigator.clipboard.writeText(shareData.url);
+          alert('Ссылка скопирована в буфер обмена!');
+        } catch (clipboardErr) {
+          console.log('Clipboard error:', clipboardErr);
+        }
+      }
+    };
+
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden border border-gray-200 dark:border-gray-700">
-        {/* Изображение */}
-        <div className="relative h-48 bg-gray-200 dark:bg-gray-700">
-          {event.cover_image_url ? (
-            <img 
-              src={event.cover_image_url} 
-              alt={event.title}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <Calendar className="w-12 h-12 text-gray-400" />
-            </div>
-          )}
-          
-          {/* Избранное */}
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              onToggleFavorite(event.id);
-            }}
-            className="absolute top-3 right-3 p-2 bg-white/90 dark:bg-gray-900/90 rounded-full hover:bg-white dark:hover:bg-gray-900 transition-colors"
-          >
-            <Heart className={`w-4 h-4 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-gray-600 dark:text-gray-400'}`} />
-          </button>
-
-          {/* Избранное событие */}
-          {event.is_featured && (
-            <div className="absolute top-3 left-3 px-2 py-1 bg-yellow-500 text-white text-xs font-medium rounded-full">
-              <Star className="w-3 h-3 inline mr-1" />
-              Рекомендуем
-            </div>
-          )}
-        </div>
-
-        {/* Контент */}
-        <div className="p-6">
-          {/* Заголовок */}
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 line-clamp-2">
-            <Link to={`/events/${event.id}`} className="hover:text-primary-600 dark:hover:text-primary-400">
-              {event.title}
-            </Link>
-          </h3>
-
-          {/* Краткое описание */}
-          {event.short_description && (
-            <p className="text-gray-600 dark:text-gray-400 text-sm mb-4 line-clamp-2">
-              {event.short_description}
-            </p>
-          )}
-
-          {/* Мета информация */}
-          <div className="space-y-2 mb-4">
-            {/* Дата и время */}
-            <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
-              <Calendar className="w-4 h-4 mr-2 flex-shrink-0" />
-              <span>{formatEventDate(event.start_at)}</span>
-              {event.start_at && (
-                <span className="ml-2 text-gray-500">
-                  • {formatEventTime(event.start_at, event.end_at)}
-                </span>
-              )}
-            </div>
-
-            {/* Место проведения */}
-            {(event.venue_name || event.venue_address) && (
-              <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
-                <MapPin className="w-4 h-4 mr-2 flex-shrink-0" />
-                <span>
-                  {event.location_type === 'online' ? 'Онлайн' : (event.venue_name || event.venue_address)}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Теги и метки */}
-          <div className="flex flex-wrap gap-2 mb-4">
-            {/* Тип события */}
-            {event.event_type && (
-              <span className={`px-2 py-1 text-xs font-medium rounded-full ${getEventTypeColor(event.event_type)}`}>
-                {EVENT_TYPE_LABELS[event.event_type]}
-              </span>
-            )}
-
-            {/* Возрастная категория */}
-            {event.age_category && (
-              <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
-                {AGE_CATEGORY_LABELS[event.age_category]}
-              </span>
-            )}
-
-            {/* Цена */}
-            {event.payment_type === 'free' ? (
-              <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
-                Бесплатно
-              </span>
-            ) : event.base_price && (
-              <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
-                от {event.base_price} {event.currency}
-              </span>
-            )}
-          </div>
-
-          {/* Действия */}
-          <div className="flex items-center justify-between">
-            <Link
-              to={`/events/${event.id}`}
-              className="inline-flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
-            >
-              Подробнее
-              <ExternalLink className="w-3 h-3 ml-2" />
-            </Link>
-
-            <div className="flex items-center gap-2">
-              {/* Кнопка поделиться */}
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  navigator.share && navigator.share({
-                    title: event.title,
-                    url: window.location.origin + `/events/${event.id}`
-                  });
-                }}
-                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                title="Поделиться"
-              >
-                <Share2 className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-  // ============ КОМПОНЕНТ СПИСОЧНОГО ПРЕДСТАВЛЕНИЯ ============
-  
-  const EventListItem = ({ event, isFavorite, onToggleFavorite }: {
-    event: EventWithDetails;
-    isFavorite: boolean;
-    onToggleFavorite: (id: string) => void;
-  }) => {
-    return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden border border-gray-200 dark:border-gray-700">
-        <div className="flex">
+      <Link to={`/events/${event.id}`} className="block group">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden border border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-600">
           {/* Изображение */}
-          <div className="relative w-48 h-32 bg-gray-200 dark:bg-gray-700 flex-shrink-0">
+          <div className="relative h-48 bg-gray-200 dark:bg-gray-700">
             {event.cover_image_url ? (
               <img 
                 src={event.cover_image_url} 
                 alt={event.title}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
-                <Calendar className="w-8 h-8 text-gray-400" />
+                <Calendar className="w-12 h-12 text-gray-400" />
               </div>
             )}
             
+            {/* Избранное */}
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onToggleFavorite(event.id);
+              }}
+              className="absolute top-3 right-3 p-2 bg-white/90 dark:bg-gray-900/90 rounded-full hover:bg-white dark:hover:bg-gray-900 transition-colors z-10"
+            >
+              <Heart className={`w-4 h-4 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-gray-600 dark:text-gray-400'}`} />
+            </button>
+
             {/* Избранное событие */}
             {event.is_featured && (
-              <div className="absolute top-2 left-2 px-2 py-1 bg-yellow-500 text-white text-xs font-medium rounded-full">
+              <div className="absolute top-3 left-3 px-2 py-1 bg-yellow-500 text-white text-xs font-medium rounded-full">
                 <Star className="w-3 h-3 inline mr-1" />
                 Рекомендуем
               </div>
             )}
+
+            {/* Стрелка перехода */}
+            <div className="absolute bottom-3 right-3 p-2 bg-primary-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all duration-200 transform translate-y-2 group-hover:translate-y-0">
+              <ExternalLink className="w-4 h-4" />
+            </div>
           </div>
 
           {/* Контент */}
-          <div className="flex-1 p-6">
-            <div className="flex justify-between items-start mb-2">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                <Link to={`/events/${event.id}`} className="hover:text-primary-600 dark:hover:text-primary-400">
-                  {event.title}
-                </Link>
-              </h3>
-              
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  onToggleFavorite(event.id);
-                }}
-                className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-              >
-                <Heart className={`w-4 h-4 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
-              </button>
-            </div>
+          <div className="p-6">
+            {/* Заголовок */}
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 line-clamp-2 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+              {event.title}
+            </h3>
 
             {/* Краткое описание */}
             {event.short_description && (
-              <p className="text-gray-600 dark:text-gray-400 text-sm mb-3 line-clamp-2">
+              <p className="text-gray-600 dark:text-gray-400 text-sm mb-4 line-clamp-2">
                 {event.short_description}
               </p>
             )}
 
             {/* Мета информация */}
-            <div className="space-y-1 mb-3">
+            <div className="space-y-2 mb-4">
               {/* Дата и время */}
               <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
                 <Calendar className="w-4 h-4 mr-2 flex-shrink-0" />
@@ -872,8 +765,182 @@ const EventsPage = () => {
               )}
             </div>
 
-            {/* Теги и действия */}
-            <div className="flex items-center justify-between">
+            {/* Теги и метки */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              {/* Тип события */}
+              {event.event_type && (
+                <span className={`px-2 py-1 text-xs font-medium rounded-full ${getEventTypeColor(event.event_type)}`}>
+                  {EVENT_TYPE_LABELS[event.event_type]}
+                </span>
+              )}
+
+              {/* Возрастная категория */}
+              {event.age_category && (
+                <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                  {AGE_CATEGORY_LABELS[event.age_category]}
+                </span>
+              )}
+
+              {/* Цена */}
+              {event.payment_type === 'free' ? (
+                <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+                  Бесплатно
+                </span>
+              ) : event.base_price && (
+                <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                  от {event.base_price} {event.currency}
+                </span>
+              )}
+            </div>
+
+            {/* Действия */}
+            <div className="flex items-center justify-end">
+              {/* Кнопка поделиться */}
+              <button
+                onClick={handleShare}
+                className="p-2 text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+                title="Поделиться"
+              >
+                <Share2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </Link>
+    );
+  };
+
+// ============ КОМПОНЕНТ СПИСОЧНОГО ПРЕДСТАВЛЕНИЯ ============
+  
+  const EventListItem = ({ event, isFavorite, onToggleFavorite }: {
+    event: EventWithDetails;
+    isFavorite: boolean;
+    onToggleFavorite: (id: string) => void;
+  }) => {
+    const handleShare = async (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const shareData = {
+        title: event.title,
+        text: event.short_description || event.title,
+        url: window.location.origin + `/events/${event.id}`
+      };
+
+      try {
+        if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+          await navigator.share(shareData);
+        } else {
+          // Fallback для браузеров без Web Share API
+          await navigator.clipboard.writeText(shareData.url);
+          alert('Ссылка скопирована в буфер обмена!');
+        }
+      } catch (err) {
+        console.log('Error sharing:', err);
+        try {
+          await navigator.clipboard.writeText(shareData.url);
+          alert('Ссылка скопирована в буфер обмена!');
+        } catch (clipboardErr) {
+          console.log('Clipboard error:', clipboardErr);
+        }
+      }
+    };
+
+    return (
+      <Link to={`/events/${event.id}`} className="block group">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden border border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-600">
+          <div className="flex">
+            {/* Изображение */}
+            <div className="relative w-48 h-32 bg-gray-200 dark:bg-gray-700 flex-shrink-0">
+              {event.cover_image_url ? (
+                <img 
+                  src={event.cover_image_url} 
+                  alt={event.title}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <Calendar className="w-8 h-8 text-gray-400" />
+                </div>
+              )}
+              
+              {/* Избранное событие */}
+              {event.is_featured && (
+                <div className="absolute top-2 left-2 px-2 py-1 bg-yellow-500 text-white text-xs font-medium rounded-full">
+                  <Star className="w-3 h-3 inline mr-1" />
+                  Рекомендуем
+                </div>
+              )}
+
+              {/* Стрелка перехода */}
+              <div className="absolute bottom-2 right-2 p-1.5 bg-primary-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all duration-200 transform translate-y-2 group-hover:translate-y-0">
+                <ExternalLink className="w-3 h-3" />
+              </div>
+            </div>
+
+            {/* Контент */}
+            <div className="flex-1 p-6">
+              <div className="flex justify-between items-start mb-2">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+                  {event.title}
+                </h3>
+                
+                <div className="flex items-center gap-2 ml-4">
+                  {/* Избранное */}
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onToggleFavorite(event.id);
+                    }}
+                    className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                  >
+                    <Heart className={`w-4 h-4 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+                  </button>
+                  
+                  {/* Поделиться */}
+                  <button
+                    onClick={handleShare}
+                    className="p-2 text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+                    title="Поделиться"
+                  >
+                    <Share2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Краткое описание */}
+              {event.short_description && (
+                <p className="text-gray-600 dark:text-gray-400 text-sm mb-3 line-clamp-2">
+                  {event.short_description}
+                </p>
+              )}
+
+              {/* Мета информация */}
+              <div className="space-y-1 mb-3">
+                {/* Дата и время */}
+                <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                  <Calendar className="w-4 h-4 mr-2 flex-shrink-0" />
+                  <span>{formatEventDate(event.start_at)}</span>
+                  {event.start_at && (
+                    <span className="ml-2 text-gray-500">
+                      • {formatEventTime(event.start_at, event.end_at)}
+                    </span>
+                  )}
+                </div>
+
+                {/* Место проведения */}
+                {(event.venue_name || event.venue_address) && (
+                  <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                    <MapPin className="w-4 h-4 mr-2 flex-shrink-0" />
+                    <span>
+                      {event.location_type === 'online' ? 'Онлайн' : (event.venue_name || event.venue_address)}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Теги */}
               <div className="flex flex-wrap gap-2">
                 {/* Тип события */}
                 {event.event_type && (
@@ -893,18 +960,10 @@ const EventsPage = () => {
                   </span>
                 )}
               </div>
-
-              <Link
-                to={`/events/${event.id}`}
-                className="inline-flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
-              >
-                Подробнее
-                <ExternalLink className="w-3 h-3 ml-2" />
-              </Link>
             </div>
           </div>
         </div>
-      </div>
+      </Link>
     );
   };
 
@@ -1140,6 +1199,12 @@ const EventsPage = () => {
                 </div>
               </div>
             )}
+  
+
+
+
+
+  
             {/* Сортировка и статистика */}
             <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="flex items-center gap-4">
