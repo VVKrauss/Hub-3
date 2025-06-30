@@ -1,6 +1,6 @@
 // src/components/events/EventsHeroSlider.tsx
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, MapPin, Clock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, MapPin, Clock, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { EventWithDetails } from '../../types/database';
 
@@ -52,8 +52,7 @@ const EventsHeroSlider: React.FC<EventsHeroSliderProps> = ({
     const date = new Date(dateString);
     return date.toLocaleDateString('ru-RU', {
       day: 'numeric',
-      month: 'long',
-      year: 'numeric'
+      month: 'long'
     });
   };
 
@@ -67,7 +66,7 @@ const EventsHeroSlider: React.FC<EventsHeroSliderProps> = ({
 
   if (upcomingEventsWithImages.length === 0) {
     return (
-      <div className="relative h-96 bg-gradient-to-r from-gray-600 to-gray-800 rounded-xl overflow-hidden">
+      <div className="relative h-96 bg-gradient-to-r from-gray-600 to-gray-800 overflow-hidden">
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center text-white">
             <Calendar className="h-16 w-16 mx-auto mb-4 opacity-50" />
@@ -82,7 +81,7 @@ const EventsHeroSlider: React.FC<EventsHeroSliderProps> = ({
   const currentEvent = upcomingEventsWithImages[currentSlide];
 
   return (
-    <div className="relative h-96 rounded-xl overflow-hidden group">
+    <div className="relative h-96 overflow-hidden group">
       {/* Основное изображение */}
       <div className="absolute inset-0">
         <img
@@ -95,33 +94,32 @@ const EventsHeroSlider: React.FC<EventsHeroSliderProps> = ({
 
       {/* Контент */}
       <div className="absolute inset-0 flex items-center">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
+        <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl">
-            {/* Тип события */}
-            <div className="mb-4">
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-white/90 text-gray-900">
-                {currentEvent.event_type === 'lecture' ? 'Лекция' :
-                 currentEvent.event_type === 'workshop' ? 'Мастер-класс' :
-                 currentEvent.event_type === 'conference' ? 'Конференция' :
-                 currentEvent.event_type === 'seminar' ? 'Семинар' :
-                 currentEvent.event_type === 'festival' ? 'Фестиваль' : 'Событие'}
-              </span>
-            </div>
-
             {/* Заголовок */}
             <h1 className="text-4xl md:text-5xl font-bold text-white mb-4 leading-tight">
               {currentEvent.title}
             </h1>
 
-            {/* Краткое описание */}
+            {/* Краткое описание - показываем только если есть */}
             {currentEvent.short_description && (
               <p className="text-xl text-gray-200 mb-6 line-clamp-2">
                 {currentEvent.short_description}
               </p>
             )}
 
+            {/* Кнопка с иконкой */}
+            <div className="mb-6">
+              <Link
+                to={`/events/${currentEvent.slug || currentEvent.id}`}
+                className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white border border-white/20 px-6 py-3 rounded-full font-medium transition-all hover:scale-105"
+              >
+                <ArrowRight className="h-5 w-5" />
+              </Link>
+            </div>
+
             {/* Мета информация */}
-            <div className="flex flex-wrap items-center gap-4 text-white mb-8">
+            <div className="flex flex-wrap items-center gap-4 text-white">
               <div className="flex items-center gap-2">
                 <Clock className="h-5 w-5" />
                 <span>{formatDate(currentEvent.start_at)} • {formatTime(currentEvent.start_at)}</span>
@@ -132,25 +130,6 @@ const EventsHeroSlider: React.FC<EventsHeroSliderProps> = ({
                   <MapPin className="h-5 w-5" />
                   <span>{currentEvent.venue_name}</span>
                 </div>
-              )}
-            </div>
-
-            {/* Кнопки */}
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Link
-                to={`/events/${currentEvent.slug || currentEvent.id}`}
-                className="bg-primary-600 hover:bg-primary-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors inline-flex items-center justify-center"
-              >
-                Подробнее о событии
-              </Link>
-              
-              {currentEvent.registration_enabled && (
-                <Link
-                  to={`/events/${currentEvent.slug || currentEvent.id}#registration`}
-                  className="bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white border border-white/20 px-8 py-3 rounded-lg font-semibold transition-colors inline-flex items-center justify-center"
-                >
-                  Зарегистрироваться
-                </Link>
               )}
             </div>
           </div>
@@ -189,29 +168,6 @@ const EventsHeroSlider: React.FC<EventsHeroSliderProps> = ({
                   : 'bg-white/50 hover:bg-white/75'
               }`}
             />
-          ))}
-        </div>
-      )}
-
-      {/* Миниатюры событий (для больших экранов) */}
-      {upcomingEventsWithImages.length > 1 && (
-        <div className="absolute bottom-4 right-4 hidden lg:flex space-x-2">
-          {upcomingEventsWithImages.map((event, index) => (
-            <button
-              key={event.id}
-              onClick={() => goToSlide(index)}
-              className={`w-16 h-16 rounded-lg overflow-hidden transition-all ${
-                index === currentSlide
-                  ? 'ring-2 ring-white scale-110'
-                  : 'opacity-70 hover:opacity-90'
-              }`}
-            >
-              <img
-                src={event.cover_image_url!}
-                alt={event.title}
-                className="w-full h-full object-cover"
-              />
-            </button>
           ))}
         </div>
       )}
