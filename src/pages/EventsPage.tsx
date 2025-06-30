@@ -49,7 +49,11 @@ import type {
   ShEventType,
   ShEventStatus,
   ShAgeCategory,
-  ShPaymentType,
+  ShPaymentType
+} from '../types/database';
+
+// Импортируем константы отдельно
+import {
   EVENT_STATUS_LABELS,
   EVENT_TYPE_LABELS,
   PAYMENT_TYPE_LABELS,
