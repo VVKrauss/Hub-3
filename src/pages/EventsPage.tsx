@@ -593,19 +593,37 @@ const EventsPage = () => {
   const renderEventCard = (event: EventWithDetails) => (
     <div key={event.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden group">
       {/* Изображение */}
-      <div className="relative h-48 bg-gradient-to-br from-primary-500 to-secondary-500 overflow-hidden">
+      <div className="relative h-48 overflow-hidden">
         {event.cover_image_url ? (
           <img
             src={event.cover_image_url}
             alt={event.title}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             onError={(e) => {
+              // Если изображение не загрузилось, показываем градиент с иконкой
               const target = e.target as HTMLImageElement;
-              target.style.display = 'none';
+              const parent = target.parentElement;
+              if (parent) {
+                parent.innerHTML = `
+                  <div class="w-full h-full bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center">
+                    <svg class="h-16 w-16 text-white opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                    </svg>
+                  </div>
+                `;
+              }
+            }}
+            onLoad={(e) => {
+              // Убираем градиент если изображение загрузилось
+              const target = e.target as HTMLImageElement;
+              const parent = target.parentElement;
+              if (parent) {
+                parent.className = "relative h-48 overflow-hidden";
+              }
             }}
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center">
+          <div className="w-full h-full bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center">
             <Calendar className="h-16 w-16 text-white opacity-50" />
           </div>
         )}
@@ -753,19 +771,29 @@ const EventsPage = () => {
     <div key={event.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden">
       <div className="flex">
         {/* Изображение */}
-        <div className="flex-shrink-0 w-32 h-32 bg-gradient-to-br from-primary-500 to-secondary-500 relative overflow-hidden">
+        <div className="flex-shrink-0 w-32 h-32 relative overflow-hidden">
           {event.cover_image_url ? (
             <img
               src={event.cover_image_url}
               alt={event.title}
               className="w-full h-full object-cover"
               onError={(e) => {
+                // Если изображение не загрузилось, показываем градиент с иконкой
                 const target = e.target as HTMLImageElement;
-                target.style.display = 'none';
+                const parent = target.parentElement;
+                if (parent) {
+                  parent.innerHTML = `
+                    <div class="w-full h-full bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center">
+                      <svg class="h-8 w-8 text-white opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                      </svg>
+                    </div>
+                  `;
+                }
               }}
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center">
+            <div className="w-full h-full bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center">
               <Calendar className="h-8 w-8 text-white opacity-50" />
             </div>
           )}
@@ -867,7 +895,6 @@ const EventsPage = () => {
       </div>
     </div>
   );
-
   // ============ ОСНОВНОЙ РЕНДЕР ============
 
   if (loading) {
