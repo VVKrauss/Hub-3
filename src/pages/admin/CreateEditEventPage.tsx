@@ -255,9 +255,16 @@ const CreateEditEventPage = () => {
         .from('sh_events')
         .select('*')
         .eq('id', id)
-        .single();
+        .maybeSingle(); // Use maybeSingle to avoid cache issues
 
       console.log('sh_events query result:', { data, error });
+      
+      if (data) {
+        console.log('Loaded event_type:', data.event_type);
+        console.log('Loaded status:', data.status);
+        console.log('Loaded title:', data.title);
+        console.log('Full loaded data:', data);
+      }
 
       if (error && error.code === 'PGRST116') {
         console.log('Event not found in sh_events, trying old events table...');
@@ -772,6 +779,8 @@ const CreateEditEventPage = () => {
       };
 
       console.log('Cleaned event data for save:', eventData);
+      console.log('SAVING event_type:', eventData.event_type);
+      console.log('SAVING status:', eventData.status);
 
       let savedEventId = id;
       let saveError = null;
