@@ -31,6 +31,9 @@ import {
 } from 'lucide-react';
 import { parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
+// Import existing components (will need to be adapted)
+// import EventSpeakersSection from '../../components/admin/EventSpeakersSection';
+// import EventFestivalProgramSection from '../../components/admin/EventFestivalProgramSection';
 
 // Updated types for sh_ system
 type ShEventType = 'lecture' | 'workshop' | 'festival' | 'conference' | 'seminar' | 'other';
@@ -140,11 +143,21 @@ interface ShEvent {
   is_public: boolean;
   show_attendees_count: boolean;
   allow_waitlist: boolean;
-  // Legacy fields for backward compatibility
+  // Legacy fields for backward compatibility - will be migrated to separate tables
   speakers?: string[];
-  festival_program?: any[];
+  festival_program?: FestivalProgramItem[]; // Keep for now, will save to sh_event_schedule
   hide_speakers_gallery?: boolean;
   photo_gallery?: string;
+}
+
+// Festival program item type (compatible with existing EventFestivalProgramSection)
+interface FestivalProgramItem {
+  title: string;
+  description: string;
+  image_url: string;
+  start_time: string;
+  end_time: string;
+  lecturer_id: string;
 }
 
 const CreateEditEventPage = () => {
@@ -157,7 +170,7 @@ const CreateEditEventPage = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [activeTab, setActiveTab] = useState<'basic' | 'details' | 'location' | 'registration' | 'seo'>('basic');
+  const [activeTab, setActiveTab] = useState<'basic' | 'details' | 'location' | 'registration' | 'program' | 'seo'>('basic');
 
   // Initialize event with new sh_ structure
   const [event, setEvent] = useState<ShEvent>({
@@ -261,6 +274,12 @@ const CreateEditEventPage = () => {
       }
 
       if (data) {
+        // Load additional data for new system
+        const [scheduleData, speakersData] = await Promise.all([
+          loadEventSchedule(data.id),
+          loadEventSpeakers(data.id)
+        ]);
+
         setEvent({
           ...data,
           tags: data.tags || [],
@@ -268,8 +287,8 @@ const CreateEditEventPage = () => {
           meta_keywords: data.meta_keywords || [],
           meta_title: data.meta_title || '',
           meta_description: data.meta_description || '',
-          speakers: data.speakers || [],
-          festival_program: data.festival_program || []
+          speakers: speakersData,
+          festival_program: scheduleData
         });
         setSlugManuallyEdited(true); // Assume existing events have custom slugs
       }
@@ -278,6 +297,50 @@ const CreateEditEventPage = () => {
       toast.error('Ошибка при загрузке мероприятия');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Load event schedule (festival program)
+  const loadEventSchedule = async (eventId: string): Promise<FestivalProgramItem[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('sh_event_schedule')
+        .select('*')
+        .eq('event_id', eventId)
+        .order('display_order', { ascending: true });
+
+      if (error) throw error;
+
+      // Convert schedule items to festival program format
+      return (data || []).map(item => ({
+        title: item.title,
+        description: item.description || '',
+        image_url: '', // Schedule doesn't have images yet
+        start_time: item.start_time,
+        end_time: item.end_time,
+        lecturer_id: item.speaker_id || ''
+      }));
+    } catch (error) {
+      console.warn('Error loading event schedule:', error);
+      return [];
+    }
+  };
+
+  // Load event speakers
+  const loadEventSpeakers = async (eventId: string): Promise<string[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('sh_event_speakers')
+        .select('speaker_id')
+        .eq('event_id', eventId)
+        .order('display_order', { ascending: true });
+
+      if (error) throw error;
+
+      return (data || []).map(item => item.speaker_id);
+    } catch (error) {
+      console.warn('Error loading event speakers:', error);
+      return [];
     }
   };
 
@@ -472,6 +535,32 @@ const CreateEditEventPage = () => {
     }));
   };
 
+  // Festival program handlers
+  const handleFestivalProgramChange = (program: FestivalProgramItem[]) => {
+    setEvent(prev => ({
+      ...prev,
+      festival_program: program
+    }));
+  };
+
+  const handleSpeakerToggle = (speakerId: string) => {
+    setEvent(prev => {
+      const speakers = [...(prev.speakers || [])];
+      
+      if (speakers.includes(speakerId)) {
+        return {
+          ...prev,
+          speakers: speakers.filter(id => id !== speakerId)
+        };
+      } else {
+        return {
+          ...prev,
+          speakers: [...speakers, speakerId]
+        };
+      }
+    });
+  };
+
   // Save event
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -500,11 +589,22 @@ const CreateEditEventPage = () => {
         }
       }
 
+      // Prepare event data - exclude legacy fields that don't exist in sh_events
+      const {
+        speakers,
+        festival_program,
+        hide_speakers_gallery,
+        photo_gallery,
+        ...cleanEventData
+      } = event;
+
       const eventData = {
-        ...event,
+        ...cleanEventData,
         updated_at: new Date().toISOString(),
         ...(id ? {} : { created_at: new Date().toISOString() })
       };
+
+      let savedEventId = id;
 
       if (id) {
         const { error } = await supabase
@@ -514,11 +614,24 @@ const CreateEditEventPage = () => {
 
         if (error) throw error;
       } else {
-        const { error } = await supabase
+        const { data: newEvent, error } = await supabase
           .from('sh_events')
-          .insert([eventData]);
+          .insert([eventData])
+          .select('id')
+          .single();
 
         if (error) throw error;
+        savedEventId = newEvent.id;
+      }
+
+      // Save festival program to sh_event_schedule if it exists
+      if (festival_program && festival_program.length > 0 && savedEventId) {
+        await saveFestivalProgramToSchedule(savedEventId, festival_program);
+      }
+
+      // Save speakers to sh_event_speakers if they exist
+      if (speakers && speakers.length > 0 && savedEventId) {
+        await saveEventSpeakers(savedEventId, speakers);
       }
       
       toast.success(id ? 'Мероприятие обновлено' : 'Мероприятие создано');
@@ -528,6 +641,77 @@ const CreateEditEventPage = () => {
       toast.error(`Ошибка при сохранении мероприятия: ${error.message}`);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Helper function to save festival program to sh_event_schedule
+  const saveFestivalProgramToSchedule = async (eventId: string, program: FestivalProgramItem[]) => {
+    try {
+      // First, delete existing schedule items for this event
+      await supabase
+        .from('sh_event_schedule')
+        .delete()
+        .eq('event_id', eventId);
+
+      // Convert festival program items to schedule format
+      const scheduleItems = program.map((item, index) => ({
+        event_id: eventId,
+        title: item.title,
+        description: item.description || null,
+        start_time: item.start_time,
+        end_time: item.end_time,
+        date: new Date(event.start_at).toISOString().split('T')[0], // Use event date
+        speaker_id: item.lecturer_id || null,
+        display_order: index,
+        created_at: new Date().toISOString()
+      }));
+
+      // Insert new schedule items
+      if (scheduleItems.length > 0) {
+        const { error } = await supabase
+          .from('sh_event_schedule')
+          .insert(scheduleItems);
+
+        if (error) {
+          console.warn('Failed to save festival program to schedule:', error);
+          // Don't throw error, just log it as this is not critical
+        }
+      }
+    } catch (error) {
+      console.warn('Error saving festival program:', error);
+    }
+  };
+
+  // Helper function to save event speakers
+  const saveEventSpeakers = async (eventId: string, speakerIds: string[]) => {
+    try {
+      // First, delete existing speakers for this event
+      await supabase
+        .from('sh_event_speakers')
+        .delete()
+        .eq('event_id', eventId);
+
+      // Insert new speakers
+      const eventSpeakers = speakerIds.map((speakerId, index) => ({
+        event_id: eventId,
+        speaker_id: speakerId,
+        role: 'speaker',
+        display_order: index,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }));
+
+      if (eventSpeakers.length > 0) {
+        const { error } = await supabase
+          .from('sh_event_speakers')
+          .insert(eventSpeakers);
+
+        if (error) {
+          console.warn('Failed to save event speakers:', error);
+        }
+      }
+    } catch (error) {
+      console.warn('Error saving event speakers:', error);
     }
   };
 
@@ -580,6 +764,7 @@ const CreateEditEventPage = () => {
     { id: 'details', label: 'Детали', icon: Calendar },
     { id: 'location', label: 'Место', icon: MapPin },
     { id: 'registration', label: 'Регистрация', icon: Users },
+    ...(event.event_type === 'festival' ? [{ id: 'program', label: 'Программа', icon: Clock }] : []),
     { id: 'seo', label: 'SEO', icon: Globe }
   ];
 
@@ -1315,6 +1500,118 @@ const CreateEditEventPage = () => {
                   <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
                     Рекомендуемое мероприятие
                   </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Program Tab - only for festivals */}
+        {activeTab === 'program' && event.event_type === 'festival' && (
+          <div className="space-y-6">
+            <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-dark-700 p-6">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                Программа фестиваля
+              </h3>
+              
+              <div className="space-y-4">
+                {/* Festival Program Items */}
+                {event.festival_program && event.festival_program.length > 0 ? (
+                  <div className="space-y-4">
+                    {event.festival_program.map((item, index) => {
+                      const speaker = speakers.find(s => s.id === item.lecturer_id);
+                      
+                      return (
+                        <div 
+                          key={index}
+                          className="bg-gray-50 dark:bg-dark-700 rounded-xl p-4 border border-gray-200 dark:border-dark-600"
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <h4 className="font-semibold text-gray-900 dark:text-white">{item.title}</h4>
+                              <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                <div className="flex items-center">
+                                  <Clock className="h-4 w-4 mr-1" />
+                                  <span>{item.start_time} - {item.end_time}</span>
+                                </div>
+                                {speaker && (
+                                  <div className="flex items-center">
+                                    <Users className="h-4 w-4 mr-1" />
+                                    <span>{speaker.name}</span>
+                                  </div>
+                                )}
+                              </div>
+                              {item.description && (
+                                <p className="text-sm text-gray-600 dark:text-gray-300 mt-2">
+                                  {item.description}
+                                </p>
+                              )}
+                            </div>
+                            
+                            <div className="flex gap-2 ml-4">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updatedProgram = [...(event.festival_program || [])];
+                                  updatedProgram.splice(index, 1);
+                                  handleFestivalProgramChange(updatedProgram);
+                                }}
+                                className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 bg-gray-50 dark:bg-dark-700 rounded-xl">
+                    <div className="w-16 h-16 bg-gray-200 dark:bg-dark-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Calendar className="h-8 w-8 text-gray-400 dark:text-gray-500" />
+                    </div>
+                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                      Нет пунктов программы
+                    </h4>
+                    <p className="text-gray-500 dark:text-gray-400 mb-4">
+                      Добавьте пункты, чтобы создать программу фестиваля
+                    </p>
+                  </div>
+                )}
+
+                {/* Add Program Item Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Simple add - in future can be expanded to modal form
+                    const newItem: FestivalProgramItem = {
+                      title: `Пункт программы ${(event.festival_program?.length || 0) + 1}`,
+                      description: '',
+                      image_url: '',
+                      start_time: '10:00',
+                      end_time: '11:00',
+                      lecturer_id: ''
+                    };
+                    handleFestivalProgramChange([...(event.festival_program || []), newItem]);
+                  }}
+                  className="w-full p-4 border-2 border-dashed border-gray-300 dark:border-dark-600 rounded-lg hover:border-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/10 transition-colors flex items-center justify-center gap-2 text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
+                >
+                  <Plus className="h-5 w-5" />
+                  Добавить пункт программы
+                </button>
+
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                  <div className="flex">
+                    <Info className="h-5 w-5 text-blue-400 mt-0.5 mr-3" />
+                    <div className="text-sm text-blue-700 dark:text-blue-300">
+                      <p className="font-medium mb-1">О программе фестиваля:</p>
+                      <p>
+                        Программа сохраняется в новой структуре БД (sh_event_schedule). 
+                        В будущих версиях будет добавлен полноценный редактор с поддержкой изображений и расширенных настроек.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
