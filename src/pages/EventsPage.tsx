@@ -386,139 +386,64 @@ const EventsPageUpdated = () => {
 
   // ============ КОМПОНЕНТЫ РЕНДЕРИНГА ============
 
-  const renderEventCard = (event: EventWithDetails) => (
-    <div key={event.id} className="bg-white dark:bg-dark-800 rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 group relative">
-      {/* Изображение события */}
-      <div className="aspect-video overflow-hidden relative">
-        {event.cover_image_url ? (
-          <img
-            src={event.cover_image_url}
-            alt={event.title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-          />
-        ) : (
-          <div className="w-full h-full bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center">
-            <Calendar className="h-12 w-12 text-white" />
-          </div>
-        )}
-        
-        {/* Overlay с действиями */}
-        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
-          <div className="flex gap-2">
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                toggleFavorite(event.id);
-              }}
-              className="p-2 bg-white rounded-full shadow-lg hover:bg-gray-50 transition-colors"
-            >
-              <Heart className={`h-4 w-4 ${favorites.has(event.id) ? 'text-red-500 fill-current' : 'text-gray-600'}`} />
-            </button>
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                shareEvent(event);
-              }}
-              className="p-2 bg-white rounded-full shadow-lg hover:bg-gray-50 transition-colors"
-            >
-              <Share2 className="h-4 w-4 text-gray-600" />
-            </button>
-          </div>
-        </div>
-
-        {/* Бейдж статуса */}
-        <div className="absolute top-4 left-4">
-          {getEventStatusBadge(event)}
-        </div>
-
-        {/* Тип события */}
-        <div className="absolute top-4 right-4">
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800 dark:bg-primary-900/20 dark:text-primary-400">
-            {getEventTypeLabel(event.event_type)}
-          </span>
-        </div>
-
-        {/* Избранное */}
-        {event.is_featured && (
-          <div className="absolute bottom-4 left-4">
-            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400">
-              <Star className="h-3 w-3 mr-1" />
-              Рекомендуем
-            </span>
-          </div>
-        )}
+const renderEventCard = (event: EventWithDetails) => (
+  <div key={event.id} className="bg-white dark:bg-dark-800 rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 group relative">
+    {/* Изображение события */}
+    <div className="aspect-video overflow-hidden relative">
+      {/* Проверяем разные поля для изображения и правильно обрабатываем URL */}
+      {(event.cover_image_url || event.bg_image) ? (
+        <img
+          src={getSupabaseImageUrl(event.cover_image_url || event.bg_image)}
+          alt={event.title}
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          onError={(e) => {
+            // Fallback при ошибке загрузки
+            const img = e.target as HTMLImageElement;
+            if (!img.dataset.fallbackTried) {
+              img.dataset.fallbackTried = 'true';
+              // Пробуем альтернативное поле
+              const altField = event.cover_image_url ? event.bg_image : event.cover_image_url;
+              if (altField) {
+                img.src = getSupabaseImageUrl(altField);
+                return;
+              }
+            }
+            // Если ничего не помогло, скрываем изображение и показываем placeholder
+            img.style.display = 'none';
+            const placeholder = img.parentElement?.querySelector('.image-placeholder');
+            if (placeholder) {
+              (placeholder as HTMLElement).style.display = 'flex';
+            }
+          }}
+        />
+      ) : null}
+      
+      {/* Placeholder когда нет изображения */}
+      <div 
+        className={`image-placeholder w-full h-full bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center ${(event.cover_image_url || event.bg_image) ? 'hidden' : 'flex'}`}
+      >
+        <Calendar className="h-12 w-12 text-white" />
       </div>
-
-      {/* Содержимое карточки */}
-      <div className="p-6">
-        {/* Дата и время */}
-        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-3">
-          <Clock className="h-4 w-4" />
-          <span>{apiUtils.formatDate(event.start_at)}</span>
-          <span>•</span>
-          <span>{apiUtils.formatTime(event.start_at)}</span>
-        </div>
-
-        {/* Заголовок */}
-        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2 line-clamp-2 group-hover:text-primary-600 transition-colors">
-          {event.title}
-        </h3>
-
-        {/* Краткое описание */}
-        {event.short_description && (
-          <p className="text-gray-600 dark:text-gray-300 text-sm mb-4 line-clamp-3">
-            {event.short_description}
-          </p>
-        )}
-
-        {/* Теги */}
-        {event.tags && event.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-4">
-            {event.tags.slice(0, 3).map((tag, index) => (
-              <span key={index} className="inline-flex items-center px-2 py-1 rounded text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
-                <Tag className="h-3 w-3 mr-1" />
-                {tag}
-              </span>
-            ))}
-            {event.tags.length > 3 && (
-              <span className="text-xs text-gray-500">+{event.tags.length - 3}</span>
-            )}
-          </div>
-        )}
-
-        {/* Мета-информация */}
-        <div className="space-y-2 mb-4">
-          {/* Место проведения */}
-          {event.venue_name && (
-            <div className="flex items-center gap-2 text-sm text-gray-500">
-              <MapPin className="h-4 w-4" />
-              <span className="truncate">{event.venue_name}</span>
-            </div>
-          )}
+      
+      {/* Overlay с действиями */}
+      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
+        <div className="flex gap-2">
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              toggleFavorite(event.id);
+            }}
+            className="p-2 bg-white rounded-full shadow-lg hover:bg-gray-50 transition-colors"
+          >
+            <Heart className={`h-4 w-4 ${favorites.has(event.id) ? 'text-red-500 fill-current' : ''}`} />
+          </button>
           
-          {/* Участники */}
-          {event.registration_enabled && (
-            <div className="flex items-center gap-2 text-sm text-gray-500">
-              <Users className="h-4 w-4" />
-              <span>
-                {event.registrations_count || 0}
-                {event.max_attendees && ` / ${event.max_attendees}`}
-                {event.available_spots !== null && ` (свободно: ${event.available_spots})`}
-              </span>
-            </div>
-          )}
-
-          {/* Возрастное ограничение */}
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <span className="font-medium">{event.age_category}</span>
-          </div>
-        </div>
-
-        {/* Нижняя часть - цена и кнопка */}
-        <div className="flex items-center justify-between">
-          <div>
-            {getPaymentTypeIcon(event.payment_type, event.base_price)}
-          </div>
+          <button
+            onClick={() => shareEvent(event)}
+            className="p-2 text-gray-400 hover:text-blue-500 transition-colors"
+          >
+            <Share2 className="h-4 w-4" />
+          </button>
 
           <Link
             to={`/events/${event.slug}`}
@@ -529,7 +454,8 @@ const EventsPageUpdated = () => {
         </div>
       </div>
     </div>
-  );
+  </div>
+);
 
   const renderEventListItem = (event: EventWithDetails) => (
     <div key={event.id} className="bg-white dark:bg-dark-800 rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
