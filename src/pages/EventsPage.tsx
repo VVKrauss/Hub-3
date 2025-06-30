@@ -898,7 +898,6 @@ const EventsPage = () => {
       </div>
     </div>
   );
-  // ============ ОСНОВНОЙ РЕНДЕР ============
 // ============ ОСНОВНОЙ РЕНДЕР ============
 
   if (loading) {
@@ -925,11 +924,9 @@ const EventsPage = () => {
   return (
     <Layout>
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
-        {/* Hero слайдшоу с предстоящими событиями */}
-        <div className="bg-white dark:bg-gray-800 py-8">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <EventsHeroSlider events={events} />
-          </div>
+        {/* Hero слайдшоу с предстоящими событиями - полная ширина */}
+        <div className="bg-white dark:bg-gray-800">
+          <EventsHeroSlider events={events} />
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
