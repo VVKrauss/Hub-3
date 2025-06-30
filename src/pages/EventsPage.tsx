@@ -1140,4 +1140,187 @@ const EventsPage = () => {
                 </div>
               </div>
             )}
-            
+            {/* Сортировка и статистика */}
+            <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Сортировка:
+                  </label>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300"
+                  >
+                    <option value="date-asc">По дате (сначала ближайшие)</option>
+                    <option value="date-desc">По дате (сначала дальние)</option>
+                    <option value="title-asc">По названию (А-Я)</option>
+                    <option value="title-desc">По названию (Я-А)</option>
+                    <option value="type">По типу события</option>
+                    <option value="featured">Сначала рекомендуемые</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                {searchQuery ? 
+                  `Найдено ${events.length} событий` : 
+                  `Всего событий: ${stats.total || events.length}`
+                }
+              </div>
+            </div>
+          </div>
+
+          {/* Основной контент с сайдбаром */}
+          <div className="flex gap-8">
+            {/* Основная область с событиями */}
+            <div className="flex-1">
+              {/* Заголовок секции */}
+              <div className="mb-6">
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                  {searchQuery ? 
+                    `Результаты поиска "${searchQuery}"` : 
+                    'Все события'
+                  }
+                </h1>
+                <p className="text-gray-600 dark:text-gray-400">
+                  {loading ? 'Загрузка...' : 
+                   searchQuery ? 
+                     `Найдено ${events.length} событий` :
+                     `Показано ${events.length} из ${stats.total || events.length} событий`
+                  }
+                </p>
+              </div>
+
+              {/* Список событий */}
+              {events.length === 0 ? (
+                <div className="text-center py-12">
+                  <Calendar className="h-16 w-16 mx-auto text-gray-400 mb-4" />
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                    {searchQuery ? 'Ничего не найдено' : 'Нет событий'}
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-400 mb-6">
+                    {searchQuery ? 
+                      'Попробуйте изменить параметры поиска или фильтры' :
+                      'Пока нет доступных событий для показа'
+                    }
+                  </p>
+                  {searchQuery && (
+                    <button
+                      onClick={clearAllFilters}
+                      className="inline-flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
+                    >
+                      Сбросить фильтры
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <>
+                  {/* События в сетке или списке */}
+                  {viewMode === 'grid' ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {events.map((event) => (
+                        <EventCard
+                          key={event.id}
+                          event={event}
+                          isFavorite={favorites.has(event.id)}
+                          onToggleFavorite={toggleFavorite}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {events.map((event) => (
+                        <EventListItem
+                          key={event.id}
+                          event={event}
+                          isFavorite={favorites.has(event.id)}
+                          onToggleFavorite={toggleFavorite}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Кнопка "Загрузить еще" */}
+                  {hasMore && (
+                    <div className="text-center mt-12">
+                      <button
+                        onClick={() => loadEvents(false)}
+                        disabled={loadingMore}
+                        className="inline-flex items-center gap-2 px-6 py-3 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition-colors"
+                      >
+                        {loadingMore ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Загрузка...
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown className="h-4 w-4" />
+                            Загрузить еще события
+                          </>
+                        )}
+                      </button>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                        Показано {events.length} из {stats.total} событий
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Информация о завершении списка */}
+                  {!hasMore && events.length > pageSettings.itemsPerPage && (
+                    <div className="text-center mt-12 py-8 border-t border-gray-200 dark:border-gray-700">
+                      <p className="text-gray-500 dark:text-gray-400">
+                        Вы просмотрели все доступные события ({events.length})
+                      </p>
+                      <button
+                        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                        className="text-primary-600 hover:text-primary-700 text-sm font-medium mt-2 inline-flex items-center gap-1"
+                      >
+                        ↑ Вернуться к началу
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Сайдбар с прошедшими событиями */}
+            <div className="w-80 flex-shrink-0">
+              <PastEventsSidebar 
+                pastEvents={pastEvents} 
+                loading={loadingPast} 
+              />
+            </div>
+          </div>
+
+          {/* Call to Action */}
+          {events.length > 0 && (
+            <section className="mt-16 bg-gradient-to-r from-primary-600 to-secondary-600 rounded-xl p-8 text-white text-center">
+              <h2 className="text-2xl font-bold mb-4">
+                Не нашли подходящее событие?
+              </h2>
+              <p className="text-primary-100 mb-6 max-w-2xl mx-auto">
+                Подпишитесь на наши уведомления, чтобы первыми узнавать о новых мероприятиях, 
+                или предложите свою тему для будущих событий.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <button className="bg-white text-primary-600 hover:bg-gray-100 px-6 py-3 rounded-lg font-medium transition-colors">
+                  Подписаться на уведомления
+                </button>
+                <Link
+                  to="/contact"
+                  className="bg-primary-700 hover:bg-primary-800 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                >
+                  Предложить тему
+                </Link>
+              </div>
+            </section>
+          )}
+        </div>
+      </div>
+    </Layout>
+  );
+};
+
+export default EventsPage;
