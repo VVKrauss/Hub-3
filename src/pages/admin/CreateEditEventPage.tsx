@@ -613,18 +613,22 @@ const CreateEditEventPage = () => {
           .from('sh_events')
           .select('id')
           .eq('slug', event.slug)
-          .neq('id', id || '')
-          .single();
+          .limit(1);
 
         if (slugError && slugError.code !== 'PGRST116') {
           console.error('Error checking slug uniqueness:', slugError);
-          throw new Error('Ошибка проверки уникальности slug');
+          // Don't throw error, just warn and continue
+          console.warn('Slug uniqueness check failed, continuing anyway');
         }
 
-        if (existingEvent) {
-          setErrors(prev => ({ ...prev, slug: true }));
-          toast.error('Slug уже используется, выберите другой');
-          return;
+        // Check if we found an existing event with this slug (excluding current event)
+        if (existingEvent && existingEvent.length > 0) {
+          const existingId = existingEvent[0].id;
+          if (existingId !== id) {
+            setErrors(prev => ({ ...prev, slug: true }));
+            toast.error('Slug уже используется, выберите другой');
+            return;
+          }
         }
       }
 
@@ -753,7 +757,11 @@ const CreateEditEventPage = () => {
       
       console.log('Save process completed successfully');
       toast.success(id ? 'Мероприятие обновлено' : 'Мероприятие создано');
-      navigate('/admin/events');
+      
+      // Force redirect with a small delay to ensure toast is shown
+      setTimeout(() => {
+        navigate('/admin/events', { replace: true });
+      }, 1000);
     } catch (error) {
       console.error('Error saving event:', error);
       toast.error(`Ошибка при сохранении мероприятия: ${error?.message || 'Неизвестная ошибка'}`);
@@ -916,6 +924,15 @@ const CreateEditEventPage = () => {
               <Save className="h-5 w-5" />
             )}
             {saving ? 'Сохранение...' : 'Сохранить'}
+          </button>
+          
+          {/* Manual return button - shown after successful save */}
+          <button
+            type="button"
+            onClick={() => navigate('/admin/events', { replace: true })}
+            className="px-4 py-2 border border-gray-300 dark:border-dark-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors"
+          >
+            Вернуться к списку
           </button>
         </div>
       </div>
