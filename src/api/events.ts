@@ -88,9 +88,9 @@ export const getEvents = async (
       `, { count: 'exact' });
 
     // Применяем фильтры
-    if (filters.status?.length) {
-      query = query.in('status', filters.status);
-    }
+if (!filters.status?.length) {
+  query = query.eq('status', 'active');
+}
     
     if (filters.event_type?.length) {
       query = query.in('event_type', filters.event_type);
@@ -444,7 +444,7 @@ export const getUpcomingEvents = async (limit: number = 10): Promise<ApiResponse
         )
       `)
       .gte('start_at', now)
-      .eq('status', 'published')
+      .eq('status', 'active')
       .eq('is_public', true)
       .order('start_at', { ascending: true })
       .limit(limit);
@@ -492,7 +492,7 @@ export const getFeaturedEvents = async (limit: number = 6): Promise<ApiResponse<
         )
       `)
       .eq('is_featured', true)
-      .eq('status', 'published')
+      .eq('status', 'active')
       .eq('is_public', true)
       .order('start_at', { ascending: true })
       .limit(limit);
@@ -998,7 +998,7 @@ export const getEventsByType = async (
         )
       `)
       .eq('event_type', eventType)
-      .eq('status', 'published')
+      .eq('status', 'active')
       .eq('is_public', true)
       .order('start_at', { ascending: true })
       .limit(limit);
