@@ -31,6 +31,8 @@ import {
   DollarSign
 } from 'lucide-react';
 
+import { getSupabaseImageUrl } from '../utils/imageUtils';
+
 // Импортируем новые API функции
 import { 
   getEvents, 
