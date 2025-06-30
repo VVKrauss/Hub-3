@@ -1,10 +1,10 @@
 // src/types/database.ts
 // Типы для новой структуры БД с префиксом sh_ 
-// ОБНОВЛЕННАЯ ВЕРСИЯ с новыми статусами
+// ФИНАЛЬНАЯ ВЕРСИЯ с исправленными статусами
 
 // Основные enum типы из БД
 export type ShEventType = 'lecture' | 'workshop' | 'festival' | 'conference' | 'seminar' | 'other';
-export type ShEventStatus = 'draft' | 'active' | 'past' | 'cancelled';  // ОБНОВЛЕНО: убрали published/completed, добавили active/past
+export type ShEventStatus = 'draft' | 'active' | 'past' | 'cancelled';
 export type ShAgeCategory = '0+' | '6+' | '12+' | '16+' | '18+';
 export type ShPaymentType = 'free' | 'paid' | 'donation';
 export type ShUserRole = 'admin' | 'moderator' | 'member' | 'guest';
@@ -62,7 +62,7 @@ export interface ShEvent {
   created_by?: string;
   created_at: string;
   updated_at: string;
-  published_at?: string; // Дата когда событие стало активным
+  published_at?: string;
 }
 
 export interface ShUser {
@@ -304,6 +304,7 @@ export interface EventWithDetails extends ShEvent {
   ticket_types?: ShEventTicketType[];
   registrations_count?: number;
   available_spots?: number;
+  // Алиасы для обратной совместимости
   sh_event_speakers?: (ShEventSpeaker & { speaker: ShSpeaker })[];
   sh_event_schedule?: ShEventSchedule[];
   sh_event_ticket_types?: ShEventTicketType[];
@@ -364,6 +365,23 @@ export interface BookingFilters {
   search?: string;
 }
 
+export interface SpeakerFilters {
+  status?: ShSpeakerStatus[];
+  is_featured?: boolean;
+  field_of_expertise?: string;
+  search?: string;
+}
+
+export interface RegistrationFilters {
+  event_id?: string;
+  registration_status?: ShRegistrationStatus[];
+  payment_status?: ShPaymentStatus[];
+  registration_type?: ShRegistrationType[];
+  date_from?: string;
+  date_to?: string;
+  search?: string;
+}
+
 // Константы для использования в приложении
 export const EVENT_STATUS_LABELS: Record<ShEventStatus, string> = {
   draft: 'Черновик',
@@ -412,4 +430,18 @@ export const isEventUpcoming = (event: ShEvent): boolean => {
   const eventDate = new Date(event.start_at);
   
   return eventDate > now && event.status === 'active';
+};
+
+export const isEventPast = (event: ShEvent): boolean => {
+  const now = new Date();
+  const eventDate = new Date(event.start_at);
+  
+  return eventDate < now;
+};
+
+export const getEventDisplayStatus = (event: ShEvent): string => {
+  if (isEventPast(event) && event.status === 'active') {
+    return 'Завершено';
+  }
+  return EVENT_STATUS_LABELS[event.status];
 };
