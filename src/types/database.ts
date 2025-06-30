@@ -1,9 +1,10 @@
 // src/types/database.ts
-// Типы для новой структуры БД с префиксом sh_ (готовая система)
+// Типы для новой структуры БД с префиксом sh_ 
+// ОБНОВЛЕННАЯ ВЕРСИЯ с новыми статусами
 
 // Основные enum типы из БД
 export type ShEventType = 'lecture' | 'workshop' | 'festival' | 'conference' | 'seminar' | 'other';
-export type ShEventStatus = 'draft' | 'published' | 'cancelled' | 'completed';  
+export type ShEventStatus = 'draft' | 'active' | 'past' | 'cancelled';  // ОБНОВЛЕНО: убрали published/completed, добавили active/past
 export type ShAgeCategory = '0+' | '6+' | '12+' | '16+' | '18+';
 export type ShPaymentType = 'free' | 'paid' | 'donation';
 export type ShUserRole = 'admin' | 'moderator' | 'member' | 'guest';
@@ -61,7 +62,7 @@ export interface ShEvent {
   created_by?: string;
   created_at: string;
   updated_at: string;
-  published_at?: string;
+  published_at?: string; // Дата когда событие стало активным
 }
 
 export interface ShUser {
@@ -303,6 +304,9 @@ export interface EventWithDetails extends ShEvent {
   ticket_types?: ShEventTicketType[];
   registrations_count?: number;
   available_spots?: number;
+  sh_event_speakers?: (ShEventSpeaker & { speaker: ShSpeaker })[];
+  sh_event_schedule?: ShEventSchedule[];
+  sh_event_ticket_types?: ShEventTicketType[];
 }
 
 export interface SpeakerWithSocials extends ShSpeaker {
@@ -359,3 +363,53 @@ export interface BookingFilters {
   space_name?: string;
   search?: string;
 }
+
+// Константы для использования в приложении
+export const EVENT_STATUS_LABELS: Record<ShEventStatus, string> = {
+  draft: 'Черновик',
+  active: 'Активное',
+  past: 'Прошедшее', 
+  cancelled: 'Отменено'
+};
+
+export const EVENT_TYPE_LABELS: Record<ShEventType, string> = {
+  lecture: 'Лекция',
+  workshop: 'Мастер-класс',
+  festival: 'Фестиваль',
+  conference: 'Конференция',
+  seminar: 'Семинар',
+  other: 'Другое'
+};
+
+export const PAYMENT_TYPE_LABELS: Record<ShPaymentType, string> = {
+  free: 'Бесплатно',
+  paid: 'Платно',
+  donation: 'Донейшн'
+};
+
+export const AGE_CATEGORY_LABELS: Record<ShAgeCategory, string> = {
+  '0+': '0+',
+  '6+': '6+', 
+  '12+': '12+',
+  '16+': '16+',
+  '18+': '18+'
+};
+
+// Утилиты для работы со статусами
+export const getEventStatusFromDate = (startDate: string): ShEventStatus => {
+  const now = new Date();
+  const eventDate = new Date(startDate);
+  
+  return eventDate < now ? 'past' : 'active';
+};
+
+export const isEventActive = (event: ShEvent): boolean => {
+  return event.status === 'active' && event.is_public;
+};
+
+export const isEventUpcoming = (event: ShEvent): boolean => {
+  const now = new Date();
+  const eventDate = new Date(event.start_at);
+  
+  return eventDate > now && event.status === 'active';
+};
