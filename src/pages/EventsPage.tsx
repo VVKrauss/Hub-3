@@ -421,173 +421,85 @@ const EventsPage = () => {
 
   // ============ КОМПОНЕНТЫ РЕНДЕРИНГА ============
 
-  // Компонент фильтров
-  const FiltersPanel = () => (
-    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-          <Filter className="h-5 w-5" />
-          Фильтры
-          {getActiveFiltersCount() > 0 && (
-            <span className="bg-primary-100 text-primary-800 text-xs font-medium px-2 py-1 rounded-full">
-              {getActiveFiltersCount()}
-            </span>
-          )}
-        </h3>
-        {hasActiveFilters() && (
-          <button
-            onClick={clearFilters}
-            className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 flex items-center gap-1"
-          >
-            <X className="h-4 w-4" />
-            Очистить все
-          </button>
-        )}
-      </div>
-
-      <div className="space-y-6">
-        {/* Статус событий */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-            Статус
-          </label>
-          <div className="space-y-2">
-            {(['active', 'past', 'draft'] as ShEventStatus[]).map(status => (
-              <label key={status} className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={filters.status?.includes(status) || false}
-                  onChange={() => toggleEventStatus(status)}
-                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                />
-                <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                  {EVENT_STATUS_LABELS[status]} 
-                  {stats[status] > 0 && (
-                    <span className="text-gray-500 ml-1">({stats[status]})</span>
-                  )}
-                </span>
-              </label>
-            ))}
-          </div>
-        </div>
-
+  // Компактный горизонтальный блок фильтров
+  const CompactFiltersPanel = () => (
+    <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 mb-6">
+      <div className="flex flex-wrap items-center gap-4">
         {/* Тип события */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-            Тип события
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+            Тип:
           </label>
-          <div className="space-y-2">
-            {(['lecture', 'workshop', 'conference', 'seminar', 'festival', 'other'] as ShEventType[]).map(type => (
-              <label key={type} className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={filters.event_type?.includes(type) || false}
-                  onChange={() => toggleEventType(type)}
-                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                />
-                <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                  {EVENT_TYPE_LABELS[type]}
-                </span>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        {/* Тип оплаты */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-            Оплата
-          </label>
-          <div className="space-y-2">
-            {(['free', 'paid', 'donation'] as ShPaymentType[]).map(type => (
-              <label key={type} className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={filters.payment_type?.includes(type) || false}
-                  onChange={() => togglePaymentType(type)}
-                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                />
-                <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                  {PAYMENT_TYPE_LABELS[type]}
-                </span>
-              </label>
-            ))}
-          </div>
+          <select
+            value={filters.event_type?.[0] || ''}
+            onChange={(e) => handleFilterChange('event_type', e.target.value ? [e.target.value as ShEventType] : [])}
+            className="text-sm border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-500 focus:border-transparent"
+          >
+            <option value="">Все типы</option>
+            <option value="lecture">Лекция</option>
+            <option value="workshop">Мастер-класс</option>
+            <option value="conference">Конференция</option>
+            <option value="seminar">Семинар</option>
+            <option value="festival">Фестиваль</option>
+            <option value="other">Другое</option>
+          </select>
         </div>
 
         {/* Возрастная категория */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-            Возрастная категория
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+            Возраст:
           </label>
-          <div className="grid grid-cols-2 gap-2">
-            {(['0+', '6+', '12+', '16+', '18+'] as ShAgeCategory[]).map(category => (
-              <label key={category} className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={filters.age_category?.includes(category) || false}
-                  onChange={() => {
-                    const current = filters.age_category || [];
-                    const newCategories = current.includes(category)
-                      ? current.filter(c => c !== category)
-                      : [...current, category];
-                    handleFilterChange('age_category', newCategories);
-                  }}
-                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                />
-                <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                  {AGE_CATEGORY_LABELS[category]}
-                </span>
-              </label>
-            ))}
-          </div>
+          <select
+            value={filters.age_category?.[0] || ''}
+            onChange={(e) => handleFilterChange('age_category', e.target.value ? [e.target.value as ShAgeCategory] : [])}
+            className="text-sm border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-500 focus:border-transparent"
+          >
+            <option value="">Все возраста</option>
+            <option value="0+">0+</option>
+            <option value="6+">6+</option>
+            <option value="12+">12+</option>
+            <option value="16+">16+</option>
+            <option value="18+">18+</option>
+          </select>
         </div>
 
-        {/* Только рекомендуемые */}
-        <div>
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={filters.is_featured === true}
-              onChange={(e) => handleFilterChange('is_featured', e.target.checked ? true : undefined)}
-              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-            />
-            <span className="ml-2 text-sm text-gray-700 dark:text-gray-300 flex items-center gap-1">
-              <Star className="h-4 w-4 text-yellow-500" />
-              Только рекомендуемые
-              {stats.featured > 0 && (
-                <span className="text-gray-500">({stats.featured})</span>
-              )}
-            </span>
+        {/* Дата от */}
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+            От:
           </label>
+          <input
+            type="date"
+            value={filters.date_from || ''}
+            onChange={(e) => handleFilterChange('date_from', e.target.value || undefined)}
+            className="text-sm border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-500 focus:border-transparent"
+          />
         </div>
 
-        {/* Диапазон дат */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-            Период проведения
+        {/* Дата до */}
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+            До:
           </label>
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">От</label>
-              <input
-                type="date"
-                value={filters.date_from || ''}
-                onChange={(e) => handleFilterChange('date_from', e.target.value || undefined)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">До</label>
-              <input
-                type="date"
-                value={filters.date_to || ''}
-                onChange={(e) => handleFilterChange('date_to', e.target.value || undefined)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-              />
-            </div>
-          </div>
+          <input
+            type="date"
+            value={filters.date_to || ''}
+            onChange={(e) => handleFilterChange('date_to', e.target.value || undefined)}
+            className="text-sm border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-500 focus:border-transparent"
+          />
         </div>
+
+        {/* Кнопка очистки фильтров */}
+        {hasActiveFilters() && (
+          <button
+            onClick={clearFilters}
+            className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 flex items-center gap-1 px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          >
+            <X className="h-4 w-4" />
+            Очистить
+          </button>
+        )}
       </div>
     </div>
   );
@@ -742,7 +654,7 @@ const EventsPage = () => {
 
         {/* Тип события и возрастная категория */}
         <div className="flex items-center justify-between mb-4">
-          <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200">
+          <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
             {EVENT_TYPE_LABELS[event.event_type]}
           </span>
           <span className="text-xs text-gray-500">
@@ -754,7 +666,7 @@ const EventsPage = () => {
         <div className="flex items-center gap-2">
           <Link
             to={`/events/${event.slug || event.id}`}
-            className="flex-1 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-md text-sm font-medium text-center transition-colors"
+            className="flex-1 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium text-center transition-colors"
           >
             Подробнее
           </Link>
@@ -856,7 +768,7 @@ const EventsPage = () => {
                   </div>
                 )}
 
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-primary-100 text-primary-800">
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-800">
                   {EVENT_TYPE_LABELS[event.event_type]}
                 </span>
               </div>
@@ -888,7 +800,7 @@ const EventsPage = () => {
               {/* Кнопка */}
               <Link
                 to={`/events/${event.slug || event.id}`}
-                className="bg-primary-600 hover:bg-primary-700 text-white px-3 py-1.5 rounded text-sm font-medium transition-colors"
+                className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded text-sm font-medium transition-colors"
               >
                 Подробнее
               </Link>
@@ -898,7 +810,8 @@ const EventsPage = () => {
       </div>
     </div>
   );
-// ============ ОСНОВНОЙ РЕНДЕР ============
+
+  // ============ ОСНОВНОЙ РЕНДЕР ============
 
   if (loading) {
     return (
@@ -1072,48 +985,33 @@ const EventsPage = () => {
             </div>
           </div>
 
-          {/* Мобильные фильтры */}
-          {showMobileFilters && (
-            <div className="lg:hidden mb-8">
-              <FiltersPanel />
-            </div>
-          )}
+          {/* Мобильные фильтры - заменяем на компактные */}
+          <CompactFiltersPanel />
 
-          {/* Основной контент */}
-          <div className="flex gap-8">
-            {/* Боковая панель с фильтрами (десктоп) */}
-            {pageSettings.showFilters && (
-              <aside className="hidden lg:block w-80 flex-shrink-0">
-                <div className="sticky top-8">
-                  <FiltersPanel />
+          {/* Основной контент - убираем боковую панель */}
+          <div>
+            {/* Рекомендуемые события */}
+            {featuredEvents.length > 0 && (
+              <section className="mb-12">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <Star className="h-6 w-6 text-yellow-500" />
+                    Рекомендуемые события
+                  </h2>
+                  <Link
+                    to="/events?featured=true"
+                    className="text-gray-600 hover:text-gray-700 text-sm font-medium flex items-center gap-1"
+                  >
+                    Все рекомендуемые
+                    <ExternalLink className="h-4 w-4" />
+                  </Link>
                 </div>
-              </aside>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {featuredEvents.slice(0, 3).map(event => renderEventCard(event))}
+                </div>
+              </section>
             )}
-
-            {/* Основная область контента */}
-            <main className="flex-1 min-w-0">
-              {/* Рекомендуемые события */}
-              {featuredEvents.length > 0 && (
-                <section className="mb-12">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                      <Star className="h-6 w-6 text-yellow-500" />
-                      Рекомендуемые события
-                    </h2>
-                    <Link
-                      to="/events?featured=true"
-                      className="text-primary-600 hover:text-primary-700 text-sm font-medium flex items-center gap-1"
-                    >
-                      Все рекомендуемые
-                      <ExternalLink className="h-4 w-4" />
-                    </Link>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {featuredEvents.slice(0, 3).map(event => renderEventCard(event))}
-                  </div>
-                </section>
-              )}
 
               {/* Заголовок секции основных событий */}
               <section>
@@ -1277,7 +1175,7 @@ const EventsPage = () => {
               </section>
 
               {/* Call to Action */}
-              {/* {events.length > 0 && (
+              {events.length > 0 && (
                 <section className="mt-16 bg-gradient-to-r from-primary-600 to-secondary-600 rounded-xl p-8 text-white text-center">
                   <h2 className="text-2xl font-bold mb-4">
                     Не нашли подходящее событие?
@@ -1298,8 +1196,7 @@ const EventsPage = () => {
                     </Link>
                   </div>
                 </section>
-              )} */}
-              
+              )}
             </main>
           </div>
         </div>
