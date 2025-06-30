@@ -1,4 +1,4 @@
-// src/pages/EventsPage.tsx
+// src/pages/EventsPage.tsx KKK
 // ИСПРАВЛЕННАЯ ВЕРСИЯ EventsPage для работы с новой БД структурой
 // Часть 1: Импорты, интерфейсы, состояние и основные функции
 
