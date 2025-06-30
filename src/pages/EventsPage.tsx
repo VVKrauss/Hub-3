@@ -464,7 +464,7 @@ const renderEventCard = (event: EventWithDetails) => (
         <div className="w-48 h-32 flex-shrink-0 relative">
           {event.cover_image_url ? (
             <img
-              src={event.cover_image_url}
+              src={getSupabaseImageUrl(event.cover_image_url)}
               alt={event.title}
               className="w-full h-full object-cover"
             />
