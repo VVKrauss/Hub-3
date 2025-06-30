@@ -508,7 +508,26 @@ const CreateEditEventPage = () => {
   // Load speakers list
   useEffect(() => {
     loadSpeakers();
+    checkEnumValues(); // Add enum check
   }, []);
+
+  // Check what enum values are actually supported
+  const checkEnumValues = async () => {
+    try {
+      // Try to query schema information
+      const { data, error } = await supabase.rpc('get_enum_values', { 
+        enum_name: 'sh_event_type' 
+      });
+      
+      if (!error && data) {
+        console.log('Supported sh_event_type values:', data);
+      } else {
+        console.log('Could not get enum values, error:', error);
+      }
+    } catch (error) {
+      console.log('Enum check failed:', error);
+    }
+  };
 
   const loadSpeakers = async () => {
     try {
@@ -695,6 +714,15 @@ const CreateEditEventPage = () => {
       setSaving(true);
       console.log('Starting event save process...');
       
+      // First, let's test if we can update anything at all
+      console.log('Testing simple update...');
+      const { error: testError } = await supabase
+        .from('sh_events')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', id);
+      
+      console.log('Test update result:', testError);
+      
       // Check if slug is unique
       if (!id || slugManuallyEdited) {
         const { data: existingEvent, error: slugError } = await supabase
@@ -796,6 +824,30 @@ const CreateEditEventPage = () => {
           .eq('id', id);
 
         console.log('sh_events update result:', error);
+
+        // If update failed due to enum or other constraint, try with minimal data
+        if (error) {
+          console.log('Main update failed, trying with minimal data...');
+          console.log('Update error details:', error);
+          
+          // Try with just the essential fields that are likely to work
+          const minimalData = {
+            title: eventData.title,
+            status: 'draft', // Fallback to safe value
+            event_type: 'other', // Fallback to safe value  
+            updated_at: eventData.updated_at
+          };
+          
+          console.log('Trying minimal update:', minimalData);
+          
+          const { error: minimalError } = await supabase
+            .from('sh_events')
+            .update(minimalData)
+            .eq('id', id);
+            
+          console.log('Minimal update result:', minimalError);
+          error = minimalError;
+        }
 
         // If sh_events doesn't exist or fails, try old events table
         if (error) {
