@@ -1,5 +1,5 @@
 // src/pages/EventsPage.tsx
-// ОБНОВЛЕННАЯ ВЕРСИЯ EventsPage с блоком прошедших мероприятий справа
+// ЧАСТЬ 1: Импорты, интерфейсы, состояние и основные функции
 
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -262,9 +262,14 @@ const EventsPage = () => {
     return type ? EVENT_TYPE_LABELS[type] : 'Мероприятие';
   };
 
- ? 'w-20 h-20 flex-shrink-0' : 'h-48'} bg-gray-200 dark:bg-dark-700 overflow-hidden ${
-            isCompact ? 'rounded-md' : ''
-          }`}>
+  // ============ КОМПОНЕНТЫ КАРТОЧЕК ============
+  const EventCard = ({ event }: { event: EventWithDetails }) => {
+    const isPast = new Date(event.start_at) <= new Date() || event.status === 'past';
+    
+    return (
+      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+        {event.cover_image_url && (
+          <div className="h-48 bg-gray-200 dark:bg-dark-700 overflow-hidden">
             <img
               src={event.cover_image_url}
               alt={event.title}
@@ -273,8 +278,8 @@ const EventsPage = () => {
           </div>
         )}
         
-        <div className={isCompact ? 'flex-1 min-w-0' : 'p-6'}>
-          {!isCompact && isPast && (
+        <div className="p-6">
+          {isPast && (
             <div className="mb-2">
               <span className="inline-block px-2 py-1 text-xs font-medium bg-gray-100 dark:bg-dark-700 text-gray-600 dark:text-gray-400 rounded-full">
                 Прошедшее
@@ -282,9 +287,7 @@ const EventsPage = () => {
             </div>
           )}
           
-          <h3 className={`font-bold text-gray-900 dark:text-white mb-2 ${
-            isCompact ? 'text-sm line-clamp-2' : 'text-xl'
-          }`}>
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
             <Link 
               to={`/events/${event.id}`}
               className="hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
@@ -293,53 +296,49 @@ const EventsPage = () => {
             </Link>
           </h3>
           
-          {!isCompact && event.description && (
+          {event.description && (
             <p className="text-gray-600 dark:text-gray-300 mb-4 line-clamp-3">
               {event.description}
             </p>
           )}
           
-          <div className={`space-y-2 ${isCompact ? 'text-xs' : 'text-sm'}`}>
+          <div className="space-y-2 text-sm">
             <div className="flex items-center text-gray-600 dark:text-gray-400">
-              <Calendar className={`${isCompact ? 'h-3 w-3' : 'h-4 w-4'} mr-2 text-primary-500`} />
+              <Calendar className="h-4 w-4 mr-2 text-primary-500" />
               <span className="font-medium">{formatDate(event.start_at)}</span>
             </div>
             
-            {!isCompact && (
-              <>
-                <div className="flex items-center text-gray-600 dark:text-gray-400">
-                  <Clock className="h-4 w-4 mr-2 text-primary-500" />
-                  <span>{formatTime(event.start_at)}</span>
-                </div>
-                
-                {event.venue_name && (
-                  <div className="flex items-center text-gray-600 dark:text-gray-400">
-                    <MapPin className="h-4 w-4 mr-2 text-primary-500" />
-                    <span className="truncate">{event.venue_name}</span>
-                  </div>
-                )}
-              </>
+            <div className="flex items-center text-gray-600 dark:text-gray-400">
+              <Clock className="h-4 w-4 mr-2 text-primary-500" />
+              <span>{formatTime(event.start_at)}</span>
+            </div>
+            
+            {event.venue_name && (
+              <div className="flex items-center text-gray-600 dark:text-gray-400">
+                <MapPin className="h-4 w-4 mr-2 text-primary-500" />
+                <span className="truncate">{event.venue_name}</span>
+              </div>
             )}
           </div>
           
-          {!isCompact && (
-            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-dark-600 flex justify-between items-center">
-              <span className="text-lg font-bold text-primary-600 dark:text-primary-400">
-                {formatPrice(event)}
-              </span>
-              
-              <Link
-                to={`/events/${event.id}`}
-                className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg font-medium transition-colors"
-              >
-                Подробнее
-              </Link>
-            </div>
-          )}
+          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-dark-600 flex justify-between items-center">
+            <span className="text-lg font-bold text-primary-600 dark:text-primary-400">
+              {formatPrice(event)}
+            </span>
+            
+            <Link
+              to={`/events/${event.id}`}
+              className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg font-medium transition-colors"
+            >
+              Подробнее
+            </Link>
+          </div>
         </div>
       </div>
     );
   };
+
+// ПРОДОЛЖЕНИЕ СЛЕДУЕТ В ЧАСТИ 2...
 
   // ============ ОСНОВНОЙ РЕНДЕР ============
   if (loading && activeEvents.length === 0) {
