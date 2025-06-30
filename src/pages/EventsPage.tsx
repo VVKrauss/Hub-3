@@ -425,6 +425,11 @@ const renderEventCard = (event: EventWithDetails) => (
         <Calendar className="h-12 w-12 text-white" />
       </div>
       
+      {/* Статус события */}
+      <div className="absolute top-3 left-3">
+        {getEventStatusBadge(event)}
+      </div>
+
       {/* Overlay с действиями */}
       <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
         <div className="flex gap-2">
@@ -440,127 +445,107 @@ const renderEventCard = (event: EventWithDetails) => (
           
           <button
             onClick={() => shareEvent(event)}
-            className="p-2 text-gray-400 hover:text-blue-500 transition-colors"
+            className="p-2 bg-white rounded-full shadow-lg hover:bg-gray-50 transition-colors"
           >
             <Share2 className="h-4 w-4" />
           </button>
 
           <Link
             to={`/events/${event.slug}`}
-            className="btn-primary text-sm px-4 py-2"
+            className="bg-primary-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors"
           >
             Подробнее
           </Link>
         </div>
       </div>
     </div>
-  </div>
-);
 
-  const renderEventListItem = (event: EventWithDetails) => (
-    <div key={event.id} className="bg-white dark:bg-dark-800 rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
-      <div className="flex">
-        {/* Изображение */}
-        <div className="w-48 h-32 flex-shrink-0 relative">
-          {event.cover_image_url ? (
-            <img
-              src={getSupabaseImageUrl(event.cover_image_url)}
-              alt={event.title}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center">
-              <Calendar className="h-8 w-8 text-white" />
-            </div>
-          )}
-          
-          {/* Статус */}
-          <div className="absolute top-2 left-2">
-            {getEventStatusBadge(event)}
-          </div>
+    {/* ДОБАВЛЯЕМ КОНТЕНТ КАРТОЧКИ */}
+    <div className="p-5">
+      {/* Дата и тип события */}
+      <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 mb-3">
+        <div className="flex items-center gap-2">
+          <Clock className="h-4 w-4" />
+          <span>{apiUtils.formatDateTime(event.start_at)}</span>
         </div>
+        <span className="px-2 py-1 rounded text-xs bg-primary-100 text-primary-800 dark:bg-primary-900/20 dark:text-primary-400">
+          {getEventTypeLabel(event.event_type)}
+        </span>
+      </div>
 
-        {/* Содержимое */}
-        <div className="flex-1 p-6">
-          <div className="flex justify-between items-start">
-            <div className="flex-1">
-              {/* Дата и тип */}
-              <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 mb-2">
-                <div className="flex items-center gap-1">
-                  <Clock className="h-4 w-4" />
-                  <span>{apiUtils.formatDateTime(event.start_at)}</span>
-                </div>
-                <span className="px-2 py-1 rounded text-xs bg-primary-100 text-primary-800 dark:bg-primary-900/20 dark:text-primary-400">
-                  {getEventTypeLabel(event.event_type)}
-                </span>
-              </div>
+      {/* Заголовок */}
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 line-clamp-2">
+        <Link to={`/events/${event.slug}`} className="hover:text-primary-600 transition-colors">
+          {event.title}
+        </Link>
+      </h3>
 
-              {/* Заголовок */}
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                <Link to={`/events/${event.slug}`} className="hover:text-primary-600 transition-colors">
-                  {event.title}
-                </Link>
-              </h3>
+      {/* Описание */}
+      {event.short_description && (
+        <p className="text-gray-600 dark:text-gray-300 text-sm mb-4 line-clamp-3">
+          {event.short_description}
+        </p>
+      )}
 
-              {/* Описание */}
-              {event.short_description && (
-                <p className="text-gray-600 dark:text-gray-300 text-sm mb-3 line-clamp-2">
-                  {event.short_description}
-                </p>
-              )}
+      {/* Теги */}
+      {event.tags && event.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-4">
+          {event.tags.slice(0, 3).map((tag, index) => (
+            <span 
+              key={index}
+              className="inline-flex items-center px-2 py-1 rounded text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+            >
+              <Tag className="h-3 w-3 mr-1" />
+              {tag}
+            </span>
+          ))}
+          {event.tags.length > 3 && (
+            <span className="text-xs text-gray-500">+{event.tags.length - 3}</span>
+          )}
+        </div>
+      )}
 
-              {/* Мета информация */}
-              <div className="flex items-center gap-4 text-sm text-gray-500">
-                {event.venue_name && (
-                  <div className="flex items-center gap-1">
-                    <MapPin className="h-4 w-4" />
-                    <span>{event.venue_name}</span>
-                  </div>
-                )}
-                
-                {event.registration_enabled && (
-                  <div className="flex items-center gap-1">
-                    <Users className="h-4 w-4" />
-                    <span>{event.registrations_count || 0}{event.max_attendees && `/${event.max_attendees}`}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Правая часть - цена и действия */}
-            <div className="flex flex-col items-end gap-3">
-              <div>
-                {getPaymentTypeIcon(event.payment_type, event.base_price)}
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => toggleFavorite(event.id)}
-                  className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-                >
-                  <Heart className={`h-4 w-4 ${favorites.has(event.id) ? 'text-red-500 fill-current' : ''}`} />
-                </button>
-                
-                <button
-                  onClick={() => shareEvent(event)}
-                  className="p-2 text-gray-400 hover:text-blue-500 transition-colors"
-                >
-                  <Share2 className="h-4 w-4" />
-                </button>
-
-                <Link
-                  to={`/events/${event.slug}`}
-                  className="btn-primary text-sm px-4 py-2"
-                >
-                  Подробнее
-                </Link>
-              </div>
-            </div>
+      {/* Мета информация */}
+      <div className="space-y-2 mb-4">
+        {event.venue_name && (
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <MapPin className="h-4 w-4" />
+            <span className="truncate">{event.venue_name}</span>
           </div>
+        )}
+
+        {event.registration_enabled && (
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <Users className="h-4 w-4" />
+            <span>
+              {event.registrations_count || 0}
+              {event.max_attendees && ` / ${event.max_attendees}`}
+              {event.available_spots !== null && ` (свободно: ${event.available_spots})`}
+            </span>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <span className="font-medium">{event.age_category}</span>
         </div>
       </div>
+
+      {/* Цена и действия */}
+      <div className="flex items-center justify-between">
+        <div>
+          {getPaymentTypeIcon(event.payment_type, event.base_price)}
+        </div>
+        
+        <Link
+          to={`/events/${event.slug}`}
+          className="btn-primary text-sm px-4 py-2"
+        >
+          Подробнее
+        </Link>
+      </div>
     </div>
-  );
+  </div>
+);
 
   // ============ СОСТОЯНИЯ ЗАГРУЗКИ И ОШИБОК ============
 
