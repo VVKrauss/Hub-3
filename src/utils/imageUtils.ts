@@ -9,9 +9,42 @@ export const getSupabaseImageUrl = (path: string): string => {
   // If it's already a full URL, return it
   if (path.startsWith('http')) return path;
   
-  // Otherwise, construct the URL
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  return `${supabaseUrl}/storage/v1/object/public/images/${path}`;
+  // Use the hardcoded URL as fallback if env variable is not available
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://jfvinriqydjtwsmayxix.supabase.co';
+  
+  // Remove trailing slash if present
+  const cleanBaseUrl = supabaseUrl.replace(/\/$/, '');
+  
+  // Remove leading slash from path if present
+  const cleanPath = path.replace(/^\//, '');
+  
+  return `${cleanBaseUrl}/storage/v1/object/public/images/${cleanPath}`;
+};
+
+/**
+ * Alternative function to get image URL with error handling
+ * @param path The storage path
+ * @param fallbackImage Optional fallback image URL
+ * @returns The complete public URL or fallback
+ */
+export const getImageUrlWithFallback = (path: string, fallbackImage?: string): string => {
+  if (!path) {
+    return fallbackImage || 'https://via.placeholder.com/400x300?text=No+Image';
+  }
+  
+  // If it's already a full URL, return it
+  if (path.startsWith('http')) return path;
+  
+  try {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://jfvinriqydjtwsmayxix.supabase.co';
+    const cleanBaseUrl = supabaseUrl.replace(/\/$/, '');
+    const cleanPath = path.replace(/^\//, '');
+    
+    return `${cleanBaseUrl}/storage/v1/object/public/images/${cleanPath}`;
+  } catch (error) {
+    console.error('Error constructing image URL:', error);
+    return fallbackImage || 'https://via.placeholder.com/400x300?text=Error+Loading+Image';
+  }
 };
 
 /**

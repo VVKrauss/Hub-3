@@ -90,7 +90,7 @@ const defaultInfoSection: InfoSection = {
   enabled: true,
   title: 'Добро пожаловать в ScienceHub',
   description: 'Мы создаем уникальное пространство для науки, образования и инноваций. Присоединяйтесь к нашему сообществу исследователей, предпринимателей и энтузиастов.',
-  image: 'https://wummwcsqsznyyaajcxww.supabase.co/storage/v1/object/public/images/logo/logo_science_hub%20no_title.png',
+  image: 'https://jfvinriqydjtwsmayxix.supabase.co/storage/v1/object/public/images/logo/logo_science_hub%20no_title.png',
   order: 1
 };
 
