@@ -431,15 +431,46 @@ const EventsPage = () => {
   };
 
   // Загружаем прошедшие события для сайдбара
+  // Загружаем прошедшие события для сайдбара
   const loadPastEvents = async () => {
     try {
       setLoadingPast(true);
       const response = await getEvents({ 
         status: ['past'] as ShEventStatus[] 
-      }, 1, 10);
+      }, 1, 20); // Загружаем больше событий для лучшей сортировки
       
       if (!response.error && response.data) {
-        setPastEvents(response.data);
+        // Сортируем от самого последнего к первому (по дате окончания или началу)
+        const sortedPastEvents = response.data.sort((a, b) => {
+          const dateA = new Date(a.end_at || a.start_at);
+          const dateB = new Date(b.end_at || b.start_at);
+          return dateB.getTime() - dateA.getTime(); // От последнего к первому
+        });
+        
+        setPastEvents(sortedPastEvents);
+      }
+    } catch (err) {
+      console.error('Error loading past events:', err);
+    } finally {
+      setLoadingPast(false);
+    }
+  };// Загружаем прошедшие события для сайдбара
+  const loadPastEvents = async () => {
+    try {
+      setLoadingPast(true);
+      const response = await getEvents({ 
+        status: ['past'] as ShEventStatus[] 
+      }, 1, 20); // Загружаем больше событий для лучшей сортировки
+      
+      if (!response.error && response.data) {
+        // Сортируем от самого последнего к первому (по дате окончания или началу)
+        const sortedPastEvents = response.data.sort((a, b) => {
+          const dateA = new Date(a.end_at || a.start_at);
+          const dateB = new Date(b.end_at || b.start_at);
+          return dateB.getTime() - dateA.getTime(); // От последнего к первому
+        });
+        
+        setPastEvents(sortedPastEvents);
       }
     } catch (err) {
       console.error('Error loading past events:', err);
