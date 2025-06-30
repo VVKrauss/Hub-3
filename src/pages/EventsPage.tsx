@@ -1227,7 +1227,7 @@ const EventsPage = () => {
               )}
             </div>
 
-            {/* Действия */}
+            {/* Действия */}. 
             <div className="flex items-center justify-end">
               {/* Кнопка поделиться */}
               <button
