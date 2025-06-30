@@ -393,7 +393,12 @@ const EventsPage = () => {
     return colors[type] || 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300';
   };
 
- // ============ ОСНОВНЫЕ ФУНКЦИИ ЗАГРУЗКИ ============
+
+
+
+
+
+// ============ ОСНОВНЫЕ ФУНКЦИИ ЗАГРУЗКИ ============
   
   // Загружаем активные события для слайдшоу отдельно (всегда только активные)
   const loadActiveEventsForSlider = async () => {
@@ -431,29 +436,6 @@ const EventsPage = () => {
   };
 
   // Загружаем прошедшие события для сайдбара
-  const loadPastEvents = async () => {
-    try {
-      setLoadingPast(true);
-      const response = await getEvents({ 
-        status: ['past'] as ShEventStatus[] 
-      }, 1, 20); // Загружаем больше событий для лучшей сортировки
-      
-      if (!response.error && response.data) {
-        // Сортируем от самого последнего к первому (по дате окончания или началу)
-        const sortedPastEvents = response.data.sort((a, b) => {
-          const dateA = new Date(a.end_at || a.start_at);
-          const dateB = new Date(b.end_at || b.start_at);
-          return dateB.getTime() - dateA.getTime(); // От последнего к первому
-        });
-        
-        setPastEvents(sortedPastEvents);
-      }
-    } catch (err) {
-      console.error('Error loading past events:', err);
-    } finally {
-      setLoadingPast(false);
-    }
-  };// Загружаем прошедшие события для сайдбара
   const loadPastEvents = async () => {
     try {
       setLoadingPast(true);
@@ -838,8 +820,435 @@ const EventsPage = () => {
         </div>
       </Link>
     );
+  };// ============ ОСНОВНЫЕ ФУНКЦИИ ЗАГРУЗКИ ============
+  
+  // Загружаем активные события для слайдшоу отдельно (всегда только активные)
+  const loadActiveEventsForSlider = async () => {
+    try {
+      console.log('Loading active events for slider...'); // Отладка
+      
+      // Загружаем активные события с изображениями для слайдшоу
+      const response = await getEvents({ 
+        status: ['active'] as ShEventStatus[]
+      }, 1, 20); // Больше событий для выбора лучших
+      
+      if (!response.error && response.data) {
+        console.log('Loaded events for slider:', response.data.length); // Отладка
+        
+        // Фильтруем события с изображениями и сортируем по featured
+        const eventsWithImages = response.data
+          .filter(event => event.cover_image_url)
+          .sort((a, b) => {
+            // Сначала рекомендуемые события
+            if (a.is_featured && !b.is_featured) return -1;
+            if (!a.is_featured && b.is_featured) return 1;
+            // Потом по дате
+            return new Date(a.start_at).getTime() - new Date(b.start_at).getTime();
+          })
+          .slice(0, 10); // Берем максимум 10 лучших событий
+        
+        console.log('Filtered events with images:', eventsWithImages.length); // Отладка
+        setActiveEventsForSlider(eventsWithImages);
+      } else {
+        console.error('Error loading events for slider:', response.error);
+      }
+    } catch (err) {
+      console.error('Error loading active events for slider:', err);
+    }
   };
 
+  // Загружаем прошедшие события для сайдбара
+  const loadPastEvents = async () => {
+    try {
+      setLoadingPast(true);
+      const response = await getEvents({ 
+        status: ['past'] as ShEventStatus[] 
+      }, 1, 20); // Загружаем больше событий для лучшей сортировки
+      
+      if (!response.error && response.data) {
+        // Сортируем от самого последнего к первому (по дате окончания или началу)
+        const sortedPastEvents = response.data.sort((a, b) => {
+          const dateA = new Date(a.end_at || a.start_at);
+          const dateB = new Date(b.end_at || b.start_at);
+          return dateB.getTime() - dateA.getTime(); // От последнего к первому
+        });
+        
+        setPastEvents(sortedPastEvents);
+      }
+    } catch (err) {
+      console.error('Error loading past events:', err);
+    } finally {
+      setLoadingPast(false);
+    }
+  };
+
+  const loadInitialData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Загружаем настройки страницы, события и статистику параллельно
+      const [settingsResponse, eventsResponse, featuredResponse, statsResponse] = await Promise.all([
+        getPageSettings('events').catch(() => ({ data: null })),
+        getEvents({ status: ['active'] as ShEventStatus[] }, 1, 12), // ПРИНУДИТЕЛЬНО активные события
+        getFeaturedEvents(6).catch(() => ({ data: [] })),
+        getEventsStats().catch(() => ({ data: null }))
+      ]);
+
+      // Обрабатываем настройки страницы
+      if (settingsResponse.data) {
+        const settings = settingsResponse.data as EventsPageSettings;
+        setPageSettings(settings);
+        setViewMode(settings.defaultView);
+      }
+
+      // Обрабатываем события
+      if (eventsResponse.error) {
+        console.error('Events API error:', eventsResponse.error);
+        throw new Error(eventsResponse.error);
+      }
+      
+      const eventsData = eventsResponse.data || [];
+      console.log('Loaded events:', eventsData.length); // Отладка
+      setEvents(eventsData);
+      setHasMore(eventsResponse.hasMore);
+
+      // Обрабатываем рекомендуемые события
+      if (featuredResponse.data && featuredResponse.data.length > 0) {
+        setFeaturedEvents(featuredResponse.data);
+      }
+
+      // Обрабатываем статистику
+      if (statsResponse.data) {
+        setStats(statsResponse.data);
+      }
+
+      // Загружаем избранное из localStorage
+      const savedFavorites = localStorage.getItem('favorite_events');
+      if (savedFavorites) {
+        try {
+          setFavorites(new Set(JSON.parse(savedFavorites)));
+        } catch (e) {
+          console.warn('Error parsing saved favorites:', e);
+        }
+      }
+
+    } catch (err) {
+      console.error('Error loading events page:', err);
+      setError(err instanceof Error ? err.message : 'Не удалось загрузить данные');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadEvents = async (reset: boolean = false) => {
+    try {
+      if (reset) {
+        setCurrentPage(1);
+        setLoadingMore(true);
+      } else {
+        setLoadingMore(true);
+      }
+
+      const page = reset ? 1 : currentPage;
+      
+      // Подготавливаем фильтры - всегда включаем активные события по умолчанию
+      const filtersWithDefaults = {
+        ...filters,
+        status: filters.status && filters.status.length > 0 ? filters.status : ['active'] as ShEventStatus[]
+      };
+
+      console.log('Loading events with filters:', filtersWithDefaults); // Отладка
+
+      const response = await getEvents(filtersWithDefaults, page, pageSettings.itemsPerPage);
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      let sortedEvents = response.data || [];
+      console.log('API returned events:', sortedEvents.length); // Отладка
+      
+      // Применяем сортировку на клиенте
+      sortedEvents = sortEvents(sortedEvents, sortBy);
+
+      if (reset) {
+        setEvents(sortedEvents);
+      } else {
+        setEvents(prev => [...prev, ...sortedEvents]);
+      }
+
+      setHasMore(response.hasMore);
+      if (!reset) {
+        setCurrentPage(prev => prev + 1);
+      }
+
+    } catch (err) {
+      console.error('Error loading events:', err);
+      setError(err instanceof Error ? err.message : 'Ошибка загрузки событий');
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) {
+      loadEvents(true);
+      return;
+    }
+
+    try {
+      setLoadingMore(true);
+      
+      // При поиске тоже используем активные события по умолчанию
+      const searchFilters = {
+        ...filters,
+        status: filters.status && filters.status.length > 0 ? filters.status : ['active'] as ShEventStatus[]
+      };
+      
+      const response = await searchEvents(searchQuery.trim(), searchFilters, 50);
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      let results = response.data || [];
+      results = sortEvents(results, sortBy);
+      setEvents(results);
+      setHasMore(false);
+    } catch (err) {
+      console.error('Error searching events:', err);
+      setError(err instanceof Error ? err.message : 'Ошибка поиска');
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  // ============ ОБРАБОТЧИКИ ФИЛЬТРОВ ============
+  
+  const handleFilterChange = (key: keyof EventFilters, value: any) => {
+    setFilters(prev => ({
+      ...prev,
+      [key]: value
+    }));
+    setCurrentPage(1);
+  };
+
+  const toggleEventType = (type: ShEventType) => {
+    const currentTypes = filters.event_type || [];
+    const newTypes = currentTypes.includes(type)
+      ? currentTypes.filter(t => t !== type)
+      : [...currentTypes, type];
+    handleFilterChange('event_type', newTypes);
+  };
+
+  const togglePaymentType = (type: ShPaymentType) => {
+    const currentTypes = filters.payment_type || [];
+    const newTypes = currentTypes.includes(type)
+      ? currentTypes.filter(t => t !== type)
+      : [...currentTypes, type];
+    handleFilterChange('payment_type', newTypes);
+  };
+
+  const toggleAgeCategory = (category: ShAgeCategory) => {
+    const currentCategories = filters.age_category || [];
+    const newCategories = currentCategories.includes(category)
+      ? currentCategories.filter(c => c !== category)
+      : [...currentCategories, category];
+    handleFilterChange('age_category', newCategories);
+  };
+
+  const toggleStatus = (status: ShEventStatus) => {
+    const currentStatuses = filters.status || [];
+    const newStatuses = currentStatuses.includes(status)
+      ? currentStatuses.filter(s => s !== status)
+      : [...currentStatuses, status];
+    handleFilterChange('status', newStatuses);
+  };
+
+  // ============ EFFECTS ============
+  
+  useEffect(() => {
+    loadInitialData();
+    loadActiveEventsForSlider(); // Загружаем активные события для слайдшоу
+    loadPastEvents(); // Загружаем прошедшие события для сайдбара
+  }, []);
+
+  useEffect(() => {
+    if (!loading) {
+      loadEvents(true);
+    }
+  }, [filters, sortBy]);
+
+  // ============ КОМПОНЕНТ КАРТОЧКИ СОБЫТИЯ ============
+  
+  const EventCard = ({ event, isFavorite, onToggleFavorite }: {
+    event: EventWithDetails;
+    isFavorite: boolean;
+    onToggleFavorite: (id: string) => void;
+  }) => {
+    const handleShare = async (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const shareData = {
+        title: event.title,
+        text: event.short_description || event.title,
+        url: window.location.origin + `/events/${event.id}`
+      };
+
+      try {
+        if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+          await navigator.share(shareData);
+        } else {
+          // Fallback для браузеров без Web Share API
+          await navigator.clipboard.writeText(shareData.url);
+          // Можно добавить toast уведомление о копировании
+          alert('Ссылка скопирована в буфер обмена!');
+        }
+      } catch (err) {
+        console.log('Error sharing:', err);
+        // Fallback на копирование в буфер
+        try {
+          await navigator.clipboard.writeText(shareData.url);
+          alert('Ссылка скопирована в буфер обмена!');
+        } catch (clipboardErr) {
+          console.log('Clipboard error:', clipboardErr);
+        }
+      }
+    };
+
+    return (
+      <Link to={`/events/${event.id}`} className="block group">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden border border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-600">
+          {/* Изображение */}
+          <div className="relative h-48 bg-gray-200 dark:bg-gray-700">
+            {event.cover_image_url ? (
+              <img 
+                src={event.cover_image_url} 
+                alt={event.title}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <Calendar className="w-12 h-12 text-gray-400" />
+              </div>
+            )}
+            
+            {/* Избранное */}
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onToggleFavorite(event.id);
+              }}
+              className="absolute top-3 right-3 p-2 bg-white/90 dark:bg-gray-900/90 rounded-full hover:bg-white dark:hover:bg-gray-900 transition-colors z-10"
+            >
+              <Heart className={`w-4 h-4 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-gray-600 dark:text-gray-400'}`} />
+            </button>
+
+            {/* Избранное событие */}
+            {event.is_featured && (
+              <div className="absolute top-3 left-3 px-2 py-1 bg-yellow-500 text-white text-xs font-medium rounded-full">
+                <Star className="w-3 h-3 inline mr-1" />
+                Рекомендуем
+              </div>
+            )}
+
+            {/* Стрелка перехода */}
+            <div className="absolute bottom-3 right-3 p-2 bg-primary-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all duration-200 transform translate-y-2 group-hover:translate-y-0">
+              <ExternalLink className="w-4 h-4" />
+            </div>
+          </div>
+
+          {/* Контент */}
+          <div className="p-6">
+            {/* Заголовок */}
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 line-clamp-2 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+              {event.title}
+            </h3>
+
+            {/* Краткое описание */}
+            {event.short_description && (
+              <p className="text-gray-600 dark:text-gray-400 text-sm mb-4 line-clamp-2">
+                {event.short_description}
+              </p>
+            )}
+
+            {/* Мета информация */}
+            <div className="space-y-2 mb-4">
+              {/* Дата и время */}
+              <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                <Calendar className="w-4 h-4 mr-2 flex-shrink-0" />
+                <span>{formatEventDate(event.start_at)}</span>
+                {event.start_at && (
+                  <span className="ml-2 text-gray-500">
+                    • {formatEventTime(event.start_at, event.end_at)}
+                  </span>
+                )}
+              </div>
+
+              {/* Место проведения */}
+              {(event.venue_name || event.venue_address) && (
+                <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                  <MapPin className="w-4 h-4 mr-2 flex-shrink-0" />
+                  <span>
+                    {event.location_type === 'online' ? 'Онлайн' : (event.venue_name || event.venue_address)}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Теги и метки */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              {/* Тип события */}
+              {event.event_type && (
+                <span className={`px-2 py-1 text-xs font-medium rounded-full ${getEventTypeColor(event.event_type)}`}>
+                  {EVENT_TYPE_LABELS[event.event_type]}
+                </span>
+              )}
+
+              {/* Возрастная категория */}
+              {event.age_category && (
+                <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                  {AGE_CATEGORY_LABELS[event.age_category]}
+                </span>
+              )}
+
+              {/* Цена */}
+              {event.payment_type === 'free' ? (
+                <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+                  Бесплатно
+                </span>
+              ) : event.base_price && (
+                <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                  от {event.base_price} {event.currency}
+                </span>
+              )}
+            </div>
+
+            {/* Действия */}
+            <div className="flex items-center justify-end">
+              {/* Кнопка поделиться */}
+              <button
+                onClick={handleShare}
+                className="p-2 text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+                title="Поделиться"
+              >
+                <Share2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </Link>
+    );
+  };dfv
+  
+
+
+
+
+  
 // ============ КОМПОНЕНТ СПИСОЧНОГО ПРЕДСТАВЛЕНИЯ ============
   
   const EventListItem = ({ event, isFavorite, onToggleFavorite }: {
