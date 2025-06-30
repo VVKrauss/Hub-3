@@ -86,7 +86,9 @@ const EventsPageUpdated = () => {
   const [error, setError] = useState<string | null>(null);
   
   // ============ СОСТОЯНИЕ ФИЛЬТРОВ И ПОИСКА ============
-  const [filters, setFilters] = useState<EventFilters>({});
+  const [filters, setFilters] = useState<EventFilters>({
+  status: ['active'] // по умолчанию показываем только активные
+});
   const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<SortOption>('date_asc');
