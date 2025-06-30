@@ -248,6 +248,7 @@ const CreateEditEventPage = () => {
   const loadEvent = async () => {
     try {
       setLoading(true);
+      console.log('Loading event with ID:', id);
       
       // Try to load from new sh_events table first
       let { data, error } = await supabase
@@ -256,7 +257,10 @@ const CreateEditEventPage = () => {
         .eq('id', id)
         .single();
 
+      console.log('sh_events query result:', { data, error });
+
       if (error && error.code === 'PGRST116') {
+        console.log('Event not found in sh_events, trying old events table...');
         // If not found in sh_events, try old events table for migration
         const { data: oldData, error: oldError } = await supabase
           .from('events')
@@ -264,24 +268,30 @@ const CreateEditEventPage = () => {
           .eq('id', id)
           .single();
 
+        console.log('events table query result:', { data: oldData, error: oldError });
+
         if (oldError) {
           throw oldError;
         }
 
         // Convert old event to new format
         data = convertOldEventToNew(oldData);
+        console.log('Converted old event to new format:', data);
       } else if (error) {
         throw error;
       }
 
       if (data) {
+        console.log('Loading additional data for event...');
         // Load additional data for new system
         const [scheduleData, speakersData] = await Promise.all([
           loadEventSchedule(data.id),
           loadEventSpeakers(data.id)
         ]);
 
-        setEvent({
+        console.log('Additional data loaded:', { scheduleData, speakersData });
+
+        const eventToSet = {
           ...data,
           tags: data.tags || [],
           gallery_images: data.gallery_images || [],
@@ -290,8 +300,13 @@ const CreateEditEventPage = () => {
           meta_description: data.meta_description || '',
           speakers: speakersData,
           festival_program: scheduleData
-        });
+        };
+
+        console.log('Setting event state with:', eventToSet);
+        setEvent(eventToSet);
         setSlugManuallyEdited(true); // Assume existing events have custom slugs
+      } else {
+        console.log('No event data found');
       }
     } catch (error) {
       console.error('Error loading event:', error);
