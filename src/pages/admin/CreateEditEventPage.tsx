@@ -37,7 +37,7 @@ import { ru } from 'date-fns/locale';
 
 // Updated types for sh_ system
 type ShEventType = 'lecture' | 'workshop' | 'festival' | 'conference' | 'seminar' | 'other';
-type ShEventStatus = 'draft' | 'active' | 'past' | 'cancelled';
+type ShEventStatus = 'draft' | 'published' | 'past' | 'cancelled'; // Исправлено: 'published' вместо 'active'
 type ShAgeCategory = '0+' | '6+' | '12+' | '16+' | '18+';
 type ShPaymentType = 'free' | 'paid' | 'donation';
 type LocationType = 'physical' | 'online' | 'hybrid';
@@ -54,7 +54,7 @@ const eventTypes = [
 
 const eventStatuses = [
   { value: 'draft', label: 'Черновик' },
-  { value: 'active', label: 'Активное' },
+  { value: 'published', label: 'Опубликовано' }, // Исправлено
   { value: 'past', label: 'Завершенное' },
   { value: 'cancelled', label: 'Отмененное' }
 ];
@@ -225,6 +225,7 @@ const CreateEditEventPage = () => {
       .replace(/[^\w\s-]/g, '') // Remove special characters
       .replace(/\s+/g, '-') // Replace spaces with hyphens
       .replace(/-+/g, '-') // Replace multiple hyphens with single
+      .replace(/[^a-z0-9-]/g, '') // Keep only lowercase letters, numbers, and hyphens
       .trim()
       .substring(0, SLUG_MAX_LENGTH);
   };
@@ -393,35 +394,93 @@ const CreateEditEventPage = () => {
 
   // Convert new event format back to old format for fallback
   const convertNewEventToOld = (newEvent: any): any => {
-    return {
-      id: newEvent.id,
+    const oldEvent = {
       title: newEvent.title,
       short_description: newEvent.short_description,
       description: newEvent.description,
       event_type: newEvent.event_type,
       status: newEvent.status,
       age_category: newEvent.age_category,
-      languages: [newEvent.language_code],
       start_at: newEvent.start_at,
       end_at: newEvent.end_at,
-      location: newEvent.location_type === 'physical' ? newEvent.venue_name : null,
-      video_url: newEvent.online_meeting_url || newEvent.video_url,
-      bg_image: newEvent.cover_image_url,
-      photo_gallery: Array.isArray(newEvent.gallery_images) ? 
-        newEvent.gallery_images.join(',') : '',
-      payment_type: newEvent.payment_type,
-      price: newEvent.base_price,
-      currency: newEvent.currency,
-      price_comment: newEvent.price_description,
-      registration_enabled: newEvent.registration_enabled,
-      registration_deadline: newEvent.registration_end_at,
-      max_registrations: newEvent.max_attendees,
-      registration_limit_per_user: newEvent.attendee_limit_per_registration,
-      created_at: newEvent.created_at,
-      updated_at: newEvent.updated_at,
-      speakers: newEvent.speakers || [],
-      festival_program: newEvent.festival_program || []
+      updated_at: newEvent.updated_at
     };
+
+    // Add optional fields only if they exist and have values
+    if (newEvent.id) oldEvent.id = newEvent.id;
+    if (newEvent.created_at) oldEvent.created_at = newEvent.created_at;
+    
+    // Location handling
+    if (newEvent.location_type === 'physical' && newEvent.venue_name) {
+      oldEvent.location = newEvent.venue_name;
+    }
+    
+    // Video/online handling
+    if (newEvent.online_meeting_url) {
+      oldEvent.video_url = newEvent.online_meeting_url;
+    } else if (newEvent.video_url) {
+      oldEvent.video_url = newEvent.video_url;
+    }
+    
+    // Images
+    if (newEvent.cover_image_url) {
+      oldEvent.bg_image = newEvent.cover_image_url;
+    }
+    
+    if (Array.isArray(newEvent.gallery_images) && newEvent.gallery_images.length > 0) {
+      oldEvent.photo_gallery = newEvent.gallery_images.join(',');
+    }
+    
+    // Payment
+    if (newEvent.payment_type) {
+      oldEvent.payment_type = newEvent.payment_type;
+    }
+    
+    if (newEvent.base_price !== undefined) {
+      oldEvent.price = newEvent.base_price;
+    }
+    
+    if (newEvent.currency) {
+      oldEvent.currency = newEvent.currency;
+    }
+    
+    if (newEvent.price_description) {
+      oldEvent.price_comment = newEvent.price_description;
+    }
+    
+    // Registration
+    if (newEvent.registration_enabled !== undefined) {
+      oldEvent.registration_enabled = newEvent.registration_enabled;
+    }
+    
+    if (newEvent.registration_end_at) {
+      oldEvent.registration_deadline = newEvent.registration_end_at;
+    }
+    
+    if (newEvent.max_attendees) {
+      oldEvent.max_registrations = newEvent.max_attendees;
+    }
+    
+    if (newEvent.attendee_limit_per_registration) {
+      oldEvent.registration_limit_per_user = newEvent.attendee_limit_per_registration;
+    }
+    
+    // Languages - convert single language to array
+    if (newEvent.language_code) {
+      oldEvent.languages = [newEvent.language_code];
+    }
+
+    // Legacy fields that might exist
+    if (newEvent.speakers) {
+      oldEvent.speakers = newEvent.speakers;
+    }
+    
+    if (newEvent.festival_program) {
+      oldEvent.festival_program = newEvent.festival_program;
+    }
+
+    console.log('Converted new event to old format:', oldEvent);
+    return oldEvent;
   };
 
   // Load speakers list
@@ -465,6 +524,13 @@ const CreateEditEventPage = () => {
     if (!event.slug.trim()) newErrors.slug = true;
     if (!event.start_at) newErrors.start_at = true;
     if (!event.end_at) newErrors.end_at = true;
+    
+    // Validate slug format according to DB constraint
+    const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+    if (event.slug && !slugPattern.test(event.slug)) {
+      newErrors.slug = true;
+      toast.error('Slug может содержать только строчные буквы, цифры и дефисы');
+    }
     
     if (event.location_type === 'physical' && !event.venue_name.trim()) {
       newErrors.venue_name = true;
@@ -641,13 +707,56 @@ const CreateEditEventPage = () => {
         ...cleanEventData
       } = event;
 
+      // Clean up data to match DB schema exactly
       const eventData = {
         ...cleanEventData,
+        // Ensure required fields are not null/undefined
+        title: cleanEventData.title || '',
+        slug: cleanEventData.slug || '',
+        event_type: cleanEventData.event_type || 'lecture',
+        status: cleanEventData.status || 'draft',
+        age_category: cleanEventData.age_category || '0+',
+        language_code: cleanEventData.language_code || 'sr',
+        start_at: cleanEventData.start_at,
+        end_at: cleanEventData.end_at,
+        timezone: cleanEventData.timezone || 'Europe/Belgrade',
+        location_type: cleanEventData.location_type || 'physical',
+        payment_type: cleanEventData.payment_type || 'free',
+        currency: cleanEventData.currency || 'RSD',
+        registration_required: cleanEventData.registration_required !== false,
+        registration_enabled: cleanEventData.registration_enabled !== false,
+        is_featured: cleanEventData.is_featured === true,
+        is_public: cleanEventData.is_public !== false,
+        show_attendees_count: cleanEventData.show_attendees_count !== false,
+        allow_waitlist: cleanEventData.allow_waitlist === true,
+        // Remove any undefined values
+        ...(cleanEventData.short_description ? { short_description: cleanEventData.short_description } : {}),
+        ...(cleanEventData.description ? { description: cleanEventData.description } : {}),
+        ...(cleanEventData.venue_name ? { venue_name: cleanEventData.venue_name } : {}),
+        ...(cleanEventData.venue_address ? { venue_address: cleanEventData.venue_address } : {}),
+        ...(cleanEventData.online_meeting_url ? { online_meeting_url: cleanEventData.online_meeting_url } : {}),
+        ...(cleanEventData.online_platform ? { online_platform: cleanEventData.online_platform } : {}),
+        ...(cleanEventData.cover_image_url ? { cover_image_url: cleanEventData.cover_image_url } : {}),
+        ...(cleanEventData.video_url ? { video_url: cleanEventData.video_url } : {}),
+        ...(cleanEventData.price_description ? { price_description: cleanEventData.price_description } : {}),
+        ...(cleanEventData.max_attendees ? { max_attendees: cleanEventData.max_attendees } : {}),
+        ...(cleanEventData.attendee_limit_per_registration ? { attendee_limit_per_registration: cleanEventData.attendee_limit_per_registration } : {}),
+        ...(cleanEventData.registration_start_at ? { registration_start_at: cleanEventData.registration_start_at } : {}),
+        ...(cleanEventData.registration_end_at ? { registration_end_at: cleanEventData.registration_end_at } : {}),
+        ...(cleanEventData.meta_title ? { meta_title: cleanEventData.meta_title } : {}),
+        ...(cleanEventData.meta_description ? { meta_description: cleanEventData.meta_description } : {}),
+        // Arrays - ensure they are arrays, not undefined
+        tags: Array.isArray(cleanEventData.tags) ? cleanEventData.tags : [],
+        gallery_images: Array.isArray(cleanEventData.gallery_images) ? cleanEventData.gallery_images : [],
+        meta_keywords: Array.isArray(cleanEventData.meta_keywords) ? cleanEventData.meta_keywords : [],
+        // Numeric fields
+        base_price: Number(cleanEventData.base_price) || 0,
+        // Timestamps
         updated_at: new Date().toISOString(),
         ...(id ? {} : { created_at: new Date().toISOString() })
       };
 
-      console.log('Event data to save:', eventData);
+      console.log('Cleaned event data for save:', eventData);
 
       let savedEventId = id;
       let saveError = null;
@@ -662,24 +771,29 @@ const CreateEditEventPage = () => {
           .update(eventData)
           .eq('id', id);
 
-        // If sh_events doesn't exist, try old events table
-        if (error && (error.code === 'PGRST106' || error.message?.includes('relation "sh_events" does not exist'))) {
-          console.log('sh_events table not found, falling back to events table');
+        console.log('sh_events update result:', error);
+
+        // If sh_events doesn't exist or fails, try old events table
+        if (error) {
+          console.log('sh_events failed, trying events table. Error:', error);
           
           // Convert data back to old format for fallback
           const oldEventData = convertNewEventToOld(eventData);
+          console.log('Converting to old format:', oldEventData);
           
           const fallbackResult = await supabase
             .from('events')
             .update(oldEventData)
             .eq('id', id);
             
+          console.log('events table update result:', fallbackResult.error);
           error = fallbackResult.error;
         }
 
         saveError = error;
         if (error) {
           console.error('Update error:', error);
+          console.error('Full error details:', JSON.stringify(error, null, 2));
         } else {
           console.log('Event updated successfully');
         }
@@ -694,23 +808,29 @@ const CreateEditEventPage = () => {
           .select('id')
           .single();
 
-        // If sh_events doesn't exist, try old events table
-        if (result.error && (result.error.code === 'PGRST106' || result.error.message?.includes('relation "sh_events" does not exist'))) {
-          console.log('sh_events table not found, falling back to events table');
+        console.log('sh_events insert result:', result);
+
+        // If sh_events doesn't exist or fails, try old events table
+        if (result.error) {
+          console.log('sh_events failed, trying events table. Error:', result.error);
           
           // Convert data back to old format for fallback
           const oldEventData = convertNewEventToOld(eventData);
+          console.log('Converting to old format for insert:', oldEventData);
           
           result = await supabase
             .from('events')
             .insert([oldEventData])
             .select('id')
             .single();
+            
+          console.log('events table insert result:', result);
         }
 
         saveError = result.error;
         if (result.error) {
           console.error('Insert error:', result.error);
+          console.error('Full insert error details:', JSON.stringify(result.error, null, 2));
         } else {
           console.log('New event created:', result.data);
           if (result.data) {
