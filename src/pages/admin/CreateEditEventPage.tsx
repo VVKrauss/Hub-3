@@ -849,48 +849,6 @@ const CreateEditEventPage = () => {
             .update({ title: eventData.title + ' (updated)' })
             .eq('id', id);
           console.log('title update result:', titleError);
-          
-          // Test 5: Try all possible enum values to find what works
-          console.log('Testing different enum values...');
-          
-          const testEventTypes = ['lecture', 'workshop', 'festival', 'conference', 'seminar', 'other'];
-          const testStatuses = ['draft', 'published', 'active', 'past', 'cancelled'];
-          
-          for (const testType of testEventTypes) {
-            const { error: testTypeError } = await supabase
-              .from('sh_events')
-              .update({ event_type: testType })
-              .eq('id', id);
-            console.log(`event_type '${testType}' result:`, testTypeError ? 'FAILED' : 'SUCCESS');
-            
-            if (!testTypeError) {
-              // If successful, verify it actually changed
-              const { data: checkData } = await supabase
-                .from('sh_events')
-                .select('event_type')
-                .eq('id', id)
-                .single();
-              console.log(`After setting '${testType}', DB shows:`, checkData?.event_type);
-            }
-          }
-          
-          for (const testStatus of testStatuses) {
-            const { error: testStatusError } = await supabase
-              .from('sh_events')
-              .update({ status: testStatus })
-              .eq('id', id);
-            console.log(`status '${testStatus}' result:`, testStatusError ? 'FAILED' : 'SUCCESS');
-            
-            if (!testStatusError) {
-              // If successful, verify it actually changed
-              const { data: checkData } = await supabase
-                .from('sh_events')
-                .select('status')
-                .eq('id', id)
-                .single();
-              console.log(`After setting '${testStatus}', DB shows:`, checkData?.status);
-            }
-          }
         }
 
         // If update failed due to enum or other constraint, try with minimal data
@@ -2170,4 +2128,4 @@ const CreateEditEventPage = () => {
   );
 };
 
-export default CreateEditEventPage;   
+export default CreateEditEventPage;
