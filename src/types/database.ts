@@ -3,7 +3,22 @@
 // ФИНАЛЬНАЯ ВЕРСИЯ с исправленными статусами
 
 // Основные enum типы из БД
-export type ShEventType = 'lecture' | 'workshop' | 'festival' | 'conference' | 'seminar' | 'other';
+
+export type ShEventType = 
+  | 'lecture' 
+  | 'workshop' 
+  | 'conference'
+  | 'seminar'
+  | 'festival' 
+  | 'discussion'
+  | 'concert'
+  | 'standup'
+  | 'excursion'
+  | 'quiz'
+  | 'swap'
+  | 'movie_discussion'
+  | 'conversation_club'
+  | 'other';
 export type ShEventStatus = 'draft' | 'active' | 'past' | 'cancelled';
 export type ShAgeCategory = '0+' | '6+' | '12+' | '16+' | '18+';
 export type ShPaymentType = 'free' | 'paid' | 'donation';
@@ -390,12 +405,21 @@ export const EVENT_STATUS_LABELS: Record<ShEventStatus, string> = {
   cancelled: 'Отменено'
 };
 
+// Обновить лейблы:
 export const EVENT_TYPE_LABELS: Record<ShEventType, string> = {
   lecture: 'Лекция',
   workshop: 'Мастер-класс',
-  festival: 'Фестиваль',
   conference: 'Конференция',
-  seminar: 'Семинар',
+  seminar: 'Семинар', 
+  festival: 'Фестиваль',
+  discussion: 'Дискуссия',
+  concert: 'Концерт',
+  standup: 'Стендап',
+  excursion: 'Экскурсия',
+  quiz: 'Викторина',
+  swap: 'Обмен',
+  movie_discussion: 'Обсуждение фильма',
+  conversation_club: 'Разговорный клуб',
   other: 'Другое'
 };
 

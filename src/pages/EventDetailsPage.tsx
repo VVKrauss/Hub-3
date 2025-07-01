@@ -1,299 +1,393 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { createClient } from '@supabase/supabase-js';
-import { Calendar, Clock, MapPin, Users, Globe, Share2, ArrowLeft } from 'lucide-react';
-import Layout from '../components/layout/Layout';
-import RegistrationModal from '../components/events/RegistrationModal';
-import PaymentOptionsModal from '../components/events/PaymentOptionsModal';
 import { toast } from 'react-hot-toast';
-import { EventRegistrations } from './admin/constants';
 import { 
-  formatRussianDate, 
-  formatTimeFromTimestamp, 
-  formatTimeRange,
-  isPastEvent 
-} from '../utils/dateTimeUtils';
+  Calendar, 
+  Clock, 
+  MapPin, 
+  Users, 
+  Globe, 
+  Tag, 
+  DollarSign, 
+  ExternalLink,
+  Share2,
+  Heart,
+  ArrowLeft,
+  Play,
+  Image as ImageIcon,
+  UserCheck,
+  AlertCircle,
+  CheckCircle,
+  Loader2
+} from 'lucide-react';
+import Layout from '../components/layout/Layout';
+import { 
+  EventType, 
+  PaymentType, 
+  Language,
+  EventStatus,
+  EVENT_TYPE_LABELS,
+  PAYMENT_TYPE_LABELS,
+  LANGUAGE_LABELS,
+  STATUS_LABELS
+} from '../pages/admin/constants';
+import { 
+  migrateEventToModern,
+  getEventTypeLabel,
+  getPaymentTypeLabel,
+  getLanguageLabel,
+  formatLanguages,
+  formatPrice
+} from '../utils/migrationUtils';
+import { formatRussianDate, formatTimeFromTimestamp } from '../utils/dateTimeUtils';
+import { getSupabaseImageUrl } from '../utils/imageUtils';
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
+// Обновленные интерфейсы
 interface Speaker {
   id: string;
   name: string;
   field_of_expertise: string;
-  description: string;
-  photos: { url: string; isMain?: boolean }[];
+  bio?: string;
+  photo_url?: string;
+  social_links?: Record<string, string>;
+  active: boolean;
+}
+
+interface EventSpeaker {
+  speaker_id: string;
+  speaker: Speaker;
+  role?: string;
+  bio_override?: string;
 }
 
 interface FestivalProgramItem {
+  id?: string;
   title: string;
   description: string;
-  image_url: string;
+  image_url?: string;
   start_time: string;
   end_time: string;
   lecturer_id: string;
+  lecturer_name?: string;
 }
-interface Event { 
+
+interface Registration {
+  id: string;
+  full_name: string;
+  email: string;
+  phone?: string;
+  comment?: string;
+  adult_tickets: number;
+  child_tickets: number;
+  total_amount: number;
+  status: boolean;
+  created_at: string;
+  payment_link_clicked?: boolean;
+}
+
+interface EventRegistrations {
+  max_regs: number | null;
+  current: number;
+  current_adults: number;
+  current_children: number;
+  reg_list: Registration[];
+}
+
+interface DetailedEvent {
   id: string;
   title: string;
-  description: string;
-  event_type: string;
-  bg_image: string;
-  // Используем новые поля timestamptz
-  start_at: string;
-  end_at: string;
-  location?: string;
-  age_category: string;
-  price: number | null;
+  short_description?: string;
+  description?: string;
+  event_type: EventType | string;
+  status: EventStatus | string;
+  payment_type: PaymentType | string;
+  languages: Language[] | string[];
+  bg_image?: string;
+  price?: number | null;
   currency?: string;
-  status: string;
-  payment_type: string;
-  payment_link?: string;
-  payment_widget_id?: string;
-  languages: string[];
-  speakers: string[];
-  festival_program?: FestivalProgramItem[];
-  registrations?: EventRegistrations;
+  age_category?: string;
+  location?: string;
   video_url?: string;
-  photo_gallery?: string[] | string;
-  // Удаляем legacy поля полностью, так как они больше не используются
+  photo_gallery?: string[];
+  payment_link?: string;
+  couple_discount?: number;
+  child_half_price?: boolean;
+  hide_speakers_gallery?: boolean;
+  festival_program?: FestivalProgramItem[];
+  speakers?: string[];
+  event_speakers?: EventSpeaker[];
+  registrations?: EventRegistrations;
+  // Новые поля времени
+  start_at?: string;
+  end_at?: string;
+  // Legacy поля
+  date?: string;
+  start_time?: string;
+  end_time?: string;
+  max_registrations?: number;
+  current_registration_count?: number;
+  registrations_list?: Registration[];
+  created_at?: string;
+  updated_at?: string;
 }
-
-
-// Helper function to safely parse photo gallery
-const parsePhotoGallery = (photoGallery: string[] | string | null | undefined): string[] => {
-  if (!photoGallery) {
-    return [];
-  }
-  
-  if (Array.isArray(photoGallery)) {
-    return photoGallery;
-  }
-  
-  if (typeof photoGallery === 'string') {
-    try {
-      const parsed = JSON.parse(photoGallery);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (e) {
-      console.error('Error parsing photo_gallery JSON:', e);
-      return [];
-    }
-  }
-  
-  return [];
-};
-
-const renderDescriptionWithLinks = (description: string) => {
-  if (!description) {
-    return <p className="text-gray-500 dark:text-gray-400">Описание отсутствует</p>;
-  }
-
-  const parts = [];
-  let lastIndex = 0;
-  let match;
-  const linkRegex = /<a\s+(?:[^>]*?\s+)?href=(["'])(.*?)\1(?:[^>]*?)>(.*?)<\/a>/g;
-
-  while ((match = linkRegex.exec(description)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push({
-        type: 'text',
-        content: description.substring(lastIndex, match.index)
-      });
-    }
-
-    parts.push({
-      type: 'link',
-      url: match[2],
-      text: match[3]
-    });
-
-    lastIndex = linkRegex.lastIndex;
-  }
-
-  if (lastIndex < description.length) {
-    parts.push({
-      type: 'text',
-      content: description.substring(lastIndex)
-    });
-  }
-
-  if (parts.length === 0) {
-    return <span>{description}</span>;
-  }
-
-  return (
-    <>
-      {parts.map((part, index) => {
-        if (part.type === 'text') {
-          return <span key={index}>{part.content}</span>;
-        } else if (part.type === 'link') {
-          return (
-            <a
-              key={index}
-              href={part.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary-600 dark:text-primary-400 hover:opacity-80 underline"
-            >
-              {part.text}
-            </a>
-          );
-        }
-        return null;
-      })}
-    </>
-  );
-};
-
-const renderEventDescription = (text: string) => {
-  if (!text) return null;
-  
-  const paragraphs = text.split(/\n\s*\n/);
-  
-  return (
-    <div className="prose dark:prose-invert max-w-none">
-      {paragraphs.map((paragraph, i) => (
-        <p key={i} className="mb-4">
-          {renderDescriptionWithLinks(paragraph)}
-        </p>
-      ))}
-    </div>
-  );
-};
 
 const EventDetailsPage = () => {
   const { id } = useParams<{ id: string }>();
-  const [event, setEvent] = useState<Event | null>(null);
+  const navigate = useNavigate();
+  
+  // Состояние
+  const [event, setEvent] = useState<DetailedEvent | null>(null);
   const [speakers, setSpeakers] = useState<Speaker[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showShareMenu, setShowShareMenu] = useState(false);
-  const [showRegistrationModal, setShowRegistrationModal] = useState(false);
-  const [showPaymentOptions, setShowPaymentOptions] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [showGallery, setShowGallery] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(0);
 
   useEffect(() => {
-    window.scrollTo(0, 0);
-    fetchEventData();
+    if (id) {
+      fetchEvent(id);
+    }
   }, [id]);
 
-  const fetchEventData = async () => {
+  const fetchEvent = async (eventId: string) => {
     try {
       setLoading(true);
-      
-      // Получаем событие с временным слотом
+      setError(null);
+
+      // Загружаем событие
       const { data: eventData, error: eventError } = await supabase
         .from('events')
-        .select(`
-          *,
-          time_slot:time_slots_table!fk_time_slots_event(
-            id,
-            start_at,
-            end_at
-          )
-        `)
-        .eq('id', id)
+        .select('*')
+        .eq('id', eventId)
         .single();
 
-      if (eventError) throw eventError;
+      if (eventError) {
+        if (eventError.code === 'PGRST116') {
+          throw new Error('Мероприятие не найдено');
+        }
+        throw eventError;
+      }
 
-      // Обогащаем событие временными данными из слота
-      const enrichedEvent = {
-        ...eventData,
-        start_at: eventData.time_slot?.[0]?.start_at || eventData.start_at,
-        end_at: eventData.time_slot?.[0]?.end_at || eventData.end_at
-      };
+      if (!eventData) {
+        throw new Error('Мероприятие не найдено');
+      }
 
-      setEvent(enrichedEvent);
-
-      if (eventData.speakers?.length) {
+      // Мигрируем событие к современному формату
+      const migratedEvent = migrateEventToModern(eventData);
+      
+      // Загружаем спикеров если они есть
+      let eventSpeakers: EventSpeaker[] = [];
+      if (migratedEvent.speakers && migratedEvent.speakers.length > 0) {
         const { data: speakersData, error: speakersError } = await supabase
           .from('speakers')
           .select('*')
-          .in('id', eventData.speakers);
+          .in('id', migratedEvent.speakers)
+          .eq('active', true);
 
-        if (speakersError) throw speakersError;
-        setSpeakers(speakersData || []);
+        if (!speakersError && speakersData) {
+          eventSpeakers = speakersData.map(speaker => ({
+            speaker_id: speaker.id,
+            speaker: speaker,
+            role: 'speaker'
+          }));
+          setSpeakers(speakersData);
+        }
       }
-    } catch (err) {
-      console.error('Error fetching event data:', err);
-      setError('Не удалось загрузить мероприятие');
+
+      // Формируем финальный объект события
+      const detailedEvent: DetailedEvent = {
+        ...migratedEvent,
+        event_speakers: eventSpeakers
+      };
+
+      setEvent(detailedEvent);
+
+    } catch (err: any) {
+      console.error('Error fetching event:', err);
+      setError(err.message || 'Ошибка при загрузке мероприятия');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleShare = async (platform: string) => {
+  // Утилиты для форматирования
+  const formatEventDate = (event: DetailedEvent): string => {
+    try {
+      if (event.start_at) {
+        return formatRussianDate(event.start_at);
+      }
+      if (event.date) {
+        return formatRussianDate(event.date);
+      }
+      return 'Дата не указана';
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Дата не указана';
+    }
+  };
+
+  const formatEventTime = (event: DetailedEvent): string => {
+    try {
+      if (event.start_at && event.end_at) {
+        const startTime = formatTimeFromTimestamp(event.start_at);
+        const endTime = formatTimeFromTimestamp(event.end_at);
+        return `${startTime} - ${endTime}`;
+      }
+      if (event.start_time && event.end_time) {
+        return `${event.start_time} - ${event.end_time}`;
+      }
+      return 'Время не указано';
+    } catch (error) {
+      console.error('Error formatting time:', error);
+      return 'Время не указано';
+    }
+  };
+
+  const getEventImageUrl = (bgImage?: string): string => {
+    if (!bgImage) {
+      return 'https://via.placeholder.com/1200x600?text=Изображение+недоступно';
+    }
+    try {
+      return getSupabaseImageUrl(bgImage);
+    } catch (error) {
+      console.error('Error getting image URL:', error);
+      return 'https://via.placeholder.com/1200x600?text=Ошибка+загрузки';
+    }
+  };
+
+  const handleShare = async () => {
     const url = window.location.href;
-    const eventDate = event?.start_at ? formatRussianDate(event.start_at) : '';
-    const text = `${event?.title} - ${eventDate}`;
-
-    switch (platform) {
-      case 'telegram':
-        window.open(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`);
-        break;
-      case 'vk':
-        window.open(`https://vk.com/share.php?url=${encodeURIComponent(url)}&title=${encodeURIComponent(text)}`);
-        break;
-      case 'copy':
-        try {
-          await navigator.clipboard.writeText(url);
-          toast.success('Ссылка скопирована');
-        } catch (err) {
-          toast.error('Не удалось скопировать ссылку');
-        }
-        break;
-    }
-
-    setShowShareMenu(false);
-  };
-
-  const handlePaymentOptionSelect = (option: 'online' | 'venue') => {
-    setShowPaymentOptions(false);
+    const title = event?.title || 'Мероприятие';
     
-    if (option === 'online' && event?.payment_link) {
-      window.open(event.payment_link, '_blank');
-    } else if (option === 'venue') {
-      setShowRegistrationModal(true);
-    }
-  };
-
-  const handleRegisterClick = () => {
-    if (event?.payment_type === 'free' || event?.payment_type === 'donation') {
-      setShowRegistrationModal(true);
-    } else if (event?.price === null && event?.payment_link) {
-      // For online payment only events, redirect directly to payment link
-      window.open(event.payment_link, '_blank');
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title,
+          text: event?.short_description || event?.description || '',
+          url
+        });
+      } catch (error) {
+        // Пользователь отменил или произошла ошибка
+        copyToClipboard(url);
+      }
     } else {
-      setShowPaymentOptions(true);
+      copyToClipboard(url);
     }
   };
 
-  // Helper function to get max registrations from either new or legacy structure
-  const getMaxRegistrations = (): number | null => {
-    if (event?.registrations?.max_regs !== undefined) {
-      return event.registrations.max_regs;
-    }
-    return event?.max_registrations || null;
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      toast.success('Ссылка скопирована в буфер обмена');
+    }).catch(() => {
+      toast.error('Не удалось скопировать ссылку');
+    });
   };
 
-  // Helper function to get current registration count from either new or legacy structure
-  const getCurrentRegistrationCount = (): number => {
-    if (event?.registrations?.current !== undefined) {
-      return event.registrations.current;
+  const isEventPast = (event: DetailedEvent): boolean => {
+    try {
+      const now = new Date();
+      let eventEndTime: Date;
+
+      if (event.end_at) {
+        eventEndTime = new Date(event.end_at);
+      } else if (event.date && event.end_time) {
+        eventEndTime = new Date(`${event.date}T${event.end_time}`);
+      } else {
+        return false; // Не можем определить
+      }
+
+      return eventEndTime < now;
+    } catch (error) {
+      console.error('Error checking if event is past:', error);
+      return false;
     }
-    return event?.current_registration_count || 0;
   };
 
-  // Проверяем является ли событие прошедшим используя утилиту
-  const isEventPast = event?.end_at ? isPastEvent(event.end_at) : false;
+  const canRegister = (event: DetailedEvent): boolean => {
+    if (event.status !== 'active') return false;
+    if (isEventPast(event)) return false;
+    
+    // Проверяем лимиты регистрации
+    const registrations = event.registrations;
+    if (registrations && registrations.max_regs) {
+      return registrations.current < registrations.max_regs;
+    }
+    
+    return true;
+  };
+
+  const getRegistrationStatus = (event: DetailedEvent): {
+    canRegister: boolean;
+    message: string;
+    type: 'success' | 'warning' | 'error';
+  } => {
+    if (event.status !== 'active') {
+      return {
+        canRegister: false,
+        message: 'Регистрация недоступна',
+        type: 'error'
+      };
+    }
+
+    if (isEventPast(event)) {
+      return {
+        canRegister: false,
+        message: 'Мероприятие уже прошло',
+        type: 'error'
+      };
+    }
+
+    const registrations = event.registrations;
+    if (registrations && registrations.max_regs) {
+      const available = registrations.max_regs - registrations.current;
+      if (available <= 0) {
+        return {
+          canRegister: false,
+          message: 'Места закончились',
+          type: 'error'
+        };
+      }
+      if (available <= 5) {
+        return {
+          canRegister: true,
+          message: `Осталось ${available} мест`,
+          type: 'warning'
+        };
+      }
+    }
+
+    return {
+      canRegister: true,
+      message: 'Регистрация открыта',
+      type: 'success'
+    };
+  };
+
+
+
+
+
+  /////////////////////
+
+
+
+  /////////////////////
+
 
   if (loading) {
     return (
       <Layout>
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex justify-center items-center h-64">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+          </div>
         </div>
       </Layout>
     );
@@ -302,340 +396,566 @@ const EventDetailsPage = () => {
   if (error || !event) {
     return (
       <Layout>
-        <div className="min-h-screen flex items-center justify-center text-red-600 dark:text-red-400">
-          {error || 'Мероприятие не найдено'}
+        <div className="container mx-auto px-4 py-8">
+          <div className="text-center py-12">
+            <div className="mb-4 p-4 bg-red-100 dark:bg-red-900/30 rounded-full w-16 h-16 mx-auto flex items-center justify-center">
+              <AlertCircle className="h-8 w-8 text-red-600 dark:text-red-400" />
+            </div>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+              {error || 'Мероприятие не найдено'}
+            </h2>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              Возможно, мероприятие было удалено или ссылка устарела
+            </p>
+            <Link
+              to="/events"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Вернуться к списку
+            </Link>
+          </div>
         </div>
       </Layout>
     );
   }
 
-  const maxRegistrations = getMaxRegistrations();
-  const currentRegistrationCount = getCurrentRegistrationCount();
-  
-  // Safely parse photo gallery
-  const photoGallery = parsePhotoGallery(event.photo_gallery);
+  const registrationStatus = getRegistrationStatus(event);
 
   return (
     <Layout>
-      {/* Hero блок */}
-      <div 
-        className="h-[400px] bg-cover bg-center relative"
-        style={{ 
-          backgroundImage: event.bg_image 
-            ? `url(${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/images/${event.bg_image})`
-            : 'url(https://via.placeholder.com/1920x400?text=No+image)'
-        }}
-      >
-        <div className="absolute inset-0 bg-black/50" />
-        <div className="container relative h-full flex items-end pb-12">
-          <div className="text-white">
-            <Link 
+      <div className="min-h-screen bg-gray-50 dark:bg-dark-900">
+        {/* Навигация */}
+        <div className="bg-white dark:bg-dark-800 border-b border-gray-200 dark:border-dark-600">
+          <div className="container mx-auto px-4 py-4">
+            <Link
               to="/events"
-              className="inline-flex items-center text-white/80 hover:text-white mb-4"
+              className="inline-flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
             >
-              <ArrowLeft className="h-5 w-5 mr-2" />
+              <ArrowLeft className="h-4 w-4" />
               Назад к мероприятиям
             </Link>
-            
-            <div className="hidden md:block">
-              <h1 className="text-4xl font-bold mb-4">{event.title}</h1>
-              <div className="flex flex-wrap gap-6 text-white/90">
-                {event.start_at && (
+          </div>
+        </div>
+
+        {/* Главное изображение */}
+        <div className="relative h-64 sm:h-80 lg:h-96 overflow-hidden">
+          <img
+            src={getEventImageUrl(event.bg_image)}
+            alt={event.title}
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.src = 'https://via.placeholder.com/1200x600?text=Изображение+недоступно';
+            }}
+          />
+          <div className="absolute inset-0 bg-black bg-opacity-40" />
+          
+          {/* Контент поверх изображения */}
+          <div className="absolute inset-0 flex items-end">
+            <div className="container mx-auto px-4 pb-8">
+              <div className="max-w-4xl">
+                {/* Бейджи */}
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-primary-100 dark:bg-primary-900 text-primary-800 dark:text-primary-200">
+                    {getEventTypeLabel(event.event_type as string)}
+                  </span>
+                  
+                  {event.age_category && (
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200">
+                      {event.age_category}
+                    </span>
+                  )}
+                  
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                    event.status === 'active' 
+                      ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                      : 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200'
+                  }`}>
+                    {STATUS_LABELS[event.status as EventStatus] || event.status}
+                  </span>
+                </div>
+
+                {/* Заголовок */}
+                <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-4">
+                  {event.title}
+                </h1>
+
+                {/* Краткое описание */}
+                {event.short_description && (
+                  <p className="text-lg text-gray-200 mb-6 max-w-2xl">
+                    {event.short_description}
+                  </p>
+                )}
+
+                {/* Ключевая информация */}
+                <div className="flex flex-wrap gap-6 text-white">
                   <div className="flex items-center gap-2">
                     <Calendar className="h-5 w-5" />
-                    <span>{formatRussianDate(event.start_at)}</span>
+                    <span>{formatEventDate(event)}</span>
                   </div>
-                )}
-                {event.start_at && event.end_at && (
+                  
                   <div className="flex items-center gap-2">
                     <Clock className="h-5 w-5" />
-                    <span>{formatTimeRange(event.start_at, event.end_at)}</span>
+                    <span>{formatEventTime(event)}</span>
                   </div>
-                )}
-                {event.location && (
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-5 w-5" />
-                    <span>{event.location}</span>
-                  </div>
-                )}
+                  
+                  {event.location && (
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-5 w-5" />
+                      <span>{event.location}</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Для мобильных */}
-      <div className="md:hidden bg-white dark:bg-dark-800 py-6 px-4">
-        <h1 className="text-3xl font-bold text-dark-900 dark:text-white mb-4">{event.title}</h1>
-        <div className="flex flex-col gap-3 text-dark-600 dark:text-dark-300">
-          {event.start_at && (
-            <div className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              <span>{formatRussianDate(event.start_at)}</span>
-            </div>
-          )}
-          {event.start_at && event.end_at && (
-            <div className="flex items-center gap-2">
-              <Clock className="h-5 w-5" />
-              <span>{formatTimeRange(event.start_at, event.end_at)}</span>
-            </div>
-          )}
-          {event.location && (
-            <div className="flex items-center gap-2">
-              <MapPin className="h-5 w-5" />
-              <span>{event.location}</span>
-            </div>
-          )}
+          {/* Кнопки действий */}
+          <div className="absolute top-4 right-4 flex gap-2">
+            <button
+              onClick={handleShare}
+              className="p-2 bg-white/90 hover:bg-white text-gray-900 rounded-full shadow-lg transition-colors"
+              title="Поделиться"
+            >
+              <Share2 className="h-5 w-5" />
+            </button>
+          </div>
         </div>
-      </div>
 
-      <main className="section bg-gray-50 dark:bg-dark-800">
-        <div className="container">
+        {/* Основной контент */}
+        <div className="container mx-auto px-4 py-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Левая колонка - основная информация */}
             <div className="lg:col-span-2 space-y-8">
-              <div className="card p-6">
-                <h2 className="text-2xl font-semibold mb-4">О мероприятии</h2>
-                {renderEventDescription(event.description)}
-              </div>
-
-              {/* Видео (если есть) */}
-              {event.video_url && (
-                <div className="card p-6">
-                  <h2 className="text-2xl font-semibold mb-4">Видео</h2>
-                  <div className="aspect-video">
-                    <iframe
-                      src={event.video_url}
-                      className="w-full h-full rounded-lg"
-                      allowFullScreen
-                      title="Event video"
-                    />
+              {/* Описание */}
+              {event.description && (
+                <div className="bg-white dark:bg-dark-800 rounded-lg border border-gray-200 dark:border-dark-600 p-6">
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                    О мероприятии
+                  </h2>
+                  <div className="prose dark:prose-dark max-w-none">
+                    <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                      {event.description}
+                    </p>
                   </div>
                 </div>
               )}
 
-              {/* Галерея фотографий (если есть) */}
-              {photoGallery.length > 0 && (
-                <div className="card p-6">
-                  <h2 className="text-2xl font-semibold mb-4">Фотогалерея</h2>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {photoGallery.map((photo, index) => (
-                      <img
-                        key={index}
-                        src={photo}
-                        alt={`Фото ${index + 1}`}
-                        className="w-full h-32 object-cover rounded-lg"
-                      />
+              {/* Спикеры */}
+              {!event.hide_speakers_gallery && speakers.length > 0 && (
+                <div className="bg-white dark:bg-dark-800 rounded-lg border border-gray-200 dark:border-dark-600 p-6">
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                    <Users className="h-5 w-5" />
+                    Спикеры
+                  </h2>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    {speakers.map((speaker) => (
+                      <div key={speaker.id} className="flex gap-4">
+                        {speaker.photo_url ? (
+                          <img
+                            src={getSupabaseImageUrl(speaker.photo_url)}
+                            alt={speaker.name}
+                            className="w-16 h-16 rounded-full object-cover flex-shrink-0"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.src = 'https://via.placeholder.com/64x64?text=Фото';
+                            }}
+                          />
+                        ) : (
+                          <div className="w-16 h-16 bg-gray-200 dark:bg-dark-600 rounded-full flex items-center justify-center flex-shrink-0">
+                            <Users className="h-8 w-8 text-gray-400" />
+                          </div>
+                        )}
+                        
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-gray-900 dark:text-white">
+                            {speaker.name}
+                          </h3>
+                          <p className="text-sm text-primary-600 dark:text-primary-400 mb-2">
+                            {speaker.field_of_expertise}
+                          </p>
+                          {speaker.bio && (
+                            <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-3">
+                              {speaker.bio}
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
               )}
 
-              {event.event_type === 'Festival' && event.festival_program && event.festival_program.length > 0 && (
-                <div className="card p-6">
-                  <h2 className="text-2xl font-semibold mb-6">Программа фестиваля</h2>
-                  <div className="space-y-6">
-                    {event.festival_program
-                      .sort((a, b) => {
-                        try {
-                          return new Date(a.start_time).getTime() - new Date(b.start_time).getTime();
-                        } catch (e) {
-                          console.error('Error sorting program items:', e);
-                          return 0;
-                        }
-                      })
-                      .map((item, index) => {
-                        const speaker = item.lecturer_id 
-                          ? speakers.find(s => s.id === item.lecturer_id)
-                          : null;
-                          
-                        return (
-                          <div key={index} className="border-b border-gray-200 dark:border-dark-700 pb-6 last:border-0 last:pb-0">
-                            <div className="flex flex-col md:flex-row gap-6">
-                              {item.image_url && (
-                                <div className="md:w-1/3">
-                                  <img 
-                                    src={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/images/${item.image_url}`}
-                                    alt={item.title}
-                                    className="w-full h-auto rounded-lg object-cover"
-                                  />
-                                </div>
-                              )}
-                              <div className={`${item.image_url ? 'md:w-2/3' : 'w-full'}`}>
-                                <div className="flex flex-wrap items-center gap-4 mb-3">
-                                  <span className="text-sm font-medium px-3 py-1 bg-primary-100 dark:bg-primary-900/50 text-primary-800 dark:text-primary-200 rounded-full">
-                                    {formatTimeFromTimestamp(item.start_time)} - {formatTimeFromTimestamp(item.end_time)}
-                                  </span>
-                                </div>
-                                <h3 className="text-xl font-semibold mb-2">{item.title}</h3>
-                                <div className="prose dark:prose-invert max-w-none mb-4">
-                                  {renderDescriptionWithLinks(item.description)}
-                                </div>
-                                
-                                {speaker && (
-                                  <div className="mt-4 flex items-center gap-3">
-                                    <Link to={`/speakers/${speaker.id}`} className="shrink-0">
-                                      {speaker.photos?.find(p => p.isMain)?.url && (
-                                        <img
-                                          src={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/images/${speaker.photos.find(p => p.isMain)?.url}`}
-                                          alt={speaker.name}
-                                          className="w-12 h-12 rounded-full object-cover"
-                                        />
-                                      )}
-                                    </Link>
-                                    <div>
-                                      <Link 
-                                        to={`/speakers/${speaker.id}`}
-                                        className="font-medium hover:text-primary-600 dark:hover:text-primary-400"
-                                      >
-                                        {speaker.name}
-                                      </Link>
-                                      <p className="text-sm text-dark-500 dark:text-dark-400">
-                                        {speaker.field_of_expertise}
-                                      </p>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
+              {/* Фестивальная программа */}
+              {event.event_type === 'festival' && event.festival_program && event.festival_program.length > 0 && (
+                <div className="bg-white dark:bg-dark-800 rounded-lg border border-gray-200 dark:border-dark-600 p-6">
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                    <Calendar className="h-5 w-5" />
+                    Программа фестиваля
+                  </h2>
+                  
+                  <div className="space-y-4">
+                    {event.festival_program.map((item, index) => (
+                      <div key={index} className="flex gap-4 p-4 bg-gray-50 dark:bg-dark-700 rounded-lg">
+                        {item.image_url && (
+                          <img
+                            src={item.image_url}
+                            alt={item.title}
+                            className="w-20 h-20 rounded-lg object-cover flex-shrink-0"
+                          />
+                        )}
+                        
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-1">
+                            <Clock className="h-4 w-4" />
+                            <span>{item.start_time} - {item.end_time}</span>
                           </div>
-                        );
-                      })}
+                          
+                          <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
+                            {item.title}
+                          </h3>
+                          
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                            {item.description}
+                          </p>
+                          
+                          {item.lecturer_name && (
+                            <p className="text-sm font-medium text-primary-600 dark:text-primary-400">
+                              Ведущий: {item.lecturer_name}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
-              
-              {speakers.length > 0 && (
-                <div className="space-y-6">
-                  <h2 className="text-2xl font-semibold">Спикеры</h2>
-                  {speakers.map(speaker => (
-                    <div key={speaker.id} className="card p-6">
-                      <div className="flex items-start gap-4">
-                        <Link to={`/speakers/${speaker.id}`} className="shrink-0">
+
+              {/* Видео */}
+              {event.video_url && (
+                <div className="bg-white dark:bg-dark-800 rounded-lg border border-gray-200 dark:border-dark-600 p-6">
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <Play className="h-5 w-5" />
+                    Видео
+                  </h2>
+                  
+                  <div className="aspect-video">
+                    <iframe
+                      src={event.video_url}
+                      title={`Видео: ${event.title}`}
+                      className="w-full h-full rounded-lg"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                </div>
+              )}
+
+
+
+
+{/* ///////////////////////////////// */}
+
+
+
+
+
+
+
+
+              {/* ///////////////////////// */}
+
+
+
+
+              {/* Фотогалерея */}
+              {event.photo_gallery && event.photo_gallery.length > 0 && (
+                <div className="bg-white dark:bg-dark-800 rounded-lg border border-gray-200 dark:border-dark-600 p-6">
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <ImageIcon className="h-5 w-5" />
+                    Фотогалерея
+                  </h2>
+                  
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    {event.photo_gallery
+                      .filter(photo => typeof photo === 'string' && photo.trim() !== '')
+                      .map((photo, index) => (
+                        <button
+                          key={index}
+                          onClick={() => {
+                            setSelectedImage(index);
+                            setShowGallery(true);
+                          }}
+                          className="aspect-square rounded-lg overflow-hidden hover:opacity-90 transition-opacity"
+                        >
                           <img
-                            src={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/images/${speaker.photos.find(p => p.isMain)?.url}`}
-                            alt={speaker.name}
-                            className="w-16 h-16 rounded-full object-cover"
+                            src={photo}
+                            alt={`Фото ${index + 1}`}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.style.display = 'none';
+                            }}
                           />
-                        </Link>
-                        <div>
-                          <Link 
-                            to={`/speakers/${speaker.id}`}
-                            className="text-lg font-semibold hover:text-primary-600 dark:hover:text-primary-400"
-                          >
-                            {speaker.name}
-                          </Link>
-                          <p className="text-sm text-primary-600 dark:text-primary-400 mb-2">
-                            {speaker.field_of_expertise}
-                          </p>
-                          {renderDescriptionWithLinks(speaker.description)}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                        </button>
+                      ))
+                    }
+                  </div>
                 </div>
               )}
             </div>
 
-            {!isEventPast && (
-              <div className="space-y-6">
-                <div className="card p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <div>
-                      <span className="block text-sm text-dark-500 dark:text-dark-400">Стоимость</span>
-                      <span className="text-2xl font-bold">
-                        {event.payment_type === 'free' 
-                          ? 'Бесплатно'
-                          : event.payment_type === 'donation'
-                            ? 'Донейшн'
-                            : event.price === null
-                              ? 'Онлайн оплата'
-                              : `${event.price} ${event.currency}`
-                        }
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => setShowShareMenu(!showShareMenu)}
-                      className="p-2 hover:bg-gray-100 dark:hover:bg-dark-700 rounded-full relative"
-                    >
-                      <Share2 className="h-5 w-5" />
-                      
-                      {showShareMenu && (
-                        <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-dark-800 rounded-lg shadow-lg py-2 z-50">
-                          <button
-                            onClick={() => handleShare('telegram')}
-                            className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-dark-700"
-                          >
-                            Telegram
-                          </button>
-                          <button
-                            onClick={() => handleShare('vk')}
-                            className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-dark-700"
-                          >
-                            VKontakte
-                          </button>
-                          <button
-                            onClick={() => handleShare('copy')}
-                            className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-dark-700"
-                          >
-                            Копировать ссылку
-                          </button>
-                        </div>
-                      )}
-                    </button>
+            {/* Правая колонка - информация и регистрация */}
+            <div className="space-y-6">
+              {/* Карточка регистрации */}
+              <div className="bg-white dark:bg-dark-800 rounded-lg border border-gray-200 dark:border-dark-600 p-6 sticky top-6">
+                {/* Цена */}
+                <div className="mb-6">
+                  <div className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                    {formatPrice(event.payment_type as string, event.price, event.currency)}
                   </div>
-
-                  {event.payment_widget_id && (
-                    <div 
-                      className="mb-4"
-                      dangerouslySetInnerHTML={{ __html: event.payment_widget_id }}
-                    />
+                  
+                  {event.payment_type === 'paid' && event.couple_discount && (
+                    <p className="text-sm text-green-600 dark:text-green-400">
+                      Скидка для пары: {event.couple_discount} {event.currency}
+                    </p>
                   )}
+                  
+                  {event.payment_type === 'paid' && event.child_half_price && (
+                    <p className="text-sm text-green-600 dark:text-green-400">
+                      Детский билет за полцены
+                    </p>
+                  )}
+                </div>
 
-                  <button 
-                    onClick={handleRegisterClick}
-                    className="w-full btn-primary mb-4"
-                  >
-                    {event.price === null && event.payment_link ? 'Купить онлайн' : 'Зарегистрироваться'}
-                  </button>
-
-                  <div className="space-y-4 text-sm">
-                    {event.languages?.length > 0 && (
-                      <div className="flex items-center gap-2 text-dark-500 dark:text-dark-400">
-                        <Globe className="h-5 w-5" />
-                        <span>{event.languages.join(', ')}</span>
-                      </div>
+                {/* Статус регистрации */}
+                <div className={`mb-4 p-3 rounded-lg ${
+                  registrationStatus.type === 'success' 
+                    ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-200'
+                    : registrationStatus.type === 'warning'
+                      ? 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200'
+                      : 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {registrationStatus.type === 'success' ? (
+                      <CheckCircle className="h-5 w-5" />
+                    ) : registrationStatus.type === 'warning' ? (
+                      <AlertCircle className="h-5 w-5" />
+                    ) : (
+                      <AlertCircle className="h-5 w-5" />
                     )}
+                    <span className="font-medium">{registrationStatus.message}</span>
                   </div>
                 </div>
 
-                {event.location && (
-                  <div className="card p-6">
-                    <p className="font-semibold mb-4">Место проведения</p>
-                    <div className="space-y-2">
-                      <p className="text-dark-600 dark:text-dark-300">{event.location}</p>
+                {/* Кнопка регистрации */}
+                {registrationStatus.canRegister ? (
+                  <div className="space-y-3">
+                    {event.payment_link ? (
+                      <a
+                        href={event.payment_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-lg transition-colors"
+                      >
+                        <UserCheck className="h-5 w-5" />
+                        Зарегистрироваться
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    ) : (
+                      <button
+                        onClick={() => setIsRegistering(true)}
+                        disabled={isRegistering}
+                        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white font-semibold rounded-lg transition-colors"
+                      >
+                        {isRegistering ? (
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                        ) : (
+                          <UserCheck className="h-5 w-5" />
+                        )}
+                        Зарегистрироваться
+                      </button>
+                    )}
+                    
+                    <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                      Нажимая на кнопку, вы соглашаетесь с условиями регистрации
+                    </p>
+                  </div>
+                ) : (
+                  <button
+                    disabled
+                    className="w-full px-6 py-3 bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 font-semibold rounded-lg cursor-not-allowed"
+                  >
+                    Регистрация недоступна
+                  </button>
+                )}
+
+                {/* Статистика регистраций */}
+                {event.registrations && (
+                  <div className="mt-6 pt-6 border-t border-gray-200 dark:border-dark-600">
+                    <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
+                      <span>Зарегистрировано:</span>
+                      <span className="font-medium">
+                        {event.registrations.current}
+                        {event.registrations.max_regs && ` / ${event.registrations.max_regs}`}
+                      </span>
                     </div>
+                    
+                    {event.registrations.max_regs && (
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div 
+                          className="bg-primary-600 h-2 rounded-full transition-all duration-300"
+                          style={{ 
+                            width: `${Math.min(100, (event.registrations.current / event.registrations.max_regs) * 100)}%` 
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-            )}
+
+              {/* Дополнительная информация */}
+              <div className="bg-white dark:bg-dark-800 rounded-lg border border-gray-200 dark:border-dark-600 p-6">
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-4">
+                  Детали мероприятия
+                </h3>
+                
+                <div className="space-y-4">
+                  {/* Дата и время */}
+                  <div className="flex items-start gap-3">
+                    <Calendar className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <div className="font-medium text-gray-900 dark:text-white">
+                        {formatEventDate(event)}
+                      </div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                        {formatEventTime(event)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Локация */}
+                  {event.location && (
+                    <div className="flex items-start gap-3">
+                      <MapPin className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <div className="font-medium text-gray-900 dark:text-white">
+                          Место проведения
+                        </div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">
+                          {event.location}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Языки */}
+                  {event.languages && event.languages.length > 0 && (
+                    <div className="flex items-start gap-3">
+                      <Globe className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <div className="font-medium text-gray-900 dark:text-white">
+                          Языки проведения
+                        </div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">
+                          {formatLanguages(event.languages as string[])}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Возрастная категория */}
+                  {event.age_category && (
+                    <div className="flex items-start gap-3">
+                      <Tag className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <div className="font-medium text-gray-900 dark:text-white">
+                          Возрастная категория
+                        </div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">
+                          {event.age_category}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Тип оплаты */}
+                  <div className="flex items-start gap-3">
+                    <DollarSign className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <div className="font-medium text-gray-900 dark:text-white">
+                        Тип оплаты
+                      </div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                        {getPaymentTypeLabel(event.payment_type as string)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Организатор */}
+              <div className="bg-white dark:bg-dark-800 rounded-lg border border-gray-200 dark:border-dark-600 p-6">
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-4">
+                  Организатор
+                </h3>
+                
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-primary-100 dark:bg-primary-900 rounded-full flex items-center justify-center">
+                    <Users className="h-6 w-6 text-primary-600 dark:text-primary-400" />
+                  </div>
+                  
+                  <div>
+                    <div className="font-medium text-gray-900 dark:text-white">
+                      ScienceHub
+                    </div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                      Пространство для развития и общения
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </main>
 
-      <RegistrationModal
-        isOpen={showRegistrationModal}
-        onClose={() => setShowRegistrationModal(false)}
-        event={event}
-      />
-
-      <PaymentOptionsModal
-        isOpen={showPaymentOptions}
-        onClose={() => setShowPaymentOptions(false)}
-        onSelectOption={handlePaymentOptionSelect}
-        hasOnlinePayment={event.payment_type !== 'free' && event.payment_type !== 'donation'}
-        paymentType={event.payment_type === 'widget' ? 'widget' : 'link'}
-        paymentLink={event.payment_link}
-      />
+        {/* Модальное окно галереи */}
+        {showGallery && event.photo_gallery && (
+          <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4">
+            <div className="relative max-w-4xl max-h-full">
+              <button
+                onClick={() => setShowGallery(false)}
+                className="absolute top-4 right-4 text-white hover:text-gray-300 z-10"
+              >
+                <X className="h-8 w-8" />
+              </button>
+              
+              <img
+                src={event.photo_gallery[selectedImage]}
+                alt={`Фото ${selectedImage + 1}`}
+                className="max-w-full max-h-full object-contain"
+              />
+              
+              {event.photo_gallery.length > 1 && (
+                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
+                  {event.photo_gallery.map((_, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setSelectedImage(index)}
+                      className={`w-3 h-3 rounded-full ${
+                        index === selectedImage ? 'bg-white' : 'bg-white/50'
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </Layout>
   );
 };

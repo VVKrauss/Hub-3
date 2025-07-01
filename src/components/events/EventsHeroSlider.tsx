@@ -17,12 +17,16 @@ const EventsHeroSlider: React.FC<EventsHeroSliderProps> = ({
 }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
 
+  console.log('EventsHeroSlider received events:', events.length); // Отладка
+
   // Фильтруем только предстоящие события с изображениями
   const upcomingEventsWithImages = events.filter(event => {
     const eventDate = new Date(event.start_at);
     const now = new Date();
     return eventDate > now && event.cover_image_url && event.status === 'active';
   }).slice(0, 5); // Берем максимум 5 событий
+
+  console.log('Filtered events for slider:', upcomingEventsWithImages.length); // Отладка
 
   useEffect(() => {
     if (!autoPlay || upcomingEventsWithImages.length <= 1) return;
@@ -66,12 +70,12 @@ const EventsHeroSlider: React.FC<EventsHeroSliderProps> = ({
 
   if (upcomingEventsWithImages.length === 0) {
     return (
-      <div className="relative h-96 bg-gradient-to-r from-gray-600 to-gray-800 overflow-hidden">
+      <div className="relative h-96 bg-gray-100 dark:bg-gray-800 overflow-hidden">
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center text-white">
+          <div className="text-center text-gray-600 dark:text-gray-300">
             <Calendar className="h-16 w-16 mx-auto mb-4 opacity-50" />
             <h2 className="text-3xl font-bold mb-2">Предстоящие события</h2>
-            <p className="text-gray-200">Скоро появятся новые мероприятия</p>
+            <p className="text-gray-500 dark:text-gray-400">Скоро появятся новые мероприятия</p>
           </div>
         </div>
       </div>
@@ -87,33 +91,33 @@ const EventsHeroSlider: React.FC<EventsHeroSliderProps> = ({
         <img
           src={currentEvent.cover_image_url!}
           alt={currentEvent.title}
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+          className="w-full h-full object-cover"
         />
-        <div className="absolute inset-0 bg-black/40"></div>
+        {/* Градиентная подложка для текста */}
+        <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-transparent"></div>
       </div>
 
-      {/* Контент */}
+      {/* Контент слайда */}
       <div className="absolute inset-0 flex items-center">
-        <div className="w-full px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
           <div className="max-w-2xl">
-            {/* Заголовок */}
-            <h1 className="text-4xl md:text-5xl font-bold text-white mb-4 leading-tight">
+            <h1 className="text-2xl md:text-3xl font-bold text-white mb-4 leading-tight">
               {currentEvent.title}
             </h1>
-
-            {/* Краткое описание - показываем только если есть */}
+            
             {currentEvent.short_description && (
-              <p className="text-xl text-gray-200 mb-6 line-clamp-2">
+              <p className="text-xl text-gray-200 mb-6 leading-relaxed">
                 {currentEvent.short_description}
               </p>
             )}
 
-            {/* Кнопка с иконкой */}
+            {/* Кнопка действия */}
             <div className="mb-6">
               <Link
-                to={`/events/${currentEvent.slug || currentEvent.id}`}
-                className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white border border-white/20 px-6 py-3 rounded-full font-medium transition-all hover:scale-105"
+                to={`/events/${currentEvent.id}`}
+                className="inline-flex items-center gap-3 bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white border border-white/20 px-6 py-3 rounded-full font-medium transition-all hover:scale-105"
               >
+                Узнать больше
                 <ArrowRight className="h-5 w-5" />
               </Link>
             </div>
