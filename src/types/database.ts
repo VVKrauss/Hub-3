@@ -3,7 +3,22 @@
 // ФИНАЛЬНАЯ ВЕРСИЯ с исправленными статусами
 
 // Основные enum типы из БД
-export type ShEventType = 'lecture' | 'workshop' | 'festival' | 'conference' | 'seminar' | 'other';
+
+export type ShEventType = 
+  | 'lecture' 
+  | 'workshop' 
+  | 'conference'
+  | 'seminar'
+  | 'festival' 
+  | 'discussion'
+  | 'concert'
+  | 'standup'
+  | 'excursion'
+  | 'quiz'
+  | 'swap'
+  | 'movie_discussion'
+  | 'conversation_club'
+  | 'other';
 export type ShEventStatus = 'draft' | 'active' | 'past' | 'cancelled';
 export type ShAgeCategory = '0+' | '6+' | '12+' | '16+' | '18+';
 export type ShPaymentType = 'free' | 'paid' | 'donation';
