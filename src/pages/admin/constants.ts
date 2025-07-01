@@ -1,4 +1,5 @@
-// src/pages/admin/constants.ts - ИСПРАВЛЕННАЯ ВЕРСИЯ
+// src/pages/admin/constants.ts
+// ОБНОВЛЕННЫЕ КОНСТАНТЫ - ИСПОЛЬЗУЮТ НОВЫЕ УНИФИЦИРОВАННЫЕ ЗНАЧЕНИЯ
 
 export interface Speaker {
   id: string;
@@ -39,24 +40,34 @@ export interface EventRegistrations {
   reg_list: Registration[];
 }
 
+// =============================================================================
+// ОСНОВНЫЕ ТИПЫ (унифицированные)
+// =============================================================================
+
+export type EventType = 'lecture' | 'workshop' | 'discussion' | 'conference' | 'seminar' | 'festival' | 'concert' | 'standup' | 'excursion' | 'quiz' | 'swap' | 'other';
+export type PaymentType = 'free' | 'paid' | 'donation';
+export type EventStatus = 'draft' | 'active' | 'past' | 'cancelled';
+export type AgeCategory = '0+' | '6+' | '12+' | '16+' | '18+';
+export type Currency = 'RSD' | 'EUR' | 'USD' | 'RUB';
+export type Language = 'sr' | 'en' | 'ru';
+
 export type Event = {
   id: string;
   title: string;
   short_description: string;
   description: string;
-  event_type: string;
+  event_type: EventType;  // Обновлено на новый тип
   bg_image: string | null;
   original_bg_image: string | null;
-  date: string;
-  start_time: string;
-  end_time: string;
+  start_at: string;  // Новое поле вместо date/start_time
+  end_at: string;    // Новое поле вместо date/end_time
   location: string;
-  age_category: string;
+  age_category: AgeCategory;
   price: number | null;
-  currency: string;
-  status: string;
-  payment_type: string;
-  languages: string[];
+  currency: Currency;
+  status: EventStatus;
+  payment_type: PaymentType;  // Обновлено на новый тип
+  languages: Language[];      // Обновлено на новый тип
   speakers: string[];
   hide_speakers_gallery?: boolean;
   couple_discount?: string;
@@ -65,71 +76,208 @@ export type Event = {
   payment_widget_id?: string;
   widget_chooser?: boolean;
   video_url?: string;
-  photo_gallery?: string;
+  photo_gallery?: string[];
   festival_program?: FestivalProgramItem[];
   registrations?: EventRegistrations;
-  // Legacy fields - will be removed after migration
+  // Legacy fields - для обратной совместимости
+  date?: string;
+  start_time?: string;
+  end_time?: string;
   max_registrations?: number | null;
   current_registration_count?: number;
   registrations_list?: Registration[];
 };
 
-// ❌ СТАРЫЕ КОНСТАНТЫ (НЕПРАВИЛЬНЫЕ):
-// export const eventTypes = [
-//   'Lecture',           // ← Заглавная буква!
-//   'Workshop',
-//   'Movie Discussion',
-//   'Festival',
-//   'Stand-up',
-//   'Concert',
-//   'Excursion',
-//   'Discussion',
-//   'Swap',
-//   'Quiz'
-// ];
+// =============================================================================
+// МАССИВЫ ЗНАЧЕНИЙ ДЛЯ ВЫПАДАЮЩИХ СПИСКОВ
+// =============================================================================
 
-// ✅ ПОЛНЫЙ СПИСОК ТИПОВ СОБЫТИЙ (строчными буквами для БД):
-export const eventTypes = [
+export const eventTypes: EventType[] = [
   'lecture',
-  'workshop', 
-  'conference',
+  'workshop',
+  'discussion',
+  'conference', 
   'seminar',
   'festival',
-  'discussion',
   'concert',
   'standup',
   'excursion',
   'quiz',
   'swap',
-  'movie_discussion',
-  'conversation_club',
-  'other'  // всегда последний
+  'other'
 ];
 
-// Маппинг для отображения (человекочитаемые названия)
-export const eventTypeLabels: Record<string, string> = {
+export const paymentTypes: PaymentType[] = [
+  'free',
+  'paid', 
+  'donation'
+];
+
+export const languages: Language[] = [
+  'sr',  // Serbian
+  'en',  // English
+  'ru'   // Russian
+];
+
+export const ageCategories: AgeCategory[] = [
+  '0+',
+  '6+',
+  '12+', 
+  '16+',
+  '18+'
+];
+
+export const currencies: Currency[] = [
+  'RSD',
+  'EUR',
+  'USD',
+  'RUB'
+];
+
+export const statuses: EventStatus[] = [
+  'draft',
+  'active',
+  'past',
+  'cancelled'
+];
+
+// =============================================================================
+// ЧЕЛОВЕКОЧИТАЕМЫЕ ЛЕЙБЛЫ
+// =============================================================================
+
+export const EVENT_TYPE_LABELS: Record<EventType, string> = {
   'lecture': 'Лекция',
   'workshop': 'Мастер-класс',
-  'conference': 'Конференция', 
+  'discussion': 'Дискуссия',
+  'conference': 'Конференция',
   'seminar': 'Семинар',
   'festival': 'Фестиваль',
-  'discussion': 'Дискуссия',
   'concert': 'Концерт',
-  'standup': 'Стендап',
+  'standup': 'Стенд-ап',
   'excursion': 'Экскурсия',
-  'quiz': 'Викторина',
-  'swap': 'Обмен',
-  'movie_discussion': 'Обсуждение фильма',
-  'conversation_club': 'Разговорный клуб',
+  'quiz': 'Квиз',
+  'swap': 'Своп',
   'other': 'Другое'
 };
 
-export const paymentTypes = ['cost', 'free', 'donation'];
-export const languages = ['Русский', 'Английский', 'Сербский'];
-export const ageCategories = ['0+', '12+', '18+'];
-export const currencies = ['RSD', 'EUR', 'RUB'];
-export const statuses = ['draft', 'active', 'past'];
+export const PAYMENT_TYPE_LABELS: Record<PaymentType, string> = {
+  'free': 'Бесплатно',
+  'paid': 'Платное',
+  'donation': 'Донейшн'
+};
+
+export const LANGUAGE_LABELS: Record<Language, string> = {
+  'sr': 'Српски',
+  'en': 'English', 
+  'ru': 'Русский'
+};
+
+export const STATUS_LABELS: Record<EventStatus, string> = {
+  'draft': 'Черновик',
+  'active': 'Активное',
+  'past': 'Завершено',
+  'cancelled': 'Отменено'
+};
+
+// =============================================================================
+// МАПИНГ ДЛЯ ОБРАТНОЙ СОВМЕСТИМОСТИ
+// =============================================================================
+
+// Мапинг старых значений в новые (для миграции данных)
+export const LEGACY_MAPPING = {
+  eventType: {
+    'Lecture': 'lecture',
+    'Workshop': 'workshop',
+    'Movie Discussion': 'discussion',
+    'Conversation Club': 'discussion',
+    'Festival': 'festival',
+    'Stand-up': 'standup',
+    'Concert': 'concert',
+    'Excursion': 'excursion',
+    'Discussion': 'discussion',
+    'Swap': 'swap',
+    'Quiz': 'quiz'
+  } as Record<string, EventType>,
+  
+  paymentType: {
+    'cost': 'paid',
+    'free': 'free',
+    'donation': 'donation'
+  } as Record<string, PaymentType>,
+  
+  language: {
+    'Русский': 'ru',
+    'Английский': 'en',
+    'Сербский': 'sr'
+  } as Record<string, Language>
+};
+
+// Обратный мапинг (новые значения -> старые, для отображения в UI где нужно)
+export const LEGACY_REVERSE_MAPPING = {
+  eventType: {
+    'lecture': 'Lecture',
+    'workshop': 'Workshop', 
+    'discussion': 'Discussion',
+    'conference': 'Conference',
+    'seminar': 'Seminar',
+    'festival': 'Festival',
+    'concert': 'Concert',
+    'standup': 'Stand-up',
+    'excursion': 'Excursion',
+    'quiz': 'Quiz',
+    'swap': 'Swap',
+    'other': 'Other'
+  } as Record<EventType, string>,
+  
+  paymentType: {
+    'paid': 'cost',
+    'free': 'free', 
+    'donation': 'donation'
+  } as Record<PaymentType, string>,
+  
+  language: {
+    'ru': 'Русский',
+    'en': 'Английский',
+    'sr': 'Сербский'
+  } as Record<Language, string>
+};
+
+// =============================================================================
+// УТИЛИТЫ ДЛЯ МИГРАЦИИ
+// =============================================================================
+
+export const mapLegacyEventType = (legacyType: string): EventType => {
+  return LEGACY_MAPPING.eventType[legacyType] || 'other';
+};
+
+export const mapLegacyPaymentType = (legacyType: string): PaymentType => {
+  return LEGACY_MAPPING.paymentType[legacyType] || 'free';
+};
+
+export const mapLegacyLanguage = (legacyLang: string): Language => {
+  return LEGACY_MAPPING.language[legacyLang] || 'sr';
+};
+
+// =============================================================================
+// ЛИМИТЫ ВАЛИДАЦИИ
+// =============================================================================
 
 export const TITLE_MAX_LENGTH = 70;
 export const SHORT_DESC_MAX_LENGTH = 150;
 export const DESC_MAX_LENGTH = 800;
+
+// =============================================================================
+// ФУНКЦИИ ВАЛИДАЦИИ
+// =============================================================================
+
+export const isValidEventType = (value: string): value is EventType => {
+  return eventTypes.includes(value as EventType);
+};
+
+export const isValidPaymentType = (value: string): value is PaymentType => {
+  return paymentTypes.includes(value as PaymentType);
+};
+
+export const isValidEventStatus = (value: string): value is EventStatus => {
+  return statuses.includes(value as EventStatus);
+};
