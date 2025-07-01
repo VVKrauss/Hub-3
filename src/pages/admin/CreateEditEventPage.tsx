@@ -703,8 +703,80 @@ const CreateEditEventPage = () => {
     });
   };
 
-  // Save event
-  handleSubmit
+
+
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  
+  if (!validateForm()) {
+    toast.error('Пожалуйста, заполните все обязательные поля');
+    return;
+  }
+  
+  try {
+    setSaving(true);
+    
+    const eventData = {
+      ...event,
+      price: event.price ? parseFloat(event.price) : null,
+      couple_discount: event.couple_discount ? parseFloat(event.couple_discount) : null,
+      photo_gallery: Array.isArray(event.photo_gallery) ? event.photo_gallery : [],
+      // Удаляем legacy поля
+      date: undefined,
+      start_time: undefined,
+      end_time: undefined
+    };
+    
+    Object.keys(eventData).forEach(key => {
+      if (eventData[key] === undefined) {
+        delete eventData[key];
+      }
+    });
+    
+    const isNew = !id;
+    
+    const response = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/save-event`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({
+          eventData,
+          isNew
+        })
+      }
+    );
+    
+    const result = await response.json();
+    
+    if (!response.ok) {
+      if (result.code === 'PG_NET_EXTENSION_MISSING') {
+        console.warn('Database notification extension (pg_net) is not enabled. Notifications will not be sent.');
+      } else {
+        throw new Error(result.error || 'Error saving event');
+      }
+    }
+    
+    toast.success(isNew ? 'Мероприятие создано' : 'Мероприятие обновлено');
+    
+    // Задержка перед редиректом для отображения уведомления
+    setTimeout(() => {
+      navigate('/admin/events', { replace: true });
+    }, 1000);
+    
+  } catch (error) {
+    console.error('Error saving event:', error);
+    toast.error(`Ошибка при сохранении мероприятия: ${error?.message || 'Неизвестная ошибка'}`);
+  } finally {
+    setSaving(false);
+  }
+};
+
+
+  
   // Helper function to save festival program to sh_event_schedule
   const saveFestivalProgramToSchedule = async (eventId: string, program: FestivalProgramItem[]) => {
     // First, delete existing schedule items for this event
