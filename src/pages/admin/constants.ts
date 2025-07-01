@@ -73,19 +73,16 @@ export type Event = {
   registrations_list?: Registration[];
 };
 
+// src/pages/admin/constants.ts - ИСПРАВИТЬ
 export const eventTypes = [
-  'Lecture',
-  'Workshop',
-  'Movie Discussion',
-  'Conversation Club',
-  'Festival',
-  'Stand-up',
-  'Concert',
-  'Excursion',
-  'Discussion',
-  'Swap',
-  'Quiz'
+  'lecture',      // ← вместо 'Lecture'
+  'workshop',     // ← вместо 'Workshop'  
+  'festival',     // ← вместо 'Festival'
+  'conference',   // ← добавить
+  'seminar',      // ← добавить
+  'other'         // ← добавить!
 ];
+
 
 export const paymentTypes = ['cost', 'free', 'donation'];
 export const languages = ['Русский', 'Английский', 'Сербский'];
