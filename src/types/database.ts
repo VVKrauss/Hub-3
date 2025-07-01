@@ -405,12 +405,21 @@ export const EVENT_STATUS_LABELS: Record<ShEventStatus, string> = {
   cancelled: 'Отменено'
 };
 
+// Обновить лейблы:
 export const EVENT_TYPE_LABELS: Record<ShEventType, string> = {
   lecture: 'Лекция',
   workshop: 'Мастер-класс',
-  festival: 'Фестиваль',
   conference: 'Конференция',
-  seminar: 'Семинар',
+  seminar: 'Семинар', 
+  festival: 'Фестиваль',
+  discussion: 'Дискуссия',
+  concert: 'Концерт',
+  standup: 'Стендап',
+  excursion: 'Экскурсия',
+  quiz: 'Викторина',
+  swap: 'Обмен',
+  movie_discussion: 'Обсуждение фильма',
+  conversation_club: 'Разговорный клуб',
   other: 'Другое'
 };
 
