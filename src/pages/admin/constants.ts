@@ -88,23 +88,39 @@ export type Event = {
 //   'Quiz'
 // ];
 
-// ✅ ИСПРАВЛЕННЫЕ КОНСТАНТЫ (соответствуют database enum):
+// ✅ ПОЛНЫЙ СПИСОК ТИПОВ СОБЫТИЙ (строчными буквами для БД):
 export const eventTypes = [
-  'lecture',        // ← строчная буква, соответствует БД
-  'workshop',       // ← строчная буква
-  'conference',     // ← добавлено из БД enum
-  'seminar',        // ← добавлено из БД enum
-  'festival',       // ← строчная буква
-  'other'           // ← ДОБАВЛЕНО! Это важно!
+  'lecture',
+  'workshop', 
+  'conference',
+  'seminar',
+  'festival',
+  'discussion',
+  'concert',
+  'standup',
+  'excursion',
+  'quiz',
+  'swap',
+  'movie_discussion',
+  'conversation_club',
+  'other'  // всегда последний
 ];
 
 // Маппинг для отображения (человекочитаемые названия)
 export const eventTypeLabels: Record<string, string> = {
   'lecture': 'Лекция',
   'workshop': 'Мастер-класс',
-  'conference': 'Конференция',
+  'conference': 'Конференция', 
   'seminar': 'Семинар',
   'festival': 'Фестиваль',
+  'discussion': 'Дискуссия',
+  'concert': 'Концерт',
+  'standup': 'Стендап',
+  'excursion': 'Экскурсия',
+  'quiz': 'Викторина',
+  'swap': 'Обмен',
+  'movie_discussion': 'Обсуждение фильма',
+  'conversation_club': 'Разговорный клуб',
   'other': 'Другое'
 };
 
