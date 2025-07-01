@@ -670,4 +670,294 @@ const EventDetailsPage = () => {
 
 
 
+              {/* Фотогалерея */}
+              {event.photo_gallery && event.photo_gallery.length > 0 && (
+                <div className="bg-white dark:bg-dark-800 rounded-lg border border-gray-200 dark:border-dark-600 p-6">
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <ImageIcon className="h-5 w-5" />
+                    Фотогалерея
+                  </h2>
+                  
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    {event.photo_gallery
+                      .filter(photo => typeof photo === 'string' && photo.trim() !== '')
+                      .map((photo, index) => (
+                        <button
+                          key={index}
+                          onClick={() => {
+                            setSelectedImage(index);
+                            setShowGallery(true);
+                          }}
+                          className="aspect-square rounded-lg overflow-hidden hover:opacity-90 transition-opacity"
+                        >
+                          <img
+                            src={photo}
+                            alt={`Фото ${index + 1}`}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.style.display = 'none';
+                            }}
+                          />
+                        </button>
+                      ))
+                    }
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Правая колонка - информация и регистрация */}
+            <div className="space-y-6">
+              {/* Карточка регистрации */}
+              <div className="bg-white dark:bg-dark-800 rounded-lg border border-gray-200 dark:border-dark-600 p-6 sticky top-6">
+                {/* Цена */}
+                <div className="mb-6">
+                  <div className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                    {formatPrice(event.payment_type as string, event.price, event.currency)}
+                  </div>
+                  
+                  {event.payment_type === 'paid' && event.couple_discount && (
+                    <p className="text-sm text-green-600 dark:text-green-400">
+                      Скидка для пары: {event.couple_discount} {event.currency}
+                    </p>
+                  )}
+                  
+                  {event.payment_type === 'paid' && event.child_half_price && (
+                    <p className="text-sm text-green-600 dark:text-green-400">
+                      Детский билет за полцены
+                    </p>
+                  )}
+                </div>
+
+                {/* Статус регистрации */}
+                <div className={`mb-4 p-3 rounded-lg ${
+                  registrationStatus.type === 'success' 
+                    ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-200'
+                    : registrationStatus.type === 'warning'
+                      ? 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200'
+                      : 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {registrationStatus.type === 'success' ? (
+                      <CheckCircle className="h-5 w-5" />
+                    ) : registrationStatus.type === 'warning' ? (
+                      <AlertCircle className="h-5 w-5" />
+                    ) : (
+                      <AlertCircle className="h-5 w-5" />
+                    )}
+                    <span className="font-medium">{registrationStatus.message}</span>
+                  </div>
+                </div>
+
+                {/* Кнопка регистрации */}
+                {registrationStatus.canRegister ? (
+                  <div className="space-y-3">
+                    {event.payment_link ? (
+                      <a
+                        href={event.payment_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-lg transition-colors"
+                      >
+                        <UserCheck className="h-5 w-5" />
+                        Зарегистрироваться
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    ) : (
+                      <button
+                        onClick={() => setIsRegistering(true)}
+                        disabled={isRegistering}
+                        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white font-semibold rounded-lg transition-colors"
+                      >
+                        {isRegistering ? (
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                        ) : (
+                          <UserCheck className="h-5 w-5" />
+                        )}
+                        Зарегистрироваться
+                      </button>
+                    )}
+                    
+                    <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                      Нажимая на кнопку, вы соглашаетесь с условиями регистрации
+                    </p>
+                  </div>
+                ) : (
+                  <button
+                    disabled
+                    className="w-full px-6 py-3 bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 font-semibold rounded-lg cursor-not-allowed"
+                  >
+                    Регистрация недоступна
+                  </button>
+                )}
+
+                {/* Статистика регистраций */}
+                {event.registrations && (
+                  <div className="mt-6 pt-6 border-t border-gray-200 dark:border-dark-600">
+                    <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
+                      <span>Зарегистрировано:</span>
+                      <span className="font-medium">
+                        {event.registrations.current}
+                        {event.registrations.max_regs && ` / ${event.registrations.max_regs}`}
+                      </span>
+                    </div>
+                    
+                    {event.registrations.max_regs && (
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div 
+                          className="bg-primary-600 h-2 rounded-full transition-all duration-300"
+                          style={{ 
+                            width: `${Math.min(100, (event.registrations.current / event.registrations.max_regs) * 100)}%` 
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Дополнительная информация */}
+              <div className="bg-white dark:bg-dark-800 rounded-lg border border-gray-200 dark:border-dark-600 p-6">
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-4">
+                  Детали мероприятия
+                </h3>
+                
+                <div className="space-y-4">
+                  {/* Дата и время */}
+                  <div className="flex items-start gap-3">
+                    <Calendar className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <div className="font-medium text-gray-900 dark:text-white">
+                        {formatEventDate(event)}
+                      </div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                        {formatEventTime(event)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Локация */}
+                  {event.location && (
+                    <div className="flex items-start gap-3">
+                      <MapPin className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <div className="font-medium text-gray-900 dark:text-white">
+                          Место проведения
+                        </div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">
+                          {event.location}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Языки */}
+                  {event.languages && event.languages.length > 0 && (
+                    <div className="flex items-start gap-3">
+                      <Globe className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <div className="font-medium text-gray-900 dark:text-white">
+                          Языки проведения
+                        </div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">
+                          {formatLanguages(event.languages as string[])}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Возрастная категория */}
+                  {event.age_category && (
+                    <div className="flex items-start gap-3">
+                      <Tag className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <div className="font-medium text-gray-900 dark:text-white">
+                          Возрастная категория
+                        </div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">
+                          {event.age_category}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Тип оплаты */}
+                  <div className="flex items-start gap-3">
+                    <DollarSign className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <div className="font-medium text-gray-900 dark:text-white">
+                        Тип оплаты
+                      </div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                        {getPaymentTypeLabel(event.payment_type as string)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Организатор */}
+              <div className="bg-white dark:bg-dark-800 rounded-lg border border-gray-200 dark:border-dark-600 p-6">
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-4">
+                  Организатор
+                </h3>
+                
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-primary-100 dark:bg-primary-900 rounded-full flex items-center justify-center">
+                    <Users className="h-6 w-6 text-primary-600 dark:text-primary-400" />
+                  </div>
+                  
+                  <div>
+                    <div className="font-medium text-gray-900 dark:text-white">
+                      ScienceHub
+                    </div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                      Пространство для развития и общения
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Модальное окно галереи */}
+        {showGallery && event.photo_gallery && (
+          <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4">
+            <div className="relative max-w-4xl max-h-full">
+              <button
+                onClick={() => setShowGallery(false)}
+                className="absolute top-4 right-4 text-white hover:text-gray-300 z-10"
+              >
+                <X className="h-8 w-8" />
+              </button>
               
+              <img
+                src={event.photo_gallery[selectedImage]}
+                alt={`Фото ${selectedImage + 1}`}
+                className="max-w-full max-h-full object-contain"
+              />
+              
+              {event.photo_gallery.length > 1 && (
+                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
+                  {event.photo_gallery.map((_, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setSelectedImage(index)}
+                      className={`w-3 h-3 rounded-full ${
+                        index === selectedImage ? 'bg-white' : 'bg-white/50'
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </Layout>
+  );
+};
+
+export default EventDetailsPage;
