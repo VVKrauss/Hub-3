@@ -1124,4 +1124,165 @@ const CreateEditEventPage = () => {
 
 
 
-        ============================ Часть 5 ==============================
+        {/* ============================ Часть 5 ============================== */}
+
+        {/* Спикеры */}
+        <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-dark-600 p-6">
+          <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
+            <Users className="h-5 w-5 text-primary-600" />
+            Спикеры
+          </h2>
+          
+          <EventSpeakersSection
+            selectedSpeakerIds={event.speakers}
+            hideSpeakersGallery={event.hide_speakers_gallery}
+            onSpeakerToggle={handleSpeakerToggle}
+            onHideGalleryChange={handleHideSpeakersGalleryChange}
+          />
+        </div>
+
+        {/* Фестивальная программа */}
+        {event.event_type === 'festival' && (
+          <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-dark-600 p-6">
+            <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-primary-600" />
+              Программа фестиваля
+            </h2>
+            
+            <EventFestivalProgramSection
+              program={event.festival_program}
+              onChange={handleFestivalProgramChange}
+              speakers={speakers}
+            />
+          </div>
+        )}
+
+        {/* Предпросмотр фотогалереи */}
+        {Array.isArray(event.photo_gallery) && event.photo_gallery.length > 0 && (
+          <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-dark-600 p-6">
+            <h3 className="text-lg font-semibold mb-4">Предпросмотр фотогалереи</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {event.photo_gallery
+                .filter(photo => typeof photo === 'string' && photo.trim() !== '')
+                .map((photo, index) => (
+                  <div key={index} className="relative group">
+                    <img
+                      src={photo}
+                      alt={`Preview ${index + 1}`}
+                      className="w-full h-32 object-cover rounded-lg"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 rounded-lg flex items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newGallery = event.photo_gallery.filter((_, i) => i !== index);
+                          setEvent(prev => ({
+                            ...prev,
+                            photo_gallery: newGallery
+                          }));
+                        }}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity p-2 bg-red-600 text-white rounded-full hover:bg-red-700"
+                        title="Удалить фотографию"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              }
+            </div>
+          </div>
+        )}
+
+        {/* Кнопки действий */}
+        <div className="flex flex-col sm:flex-row gap-4 justify-end">
+          <button
+            type="button"
+            onClick={() => navigate('/admin/events')}
+            className="px-6 py-3 border border-gray-300 dark:border-dark-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors"
+          >
+            Отменить
+          </button>
+          
+          <button
+            type="submit"
+            disabled={saving}
+            className="px-6 py-3 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white rounded-lg flex items-center justify-center gap-2 transition-colors"
+          >
+            {saving ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Сохранение...
+              </>
+            ) : (
+              <>
+                <Save className="h-5 w-5" />
+                {id ? 'Обновить мероприятие' : 'Создать мероприятие'}
+              </>
+            )}
+          </button>
+        </div>
+      </form>
+
+      {/* Модальное окно подтверждения удаления */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-dark-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex-shrink-0 w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Удалить мероприятие
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Это действие нельзя отменить.
+                </p>
+              </div>
+            </div>
+            
+            <p className="text-gray-700 dark:text-gray-300 mb-6">
+              Вы уверены, что хотите удалить мероприятие "{event.title}"? 
+              Все связанные данные, включая регистрации участников, будут безвозвратно утеряны.
+            </p>
+            
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-4 py-2 border border-gray-300 dark:border-dark-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={loading}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-lg transition-colors flex items-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Удаление...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4" />
+                    Удалить
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default CreateEditEventPage;
