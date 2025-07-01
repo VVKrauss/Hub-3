@@ -825,4 +825,303 @@ const CreateEditEventPage = () => {
 
 
 
-        ======================= 4 Часть ========================
+        {/* ======================= 4 Часть ======================== */}
+
+        {/* Оплата */}
+        <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-dark-600 p-6">
+          <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
+            <DollarSign className="h-5 w-5 text-primary-600" />
+            Оплата
+          </h2>
+          
+          <div className="space-y-6">
+            <div className="form-group">
+              <label className="block font-medium mb-3 text-gray-700 dark:text-gray-300">
+                Тип оплаты
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {paymentTypes.map(type => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setEvent(prev => ({ ...prev, payment_type: type }))}
+                    className={`p-4 rounded-lg border-2 text-center transition-all ${
+                      event.payment_type === type
+                        ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
+                        : 'border-gray-200 dark:border-dark-600 bg-gray-50 dark:bg-dark-700 text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-dark-500'
+                    }`}
+                  >
+                    <div className="font-semibold text-lg mb-1">
+                      {type === 'paid' ? '💰 Платное' : 
+                       type === 'free' ? '🆓 Бесплатное' : 
+                       '💝 Донейшн'}
+                    </div>
+                    <div className="text-sm opacity-75">
+                      {PAYMENT_TYPE_LABELS[type]}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {event.payment_type === 'paid' && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="form-group">
+                    <label htmlFor="price" className="block font-medium mb-2 text-gray-700 dark:text-gray-300">
+                      Цена
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        id="price"
+                        name="price"
+                        value={event.price}
+                        onChange={handleInputChange}
+                        className={`w-full px-4 py-3 pr-16 rounded-lg border transition-colors ${
+                          errors.price 
+                            ? 'border-red-500 focus:border-red-500' 
+                            : 'border-gray-300 dark:border-dark-600 focus:border-primary-500'
+                        } bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800`}
+                        placeholder="0"
+                        min="0"
+                        step="0.01"
+                      />
+                      <span className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 dark:text-gray-400">
+                        {event.currency}
+                      </span>
+                    </div>
+                    {errors.price && (
+                      <p className="text-red-500 text-sm mt-2">Укажите цену или ссылку на оплату</p>
+                    )}
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="couple_discount" className="block font-medium mb-2 text-gray-700 dark:text-gray-300">
+                      Скидка для пары
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        id="couple_discount"
+                        name="couple_discount"
+                        value={event.couple_discount}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-3 pr-16 rounded-lg border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800 transition-colors"
+                        placeholder="0"
+                        min="0"
+                        step="0.01"
+                      />
+                      <span className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 dark:text-gray-400">
+                        {event.currency}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="payment_link" className="block font-medium mb-2 text-gray-700 dark:text-gray-300">
+                    Ссылка на оплату
+                  </label>
+                  <input
+                    type="url"
+                    id="payment_link"
+                    name="payment_link"
+                    value={event.payment_link}
+                    onChange={handleInputChange}
+                    className={`w-full px-4 py-3 rounded-lg border transition-colors ${
+                      errors.payment_link 
+                        ? 'border-red-500 focus:border-red-500' 
+                        : 'border-gray-300 dark:border-dark-600 focus:border-primary-500'
+                    } bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800`}
+                    placeholder="https://example.com/payment"
+                  />
+                  {errors.payment_link && (
+                    <p className="text-red-500 text-sm mt-2">Укажите цену или ссылку на оплату</p>
+                  )}
+                </div>
+
+                <div className="form-group">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      name="child_half_price"
+                      checked={event.child_half_price}
+                      onChange={handleCheckboxChange}
+                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                    />
+                    <span className="ml-2 text-gray-700 dark:text-gray-300">
+                      Детский билет за полцены
+                    </span>
+                  </label>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Медиа контент */}
+        <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-dark-600 p-6">
+          <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
+            <Camera className="h-5 w-5 text-primary-600" />
+            Медиа контент
+          </h2>
+          
+          <div className="space-y-6">
+            <div className="form-group">
+              <label className="block font-medium mb-3 text-gray-700 dark:text-gray-300">
+                Главное изображение мероприятия
+              </label>
+              
+              {event.bg_image ? (
+                <div className="relative">
+                  <img
+                    src={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/images/${event.bg_image}`}
+                    alt="Event preview"
+                    className="w-full h-64 object-cover rounded-lg"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.src = 'https://via.placeholder.com/800x400?text=Image+not+found';
+                    }}
+                  />
+                  <div className="absolute bottom-4 right-4 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="p-2 bg-white/90 hover:bg-white text-dark-800 rounded-full shadow-lg transition-colors"
+                      title="Изменить изображение"
+                    >
+                      <Upload className="h-5 w-5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEvent(prev => ({ ...prev, bg_image: '' }))}
+                      className="p-2 bg-red-600/90 hover:bg-red-600 text-white rounded-full shadow-lg transition-colors"
+                      title="Удалить изображение"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="border-2 border-dashed border-gray-300 dark:border-dark-600 rounded-lg p-8 text-center">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <div className="flex flex-col items-center">
+                    <div className="mb-4 p-3 bg-gray-100 dark:bg-dark-700 rounded-full">
+                      <ImageIcon className="h-6 w-6 text-gray-500 dark:text-gray-400" />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
+                      disabled={isUploading}
+                    >
+                      {isUploading ? (
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                          <span>Загрузка... {uploadProgress}%</span>
+                        </div>
+                      ) : (
+                        <span>Загрузить изображение</span>
+                      )}
+                    </button>
+                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                      Рекомендуемый размер: 1200x600px
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="video_url" className="block font-medium mb-2 text-gray-700 dark:text-gray-300">
+                <Video className="h-5 w-5 inline mr-2" />
+                Ссылка на видео
+              </label>
+              <input
+                type="url"
+                id="video_url"
+                name="video_url"
+                value={event.video_url}
+                onChange={handleInputChange}
+                className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800 transition-colors"
+                placeholder="https://youtube.com/watch?v=..."
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="block font-medium mb-2 text-gray-700 dark:text-gray-300">
+                <Camera className="h-5 w-5 inline mr-2" />
+                Галерея фотографий
+              </label>
+              
+              <div className="space-y-2">
+                {Array.isArray(event.photo_gallery) && event.photo_gallery
+                  .filter(photo => typeof photo === 'string' && photo.trim() !== '')
+                  .map((photo, index) => (
+                    <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-dark-700 rounded-lg">
+                      <input
+                        type="url"
+                        value={photo}
+                        onChange={(e) => {
+                          const newGallery = [...event.photo_gallery];
+                          newGallery[index] = e.target.value;
+                          setEvent(prev => ({
+                            ...prev,
+                            photo_gallery: newGallery
+                          }));
+                        }}
+                        className="flex-1 px-3 py-2 rounded border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-800 text-gray-900 dark:text-white focus:outline-none focus:border-primary-500"
+                        placeholder="URL фотографии"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newGallery = event.photo_gallery.filter((_, i) => i !== index);
+                          setEvent(prev => ({
+                            ...prev,
+                            photo_gallery: newGallery
+                          }));
+                        }}
+                        className="p-2 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+                        title="Удалить фотографию"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))
+                }
+                
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEvent(prev => ({
+                      ...prev,
+                      photo_gallery: [...(Array.isArray(prev.photo_gallery) ? prev.photo_gallery : []), '']
+                    }));
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-gray-300 dark:border-dark-600 rounded-lg text-gray-600 dark:text-gray-400 hover:border-primary-500 hover:text-primary-600 dark:hover:text-primary-400 transition-colors w-full"
+                >
+                  <Plus className="h-4 w-4" />
+                  Добавить фотографию
+                </button>
+                
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  Вставьте прямую ссылку на изображение (например, из облачного хранилища)
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ========================= Конец 4 части ========================== */}
+
+
+
+        ============================ Часть 5 ==============================
