@@ -1,4 +1,5 @@
-// 1. Создаем файл constants.ts
+// src/pages/admin/constants.ts - ИСПРАВЛЕННАЯ ВЕРСИЯ
+
 export interface Speaker {
   id: string;
   name: string;
@@ -73,16 +74,39 @@ export type Event = {
   registrations_list?: Registration[];
 };
 
-// src/pages/admin/constants.ts - ИСПРАВИТЬ
+// ❌ СТАРЫЕ КОНСТАНТЫ (НЕПРАВИЛЬНЫЕ):
+// export const eventTypes = [
+//   'Lecture',           // ← Заглавная буква!
+//   'Workshop',
+//   'Movie Discussion',
+//   'Festival',
+//   'Stand-up',
+//   'Concert',
+//   'Excursion',
+//   'Discussion',
+//   'Swap',
+//   'Quiz'
+// ];
+
+// ✅ ИСПРАВЛЕННЫЕ КОНСТАНТЫ (соответствуют database enum):
 export const eventTypes = [
-  'lecture',      // ← вместо 'Lecture'
-  'workshop',     // ← вместо 'Workshop'  
-  'festival',     // ← вместо 'Festival'
-  'conference',   // ← добавить
-  'seminar',      // ← добавить
-  'other'         // ← добавить!
+  'lecture',        // ← строчная буква, соответствует БД
+  'workshop',       // ← строчная буква
+  'conference',     // ← добавлено из БД enum
+  'seminar',        // ← добавлено из БД enum
+  'festival',       // ← строчная буква
+  'other'           // ← ДОБАВЛЕНО! Это важно!
 ];
 
+// Маппинг для отображения (человекочитаемые названия)
+export const eventTypeLabels: Record<string, string> = {
+  'lecture': 'Лекция',
+  'workshop': 'Мастер-класс',
+  'conference': 'Конференция',
+  'seminar': 'Семинар',
+  'festival': 'Фестиваль',
+  'other': 'Другое'
+};
 
 export const paymentTypes = ['cost', 'free', 'donation'];
 export const languages = ['Русский', 'Английский', 'Сербский'];
