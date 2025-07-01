@@ -603,5 +603,190 @@ if (loading) {
 
 
 
+{/* Тип оплаты */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                      Тип оплаты
+                    </label>
+                    <div className="space-y-2">
+                      {paymentTypes.map(type => (
+                        <label key={type} className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={filters.payment_type?.includes(type) || false}
+                            onChange={() => togglePaymentType(type)}
+                            className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                          />
+                          <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                            {PAYMENT_TYPE_LABELS[type]}
+                            {stats[type] > 0 && (
+                              <span className="text-gray-500 ml-1">({stats[type]})</span>
+                            )}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
 
+                  {/* Возрастная категория */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                      Возрастная категория
+                    </label>
+                    <div className="space-y-2">
+                      {(['0+', '6+', '12+', '16+', '18+'] as const).map(category => (
+                        <label key={category} className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={filters.age_category?.includes(category) || false}
+                            onChange={() => toggleAgeCategory(category)}
+                            className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                          />
+                          <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                            {category}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Основной контент */}
+          <div className="flex-1">
+            {/* Информация о результатах */}
+            <div className="mb-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-600 dark:text-gray-400">
+                    {filteredEvents.length === 0 
+                      ? 'Мероприятий не найдено'
+                      : `Найдено ${filteredEvents.length} ${
+                          filteredEvents.length === 1 
+                            ? 'мероприятие' 
+                            : filteredEvents.length < 5 
+                              ? 'мероприятия' 
+                              : 'мероприятий'
+                        }`
+                    }
+                    {hasActiveFilters() && ' по заданным фильтрам'}
+                  </p>
+                  
+                  {filters.search && filteredEvents.length > 0 && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                      По запросу "{filters.search}"
+                    </p>
+                  )}
+                </div>
+
+                {/* Сортировка */}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Сортировка:</span>
+                  <select
+                    className="text-sm border border-gray-300 dark:border-dark-600 rounded-lg px-3 py-1 bg-white dark:bg-dark-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    defaultValue="date_asc"
+                  >
+                    <option value="date_asc">По дате (сначала ближайшие)</option>
+                    <option value="date_desc">По дате (сначала поздние)</option>
+                    <option value="title_asc">По названию (А-Я)</option>
+                    <option value="title_desc">По названию (Я-А)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Список событий */}
+            {filteredEvents.length > 0 ? (
+              <EventsList
+                events={filteredEvents}
+                viewMode={viewMode}
+                searchQuery={searchQuery}
+                showPrice={true}
+                showLanguages={true}
+                showType={true}
+                showAge={true}
+                showSpeakers={true}
+                className="mb-8"
+              />
+            ) : (
+              /* Пустое состояние */
+              <div className="text-center py-12">
+                <div className="mb-4 p-4 bg-gray-100 dark:bg-dark-700 rounded-full w-16 h-16 mx-auto flex items-center justify-center">
+                  <Calendar className="h-8 w-8 text-gray-400 dark:text-gray-500" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  {hasActiveFilters() ? 'Мероприятий не найдено' : 'Мероприятий пока нет'}
+                </h3>
+                <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
+                  {hasActiveFilters() 
+                    ? 'Попробуйте изменить параметры поиска или очистить фильтры'
+                    : 'Скоро здесь появятся интересные мероприятия. Следите за обновлениями!'
+                  }
+                </p>
+                
+                {hasActiveFilters() && (
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                    <button
+                      onClick={clearFilters}
+                      className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
+                    >
+                      Очистить фильтры
+                    </button>
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="px-4 py-2 border border-gray-300 dark:border-dark-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors"
+                    >
+                      Очистить поиск
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Статистика внизу страницы */}
+            {events.length > 0 && (
+              <div className="mt-12 pt-8 border-t border-gray-200 dark:border-dark-600">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                  Статистика мероприятий
+                </h3>
+                
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                  {/* Статистика по типам */}
+                  {eventTypes.slice(0, 6).map(type => (
+                    <div key={type} className="text-center p-3 bg-gray-50 dark:bg-dark-700 rounded-lg">
+                      <div className="text-2xl font-bold text-primary-600 dark:text-primary-400">
+                        {stats[type] || 0}
+                      </div>
+                      <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                        {EVENT_TYPE_LABELS[type]}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-3 gap-4 mt-4">
+                  {/* Статистика по оплате */}
+                  {paymentTypes.map(type => (
+                    <div key={type} className="text-center p-3 bg-gray-50 dark:bg-dark-700 rounded-lg">
+                      <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                        {stats[type] || 0}
+                      </div>
+                      <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                        {PAYMENT_TYPE_LABELS[type]}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </Layout>
+  );
+};
+
+export default EventsPage;
   
