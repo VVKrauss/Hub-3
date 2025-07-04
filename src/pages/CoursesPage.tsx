@@ -28,7 +28,7 @@ const supabase = createClient(
 
 // Типы для курсов
 type CourseType = 'offline' | 'online' | 'hybrid';
-type CourseStatus = 'draft' | 'published' | 'archived';
+type CourseStatus = 'draft' | 'active' | 'archived' | 'completed';
 type CourseLevel = 'beginner' | 'intermediate' | 'advanced';
 type CoursePaymentType = 'free' | 'paid' | 'subscription';
 
@@ -131,7 +131,7 @@ const CoursesPage = () => {
       const { data, error: fetchError } = await supabase
         .from('sh_courses')
         .select('*')
-        .eq('status', 'published')
+        .eq('status', 'active')
         .eq('is_public', true)
         .order('start_date', { ascending: true });
 
