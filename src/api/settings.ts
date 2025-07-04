@@ -755,7 +755,7 @@ const getDefaultPageSettings = (page: string): ApiResponse<any> => {
       heroImage: '',
       defaultView: 'grid',
       itemsPerPage: 16,
-      metaDescription: ''
+      metaDescription: ''  
     },
     homepage: {
       hero_section: {
