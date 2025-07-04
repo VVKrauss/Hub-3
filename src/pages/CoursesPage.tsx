@@ -138,13 +138,13 @@ const CoursesPage = () => {
 
       // Основной запрос
       let query = supabase
-        .from('courses')
+        .from('sh_courses')
         .select(`
           *,
-          instructor:speakers(
+          instructor:sh_speakers(
             id,
             name,
-            title,
+            field_of_expertise,
             avatar_url
           )
         `)
@@ -224,7 +224,7 @@ const CoursesPage = () => {
   const fetchCategories = async () => {
     try {
       const { data, error } = await supabase
-        .from('courses')
+        .from('sh_courses')
         .select('category')
         .eq('status', 'active')
         .eq('is_public', true)
@@ -243,12 +243,12 @@ const CoursesPage = () => {
     try {
       const [activeResult, featuredResult] = await Promise.all([
         supabase
-          .from('courses')
+          .from('sh_courses')
           .select('id', { count: 'exact', head: true })
           .eq('status', 'active')
           .eq('is_public', true),
         supabase
-          .from('courses')
+          .from('sh_courses')
           .select('id', { count: 'exact', head: true })
           .eq('status', 'active')
           .eq('is_public', true)
@@ -708,9 +708,9 @@ const CoursesPage = () => {
                                 <p className="text-sm font-medium text-gray-900 dark:text-white">
                                   {course.instructor.name}
                                 </p>
-                                {course.instructor.title && (
+                                {course.instructor.field_of_expertise && (
                                   <p className="text-xs text-gray-600 dark:text-gray-400">
-                                    {course.instructor.title}
+                                    {course.instructor.field_of_expertise}
                                   </p>
                                 )}
                               </div>
@@ -829,4 +829,4 @@ const CoursesPage = () => {
   );
 };
 
-export default CoursesPage;   
+export default CoursesPage;
