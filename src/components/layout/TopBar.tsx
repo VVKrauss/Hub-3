@@ -1,307 +1,487 @@
-import { useState, useEffect, useRef } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, Sun, Moon, LogIn } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+// src/components/layout/TopBar.tsx
+import { useState, useEffect } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { createClient } from '@supabase/supabase-js';
+import { 
+  Menu, 
+  X, 
+  Sun, 
+  Moon, 
+  User, 
+  LogIn, 
+  LogOut, 
+  Settings,
+  Calendar,
+  BookOpen,
+  Users,
+  Building,
+  Coffee,
+  Info,
+  Home
+} from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { getNavigationItems, getTopbarSettings } from '../../api/settings';
+import { useAuth } from '../../contexts/AuthContext';
 import Logo from '../ui/Logo';
-import LoginModal from '../auth/LoginModal';
-import UserProfileDropdown from '../ui/UserProfileDropdown';
 
-type NavItem = {
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+);
+
+interface NavigationItem {
   id: string;
   label: string;
   path: string;
   visible: boolean;
-};
+  order?: number;
+  badge?: number;
+  icon?: string;
+  external?: boolean;
+}
 
-type UserData = {
-  id: string;
-  email: string;
-  name?: string;
-  role?: string;
-  avatar?: string;
-} | null;
-
-type TopbarHeight = 'compact' | 'standard' | 'large';
+interface TopBarSettings {
+  alignment: 'left' | 'center' | 'right' | 'space-between';
+  style: 'classic' | 'modern' | 'minimal' | 'rounded';
+  spacing: 'compact' | 'normal' | 'relaxed';
+  height: 'compact' | 'normal' | 'large';
+  showBorder: boolean;
+  showShadow: boolean;
+  backgroundColor: 'white' | 'blur' | 'transparent';
+  animation: 'none' | 'slide' | 'fade' | 'bounce';
+  mobileCollapse: boolean;
+  showIcons: boolean;
+  showBadges: boolean;
+  stickyHeader: boolean;
+  maxWidth: 'container' | 'full';
+}
 
 const TopBar = () => {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [loginModalOpen, setLoginModalOpen] = useState(false);
-  const [user, setUser] = useState<UserData>(null);
-  const [topbarHeight, setTopbarHeight] = useState<TopbarHeight>('standard');
   const { theme, toggleTheme } = useTheme();
+  const { user, signOut } = useAuth();
   const location = useLocation();
-  const [navItems, setNavItems] = useState<NavItem[]>([]);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+  
+  const [isMobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [navigationItems, setNavigationItems] = useState<NavigationItem[]>([]);
+  const [topbarSettings, setTopbarSettings] = useState<TopBarSettings>({
+    alignment: 'center',
+    style: 'classic',
+    spacing: 'normal',
+    height: 'normal',
+    showBorder: true,
+    showShadow: true,
+    backgroundColor: 'white',
+    animation: 'slide',
+    mobileCollapse: true,
+    showIcons: false,
+    showBadges: true,
+    stickyHeader: true,
+    maxWidth: 'container'
+  });
+  const [loading, setLoading] = useState(true);
+
+  // Дефолтные пункты навигации
+  const defaultNavItems: NavigationItem[] = [
+    { id: 'events', label: 'Мероприятия', path: '/events', visible: true, order: 0 },
+    { id: 'courses', label: 'Курсы', path: '/courses', visible: true, order: 1 },
+    { id: 'speakers', label: 'Спикеры', path: '/speakers', visible: true, order: 2 },
+    { id: 'rent', label: 'Аренда', path: '/rent', visible: true, order: 3 },
+    { id: 'coworking', label: 'Коворкинг', path: '/coworking', visible: true, order: 4 },
+    { id: 'about', label: 'О нас', path: '/about', visible: true, order: 5 }
+  ];
+
+  // Иконки для навигации
+  const iconMap = {
+    'home': Home,
+    'events': Calendar,
+    'courses': BookOpen,
+    'speakers': Users,
+    'rent': Building,
+    'coworking': Coffee,
+    'about': Info
+  };
 
   useEffect(() => {
-    fetchNavItems();
-    fetchTopbarSettings();
-    checkUser();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        fetchUserProfile(session.user.id);
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-      }
-    });
-
-    // Close mobile menu when clicking outside
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setMobileMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-
-    return () => {
-      authListener.subscription.unsubscribe();
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    fetchNavigationSettings();
   }, []);
 
-  const checkUser = async () => {
+  const fetchNavigationSettings = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        fetchUserProfile(session.user.id);
-      }
-    } catch (error) {
-      console.error('Error checking user session:', error);
-    }
-  };
-
-  const fetchUserProfile = async (userId: string) => {
-    try {
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
+      setLoading(true);
+      
+      const { data, error } = await supabase
+        .from('site_settings')
+        .select('navigation_items, topbar_settings')
         .single();
 
-      if (error) {
-        console.warn('Error fetching user profile:', error);
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching settings:', error);
+        setNavigationItems(defaultNavItems);
+        return;
       }
 
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      setUser({
-        id: userId,
-        email: session?.user.email || '',
-        name: profile?.name || session?.user.user_metadata?.name,
-        role: profile?.role,
-        avatar: profile?.avatar
-      });
-    } catch (error) {
-      console.error('Error fetching user profile:', error);
-      // Still set basic user info even if profile fetch fails
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        setUser({
-          id: session.user.id,
-          email: session.user.email || '',
-          name: session.user.user_metadata?.name
-        });
+      // Обработка навигационных элементов
+      if (data?.navigation_items && Array.isArray(data.navigation_items) && data.navigation_items.length > 0) {
+        const navItemsWithOrder = data.navigation_items.map((item: any, index: number) => ({
+          ...item,
+          order: item.order !== undefined ? item.order : index
+        })).sort((a: any, b: any) => a.order - b.order);
+        
+        setNavigationItems(navItemsWithOrder);
+      } else {
+        setNavigationItems(defaultNavItems);
       }
-    }
-  };
 
-  const fetchNavItems = async () => {
-    try {
-      const response = await getNavigationItems();
-      if (response.data) {
-        setNavItems(response.data);
+      // Обработка настроек топбара
+      if (data?.topbar_settings) {
+        setTopbarSettings(prev => ({
+          ...prev,
+          ...data.topbar_settings
+        }));
       }
-    } catch (error) {
-      console.error('Error fetching navigation items:', error);
-      // Устанавливаем навигацию по умолчанию
-      setNavItems([
-        { id: '1', label: 'Главная', path: '/', visible: true },
-        { id: '2', label: 'События', path: '/events', visible: true },
-        { id: '3', label: 'Спикеры', path: '/speakers', visible: true },
-        { id: '4', label: 'О нас', path: '/about', visible: true },
-        { id: '5', label: 'Коворкинг', path: '/coworking', visible: true },
-        { id: '6', label: 'Аренда', path: '/rent', visible: true }
-      ]);
-    }
-  };
 
-  const fetchTopbarSettings = async () => {
-    try {
-      const response = await getTopbarSettings();
-      if (response.data?.height) {
-        setTopbarHeight(response.data.height);
-      }
     } catch (error) {
-      console.error('Error fetching topbar settings:', error);
+      console.error('Error fetching navigation settings:', error);
+      setNavigationItems(defaultNavItems);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut();
+      await signOut();
+      setMobileMenuOpen(false);
+      navigate('/');
     } catch (error) {
       console.error('Error signing out:', error);
     }
   };
 
-  const visibleNavItems = navItems.filter(item => item.visible);
-
-  // Определяем класс высоты топбара
-  const topbarHeightClass = `topbar-${topbarHeight}`;
-
-  // Определяем высоту для мобильного меню в зависимости от размера топбара
-  const getMobileMenuTop = () => {
-    switch (topbarHeight) {
-      case 'compact': return 'top-12';
-      case 'standard': return 'top-14';
-      case 'large': return 'top-20';
-      default: return 'top-16';
+  const isActivePath = (path: string) => {
+    if (path === '/') {
+      return location.pathname === '/';
     }
+    return location.pathname.startsWith(path);
   };
 
-  return (
-    <header className={`topbar ${topbarHeightClass}`}>
-      <div className="container flex items-center justify-between">
-        <Link to="/" className="flex items-center" onClick={() => setMobileMenuOpen(false)}>
-          <Logo className="h-10 w-auto" inverted={theme === 'dark'} />
-        </Link>
-        
-        {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center justify-center flex-1 space-x-8">
-          {visibleNavItems.map(item => (
-            <Link 
-              key={item.id}
-              to={item.path} 
-              className={`font-medium relative py-4 ${
-                location.pathname === item.path 
-                  ? 'text-primary dark:text-primary-400 after:content-[""] after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-primary-600 dark:after:bg-primary-400' 
-                  : 'hover:text-primary dark:hover:text-primary-400'
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-        
-        <div className="flex md:flex-none items-center gap-4">
-          <button 
-            onClick={toggleTheme} 
-            className="p-2 rounded-full hover:bg-dark-100 dark:hover:bg-dark-800"
-            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          >
-            {theme === 'dark' ? (
-              <Sun className="h-5 w-5" />
-            ) : (
-              <Moon className="h-5 w-5" />
-            )}
-          </button>
+  const closeMobileMenu = () => {
+    setMobileMenuOpen(false);
+  };
 
-          {user ? (
-            <UserProfileDropdown 
-              user={user} 
-              onLogout={handleLogout} 
-            />
-          ) : (
-            <button
-              onClick={() => setLoginModalOpen(true)}
-              className="flex items-center gap-2 p-2 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-md"
-            >
-              <LogIn className="h-5 w-5" />
-              <span className="hidden sm:inline">Войти</span>
-            </button>
-          )}
+  // Получение классов для топбара
+  const getTopbarClasses = () => {
+    const baseClasses = ['topbar'];
+    
+    if (topbarSettings.stickyHeader) {
+      baseClasses.push('sticky', 'top-0', 'z-50');
+    }
+    
+    // Фон
+    switch (topbarSettings.backgroundColor) {
+      case 'blur':
+        baseClasses.push('backdrop-blur-sm', 'bg-white/80', 'dark:bg-dark-900/80');
+        break;
+      case 'transparent':
+        baseClasses.push('bg-transparent');
+        break;
+      default:
+        baseClasses.push('bg-white', 'dark:bg-dark-900');
+    }
 
-          {/* Mobile Menu Button */}
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 md:hidden rounded-md text-dark-900 dark:text-white hover:bg-dark-100 dark:hover:bg-dark-800"
-            aria-expanded={mobileMenuOpen}
-            aria-label="Toggle menu"
-          >
-            {mobileMenuOpen ? (
-              <X className="h-6 w-6" />
-            ) : (
-              <Menu className="h-6 w-6" />
-            )}
-          </button>
+    // Тень и граница
+    if (topbarSettings.showShadow) {
+      baseClasses.push('shadow-sm');
+    }
+    if (topbarSettings.showBorder) {
+      baseClasses.push('border-b', 'border-gray-200', 'dark:border-dark-700');
+    }
+
+    // Высота
+    baseClasses.push(`topbar-${topbarSettings.height}`);
+
+    baseClasses.push('transition-colors', 'duration-200');
+
+    return baseClasses.join(' ');
+  };
+
+  // Получение классов для контейнера
+  const getContainerClasses = () => {
+    const baseClasses = ['flex', 'items-center'];
+    
+    // Выравнивание
+    switch (topbarSettings.alignment) {
+      case 'left':
+        baseClasses.push('justify-start');
+        break;
+      case 'right':
+        baseClasses.push('justify-end');
+        break;
+      case 'space-between':
+        baseClasses.push('justify-between');
+        break;
+      default:
+        baseClasses.push('justify-between'); // По умолчанию используем space-between для лого и меню
+    }
+
+    // Ширина контейнера
+    if (topbarSettings.maxWidth === 'container') {
+      baseClasses.push('container', 'mx-auto', 'px-4', 'md:px-6');
+    } else {
+      baseClasses.push('w-full', 'px-4', 'md:px-6');
+    }
+
+    // Отступы в зависимости от размера
+    switch (topbarSettings.spacing) {
+      case 'compact':
+        baseClasses.push('py-1');
+        break;
+      case 'relaxed':
+        baseClasses.push('py-4');
+        break;
+      default:
+        baseClasses.push('py-2');
+    }
+
+    return baseClasses.join(' ');
+  };
+
+  // Получение классов для мобильного меню
+  const getMobileMenuClasses = () => {
+    const baseClasses = ['mobile-menu'];
+    baseClasses.push(`mobile-menu-${topbarSettings.height}`);
+    return baseClasses.join(' ');
+  };
+
+  if (loading) {
+    return (
+      <header className={getTopbarClasses()}>
+        <div className={getContainerClasses()}>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse"></div>
+            <div className="w-32 h-6 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse"></div>
+            <div className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse"></div>
+          </div>
         </div>
-        
-        {/* Mobile Navigation */}
-        {mobileMenuOpen && (
-          <div 
-            ref={menuRef}
-            className={`mobile-menu md:hidden absolute ${getMobileMenuTop()} left-0 right-0 bg-white dark:bg-dark-900 shadow-lg z-50 animate-fade-in`}
-          >
-            <nav className="container py-5 flex flex-col space-y-4">
-              {visibleNavItems.map(item => (
+      </header>
+    );
+  }
+
+  const visibleNavItems = navigationItems.filter(item => item.visible);
+
+  return (
+    <>
+      <header className={getTopbarClasses()}>
+        <div className={getContainerClasses()}>
+          {/* Logo */}
+          <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity" onClick={closeMobileMenu}>
+            <div className="w-8 h-8 bg-primary-500 rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold text-sm">SH</span>
+            </div>
+            <span className="text-xl font-bold text-gray-900 dark:text-white">
+              Science Hub
+            </span>
+          </Link>
+          
+          {/* Desktop Navigation */}
+          <nav className={`hidden md:flex items-center space-x-8 ${
+            topbarSettings.alignment === 'center' ? 'flex-1 justify-center' : ''
+          }`}>
+            {visibleNavItems.map((item, index) => {
+              const Icon = topbarSettings.showIcons && item.icon ? iconMap[item.icon as keyof typeof iconMap] : null;
+              
+              return (
                 <Link 
                   key={item.id}
                   to={item.path} 
-                  className={`py-2 font-medium ${
-                    location.pathname === item.path 
+                  className={`
+                    font-medium relative py-4 transition-all duration-200 flex items-center gap-2
+                    ${isActivePath(item.path) 
                       ? 'text-primary-600 dark:text-primary-400' 
-                      : 'hover:text-primary-600 dark:hover:text-primary-400'
-                  }`}
-                  onClick={() => setMobileMenuOpen(false)}
+                      : 'text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400'
+                    }
+                    ${topbarSettings.animation === 'slide' ? 'hover:transform hover:-translate-y-0.5' : ''}
+                    ${topbarSettings.animation === 'fade' ? 'hover:opacity-70' : ''}
+                    ${topbarSettings.animation === 'bounce' ? 'hover:animate-pulse' : ''}
+                    ${topbarSettings.style === 'rounded' ? 'hover:bg-primary-100 dark:hover:bg-primary-900/20 rounded-full px-3 py-2' : ''}
+                  `}
                 >
-                  {item.label}
+                  {Icon && <Icon className="h-4 w-4" />}
+                  <span>{item.label}</span>
+                  {topbarSettings.showBadges && item.badge && item.badge > 0 && (
+                    <span className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                      {item.badge}
+                    </span>
+                  )}
+                  {isActivePath(item.path) && topbarSettings.style === 'classic' && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-600 dark:bg-primary-400"></span>
+                  )}
                 </Link>
-              ))}
-              {!user && (
-                <button
-                  onClick={() => {
-                    setLoginModalOpen(true);
-                    setMobileMenuOpen(false);
-                  }}
-                  className="py-2 font-medium text-left text-primary-600 dark:text-primary-400"
-                >
-                  Войти / Зарегистрироваться
-                </button>
+              );
+            })}
+          </nav>
+          
+          {/* Actions */}
+          <div className="flex items-center gap-4">
+            {/* Theme Toggle */}
+            <button 
+              onClick={toggleTheme} 
+              className="p-2 rounded-lg bg-gray-100 dark:bg-dark-800 hover:bg-gray-200 dark:hover:bg-dark-700 transition-colors"
+              title={theme === 'dark' ? 'Переключить на светлую тему' : 'Переключить на темную тему'}
+            >
+              {theme === 'dark' ? (
+                <Sun className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+              ) : (
+                <Moon className="h-5 w-5 text-gray-600 dark:text-gray-400" />
               )}
-              {user && (
-                <>
-                  <Link
-                    to="/profile"
-                    className="py-2 font-medium hover:text-primary-600 dark:hover:text-primary-400"
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    Мой профиль
-                  </Link>
-                  {user.role === 'Admin' && (
+            </button>
+
+            {/* User Menu */}
+            {user ? (
+              <div className="hidden md:flex items-center gap-3">
+                <Link
+                  to="/profile"
+                  className="flex items-center gap-2 p-2 rounded-lg bg-gray-100 dark:bg-dark-800 hover:bg-gray-200 dark:hover:bg-dark-700 transition-colors"
+                >
+                  <User className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Профиль
+                  </span>
+                </Link>
+                
+                <Link
+                  to="/admin"
+                  className="flex items-center gap-2 p-2 rounded-lg bg-primary-100 dark:bg-primary-900/30 hover:bg-primary-200 dark:hover:bg-primary-900/50 transition-colors"
+                >
+                  <Settings className="h-5 w-5 text-primary-600 dark:text-primary-400" />
+                  <span className="text-sm font-medium text-primary-700 dark:text-primary-300">
+                    Админка
+                  </span>
+                </Link>
+                
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 p-2 rounded-lg bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
+                >
+                  <LogOut className="h-5 w-5 text-red-600 dark:text-red-400" />
+                  <span className="text-sm font-medium text-red-700 dark:text-red-300">
+                    Выйти
+                  </span>
+                </button>
+              </div>
+            ) : (
+              <Link
+                to="/auth/login"
+                className="hidden md:flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-colors"
+              >
+                <LogIn className="h-4 w-4" />
+                Войти
+              </Link>
+            )}
+
+            {/* Mobile Menu Button */}
+            <button
+              onClick={() => setMobileMenuOpen(!isMobileMenuOpen)}
+              className="md:hidden p-2 rounded-lg bg-gray-100 dark:bg-dark-800 hover:bg-gray-200 dark:hover:bg-dark-700 transition-colors"
+            >
+              {isMobileMenuOpen ? (
+                <X className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+              ) : (
+                <Menu className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+              )}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Mobile Menu */}
+      {isMobileMenuOpen && topbarSettings.mobileCollapse && (
+        <>
+          {/* Overlay */}
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+            onClick={closeMobileMenu}
+          />
+          
+          {/* Menu Panel */}
+          <div className={`fixed ${getMobileMenuClasses()} left-0 right-0 bg-white dark:bg-dark-900 border-b border-gray-200 dark:border-dark-700 z-50 md:hidden`}>
+            <div className="container mx-auto px-4 py-4">
+              {/* Navigation Links */}
+              <nav className="space-y-2 mb-6">
+                {visibleNavItems.map((item) => {
+                  const Icon = iconMap[item.id as keyof typeof iconMap];
+                  return (
+                    <Link
+                      key={item.id}
+                      to={item.path}
+                      onClick={closeMobileMenu}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors ${
+                        isActivePath(item.path)
+                          ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-800'
+                      }`}
+                    >
+                      {Icon && <Icon className="h-5 w-5" />}
+                      <span>{item.label}</span>
+                      {topbarSettings.showBadges && item.badge && item.badge > 0 && (
+                        <span className="ml-auto bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                          {item.badge}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </nav>
+
+              {/* Mobile User Actions */}
+              <div className="pt-4 border-t border-gray-200 dark:border-dark-700">
+                {user ? (
+                  <div className="space-y-2">
+                    <Link
+                      to="/profile"
+                      onClick={closeMobileMenu}
+                      className="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-800 font-medium transition-colors"
+                    >
+                      <User className="h-5 w-5" />
+                      <span>Профиль</span>
+                    </Link>
+                    
                     <Link
                       to="/admin"
-                      className="py-2 font-medium hover:text-primary-600 dark:hover:text-primary-400"
-                      onClick={() => setMobileMenuOpen(false)}
+                      onClick={closeMobileMenu}
+                      className="flex items-center gap-3 px-4 py-3 rounded-lg bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 font-medium transition-colors"
                     >
-                      Панель управления
+                      <Settings className="h-5 w-5" />
+                      <span>Админка</span>
                     </Link>
-                  )}
-                  <button
-                    onClick={() => {
-                      handleLogout();
-                      setMobileMenuOpen(false);
-                    }}
-                    className="py-2 font-medium text-left text-red-600 dark:text-red-400"
+                    
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 font-medium transition-colors"
+                    >
+                      <LogOut className="h-5 w-5" />
+                      <span>Выйти</span>
+                    </button>
+                  </div>
+                ) : (
+                  <Link
+                    to="/auth/login"
+                    onClick={closeMobileMenu}
+                    className="flex items-center gap-3 px-4 py-3 rounded-lg bg-primary-600 text-white font-medium transition-colors"
                   >
-                    Выйти
-                  </button>
-                </>
-              )}
-            </nav>
+                    <LogIn className="h-5 w-5" />
+                    <span>Войти</span>
+                  </Link>
+                )}
+              </div>
+            </div>
           </div>
-        )}
-      </div>
-
-      {/* Login Modal */}
-      <LoginModal
-        isOpen={loginModalOpen}
-        onClose={() => setLoginModalOpen(false)}
-      />
-    </header>
+        </>
+      )}
+    </>
   );
 };
 
