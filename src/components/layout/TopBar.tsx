@@ -34,6 +34,7 @@ const TopBar = () => {
   const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const [navItems, setNavItems] = useState<NavItem[]>([]);
+  const [debugInfo, setDebugInfo] = useState<string>('Инициализация...');
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -112,41 +113,58 @@ const TopBar = () => {
 
   const fetchNavItems = async () => {
     try {
-      console.log('Загружаем элементы навигации...');
+      console.log('🔄 TopBar: Начинаем загрузку навигации...');
+      setDebugInfo('Загрузка навигации...');
+      
       const response = await getNavigationItems();
-      console.log('Результат загрузки навигации:', response);
+      console.log('📦 TopBar: Ответ от getNavigationItems:', response);
+      
+      if (response.error) {
+        console.error('❌ TopBar: Ошибка загрузки навигации:', response.error);
+        setDebugInfo(`Ошибка: ${response.error}`);
+        setFallbackNavigation();
+        return;
+      }
       
       if (response.data && response.data.length > 0) {
-        // Сортируем по order, если есть
+        console.log('✅ TopBar: Получены данные навигации:', response.data);
         const sortedItems = response.data.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
         setNavItems(sortedItems);
-        console.log('Установлены элементы навигации:', sortedItems);
+        setDebugInfo(`Загружено ${sortedItems.length} элементов навигации`);
+        
+        // Проверяем есть ли курсы
+        const hasCourses = sortedItems.some((item: any) => item.path === '/courses');
+        console.log('📚 TopBar: Курсы найдены в навигации:', hasCourses);
+        
+        if (!hasCourses) {
+          console.warn('⚠️ TopBar: Курсы не найдены в загруженной навигации');
+          setDebugInfo(`Загружено ${sortedItems.length} элементов, но курсов нет`);
+        }
       } else {
-        console.log('Нет данных навигации, используем значения по умолчанию');
-        // Обновленные значения по умолчанию с курсами
-        setNavItems([
-          { id: 'home', label: 'Главная', path: '/', visible: true, order: 0 },
-          { id: 'events', label: 'События', path: '/events', visible: true, order: 1 },
-          { id: 'courses', label: 'Курсы', path: '/courses', visible: true, order: 2 },
-          { id: 'speakers', label: 'Спикеры', path: '/speakers', visible: true, order: 3 },
-          { id: 'coworking', label: 'Коворкинг', path: '/coworking', visible: true, order: 4 },
-          { id: 'rent', label: 'Аренда', path: '/rent', visible: true, order: 5 },
-          { id: 'about', label: 'О нас', path: '/about', visible: true, order: 6 }
-        ]);
+        console.log('🔄 TopBar: Нет данных навигации, используем fallback');
+        setDebugInfo('Нет данных, используем fallback');
+        setFallbackNavigation();
       }
     } catch (error) {
-      console.error('Error fetching navigation items:', error);
-      // Устанавливаем навигацию по умолчанию с курсами при ошибке
-      setNavItems([
-        { id: 'home', label: 'Главная', path: '/', visible: true, order: 0 },
-        { id: 'events', label: 'События', path: '/events', visible: true, order: 1 },
-        { id: 'courses', label: 'Курсы', path: '/courses', visible: true, order: 2 },
-        { id: 'speakers', label: 'Спикеры', path: '/speakers', visible: true, order: 3 },
-        { id: 'coworking', label: 'Коворкинг', path: '/coworking', visible: true, order: 4 },
-        { id: 'rent', label: 'Аренда', path: '/rent', visible: true, order: 5 },
-        { id: 'about', label: 'О нас', path: '/about', visible: true, order: 6 }
-      ]);
+      console.error('💥 TopBar: Исключение при загрузке навигации:', error);
+      setDebugInfo(`Исключение: ${error}`);
+      setFallbackNavigation();
     }
+  };
+
+  const setFallbackNavigation = () => {
+    console.log('🔧 TopBar: Устанавливаем fallback навигацию с курсами');
+    const fallbackItems = [
+      { id: 'home', label: 'Главная', path: '/', visible: true, order: 0 },
+      { id: 'events', label: 'События', path: '/events', visible: true, order: 1 },
+      { id: 'courses', label: 'Курсы', path: '/courses', visible: true, order: 2 },
+      { id: 'speakers', label: 'Спикеры', path: '/speakers', visible: true, order: 3 },
+      { id: 'coworking', label: 'Коворкинг', path: '/coworking', visible: true, order: 4 },
+      { id: 'rent', label: 'Аренда', path: '/rent', visible: true, order: 5 },
+      { id: 'about', label: 'О нас', path: '/about', visible: true, order: 6 }
+    ];
+    setNavItems(fallbackItems);
+    setDebugInfo(`Fallback: ${fallbackItems.length} элементов с курсами`);
   };
 
   const fetchTopbarSettings = async () => {
@@ -169,6 +187,7 @@ const TopBar = () => {
   };
 
   const visibleNavItems = navItems.filter(item => item.visible);
+  console.log('👁️ TopBar: Видимые элементы навигации:', visibleNavItems);
 
   // Определяем класс высоты топбара
   const topbarHeightClass = `topbar-${topbarHeight}`;
@@ -185,6 +204,13 @@ const TopBar = () => {
 
   return (
     <header className={`topbar ${topbarHeightClass}`}>
+      {/* Отладочная информация */}
+      <div className="bg-yellow-100 dark:bg-yellow-900/30 px-4 py-1 text-xs">
+        <strong>Debug:</strong> {debugInfo} | Элементов: {navItems.length} | 
+        Видимых: {visibleNavItems.length} | 
+        Курсы: {visibleNavItems.some(item => item.path === '/courses') ? '✅' : '❌'}
+      </div>
+      
       <div className="container flex items-center justify-between">
         <Link to="/" className="flex items-center" onClick={() => setMobileMenuOpen(false)}>
           <Logo className="h-10 w-auto" inverted={theme === 'dark'} />
@@ -192,19 +218,25 @@ const TopBar = () => {
         
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center justify-center flex-1 space-x-8">
-          {visibleNavItems.map(item => (
-            <Link 
-              key={item.id}
-              to={item.path} 
-              className={`font-medium relative py-4 transition-colors duration-200 ${
-                location.pathname === item.path 
-                  ? 'text-primary dark:text-primary-400 after:content-[""] after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-primary-600 dark:after:bg-primary-400' 
-                  : 'text-gray-700 dark:text-gray-300 hover:text-primary dark:hover:text-primary-400'
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
+          {visibleNavItems.length === 0 ? (
+            <div className="text-red-500 font-bold">НЕТ ЭЛЕМЕНТОВ НАВИГАЦИИ</div>
+          ) : (
+            visibleNavItems.map(item => (
+              <Link 
+                key={item.id}
+                to={item.path} 
+                className={`font-medium relative py-4 transition-colors duration-200 ${
+                  location.pathname === item.path 
+                    ? 'text-primary dark:text-primary-400 after:content-[""] after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-primary-600 dark:after:bg-primary-400' 
+                    : 'text-gray-700 dark:text-gray-300 hover:text-primary dark:hover:text-primary-400'
+                } ${item.path === '/courses' ? 'bg-green-200 dark:bg-green-800' : ''}`}
+                title={`Debug: ID=${item.id}, Order=${item.order}, Visible=${item.visible}`}
+              >
+                {item.label}
+                {item.path === '/courses' && <span className="ml-1 text-green-600">🆕</span>}
+              </Link>
+            ))
+          )}
         </nav>
         
         <div className="flex md:flex-none items-center gap-4">
@@ -265,10 +297,11 @@ const TopBar = () => {
                     location.pathname === item.path 
                       ? 'text-primary dark:text-primary-400' 
                       : 'text-gray-700 dark:text-gray-300 hover:text-primary dark:hover:text-primary-400'
-                  }`}
+                  } ${item.path === '/courses' ? 'bg-green-200 dark:bg-green-800 px-2 rounded' : ''}`}
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   {item.label}
+                  {item.path === '/courses' && <span className="ml-1 text-green-600">🆕</span>}
                 </Link>
               ))}
             </nav>
@@ -286,6 +319,3 @@ const TopBar = () => {
 };
 
 export default TopBar;
-
-
-
