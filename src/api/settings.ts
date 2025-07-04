@@ -403,4 +403,4 @@ export const getTopbarSettings = async (): Promise<ApiResponse<any>> => {
       height: 'standard'
     });
   }
-};
+};   
