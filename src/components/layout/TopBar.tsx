@@ -5,7 +5,7 @@ import { Menu, X, User, LogOut, Settings } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { getNavigationItems, getTopbarSettings } from '../../api/settings';
 import Logo from '../ui/Logo';
-import { useTheme } from '../../hooks/useTheme';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface NavItem {
   id: string;
