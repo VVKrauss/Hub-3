@@ -26,9 +26,10 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
-// Типы для курсов
+// Типы для курсов (используем только существующие в БД)
+// Основываемся на схеме из MD файла
 type CourseType = 'offline' | 'online' | 'hybrid';
-type CourseStatus = 'draft' | 'active' | 'archived' | 'completed';
+type CourseStatus = 'draft' | 'active' | 'archived'; // Изменили published на active
 type CourseLevel = 'beginner' | 'intermediate' | 'advanced';
 type CoursePaymentType = 'free' | 'paid' | 'subscription';
 
@@ -128,21 +129,26 @@ const CoursesPage = () => {
       setLoading(true);
       setError(null);
 
+      console.log('Загружаем курсы из sh_courses...');
+
       const { data, error: fetchError } = await supabase
         .from('sh_courses')
         .select('*')
-        .eq('status', 'active')
         .eq('is_public', true)
-        .order('start_date', { ascending: true });
+        .order('created_at', { ascending: false });
+
+      console.log('Результат запроса курсов:', { data, error: fetchError });
 
       if (fetchError) {
+        console.error('Ошибка при загрузке курсов:', fetchError);
         throw fetchError;
       }
 
+      console.log('Загружено курсов:', data?.length || 0);
       setCourses(data || []);
     } catch (err) {
       console.error('Error fetching courses:', err);
-      setError('Ошибка при загрузке курсов');
+      setError('Ошибка при загрузке курсов: ' + (err as any).message);
     } finally {
       setLoading(false);
     }
@@ -592,37 +598,59 @@ const CoursesPage = () => {
                     Попробовать снова
                   </button>
                 </div>
-              ) : filteredCourses.length === 0 ? (
-                <div className="text-center py-12">
-                  <BookOpen className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                    {hasActiveFilters() ? 'Курсы не найдены' : 'Курсов пока нет'}
-                  </h3>
-                  <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
-                    {hasActiveFilters() 
-                      ? 'Попробуйте изменить параметры поиска или очистить фильтры'
-                      : 'Скоро здесь появятся интересные курсы. Следите за обновлениями!'
-                    }
-                  </p>
-                  
-                  {hasActiveFilters() && (
-                    <button
-                      onClick={clearFilters}
-                      className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg"
-                    >
-                      Очистить фильтры
-                    </button>
-                  )}
-                </div>
               ) : (
-                <div className={
-                  viewMode === 'grid' 
-                    ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-                    : "space-y-6"
-                }>
-                  {filteredCourses.map(course => (
-                    <CourseCard key={course.id} course={course} />
-                  ))}
+                <div>
+                  {/* Отладочная информация */}
+                  <div className="mb-4 p-4 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg">
+                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                      Отладка: Всего курсов загружено: {courses.length}
+                    </p>
+                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                      После фильтрации: {filteredCourses.length}
+                    </p>
+                    {courses.length > 0 && (
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-sm font-medium">Показать данные курсов</summary>
+                        <pre className="mt-2 text-xs overflow-auto max-h-40">
+                          {JSON.stringify(courses.slice(0, 2), null, 2)}
+                        </pre>
+                      </details>
+                    )}
+                  </div>
+                  
+                  {filteredCourses.length === 0 ? (
+                    <div className="text-center py-12">
+                      <BookOpen className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                        {hasActiveFilters() ? 'Курсы не найдены' : 'Курсов пока нет'}
+                      </h3>
+                      <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
+                        {hasActiveFilters() 
+                          ? 'Попробуйте изменить параметры поиска или очистить фильтры'
+                          : 'Скоро здесь появятся интересные курсы. Следите за обновлениями!'
+                        }
+                      </p>
+                      
+                      {hasActiveFilters() && (
+                        <button
+                          onClick={clearFilters}
+                          className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg"
+                        >
+                          Очистить фильтры
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className={
+                      viewMode === 'grid' 
+                        ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+                        : "space-y-6"
+                    }>
+                      {filteredCourses.map(course => (
+                        <CourseCard key={course.id} course={course} />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
