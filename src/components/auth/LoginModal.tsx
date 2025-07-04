@@ -18,8 +18,8 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
   const [resetPassword, setResetPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent | React.KeyboardEvent) => {
+    if (e) e.preventDefault();
     setLoading(true);
     setError(null);
 
@@ -285,16 +285,7 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
                   </button>
                 )}
               </div>
-            </div>colors"
-                  >
-                    {isSignUp ? 'Уже есть аккаунт? ' : 'Нет аккаунта? '}
-                    <span className="font-medium text-primary-600 dark:text-primary-400">
-                      {isSignUp ? 'Войти' : 'Зарегистрироваться'}
-                    </span>
-                  </button>
-                )}
-              </div>
-            </form>
+            </div>
 
             {/* Additional info */}
             <div className="mt-8 border-t border-gray-200 dark:border-gray-700 pt-6">
