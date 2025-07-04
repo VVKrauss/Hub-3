@@ -1,4 +1,4 @@
-// src/components/layout/TopBar.tsx - Полная замена файла
+// src/components/layout/TopBar.tsx - Исправленная версия без бесконечной загрузки
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu, X, Sun, Moon, LogIn } from 'lucide-react';
@@ -35,13 +35,49 @@ const TopBar = () => {
   const [user, setUser] = useState<User | null>(null);
   const [topbarHeight, setTopbarHeight] = useState<'compact' | 'standard' | 'large'>('standard');
   const menuRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    checkUser();
-    fetchNavItems();
-    fetchTopbarSettings();
+    let isMounted = true;
+    
+    const initialize = async () => {
+      if (!isMounted) return;
+      
+      try {
+        // Проверяем пользователя
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session && isMounted) {
+          await fetchUserProfile(session.user.id);
+        }
 
+        // Загружаем навигацию
+        if (isMounted) {
+          await fetchNavItems();
+        }
+
+        // Загружаем настройки топбара
+        if (isMounted) {
+          await fetchTopbarSettings();
+        }
+
+        if (isMounted) {
+          setMounted(true);
+        }
+      } catch (error) {
+        console.error('Error initializing TopBar:', error);
+        if (isMounted) {
+          setFallbackNavigation();
+          setMounted(true);
+        }
+      }
+    };
+
+    initialize();
+
+    // Auth listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
+      
       if (event === 'SIGNED_IN' && session) {
         await fetchUserProfile(session.user.id);
         setLoginModalOpen(false);
@@ -50,7 +86,7 @@ const TopBar = () => {
       }
     });
 
-    // Close mobile menu when clicking outside
+    // Click outside handler
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setMobileMenuOpen(false);
@@ -60,21 +96,11 @@ const TopBar = () => {
     document.addEventListener('mousedown', handleClickOutside);
 
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, []);
-
-  const checkUser = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        await fetchUserProfile(session.user.id);
-      }
-    } catch (error) {
-      console.error('Error checking user session:', error);
-    }
-  };
+  }, []); // Пустой массив зависимостей - выполняется только один раз
 
   const fetchUserProfile = async (userId: string) => {
     try {
@@ -83,10 +109,6 @@ const TopBar = () => {
         .select('*')
         .eq('id', userId)
         .single();
-
-      if (error) {
-        console.warn('Error fetching user profile:', error);
-      }
 
       const { data: { session } } = await supabase.auth.getSession();
       
@@ -99,25 +121,12 @@ const TopBar = () => {
       });
     } catch (error) {
       console.error('Error fetching user profile:', error);
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        setUser({
-          id: session.user.id,
-          email: session.user.email || '',
-          name: session.user.user_metadata?.name
-        });
-      }
     }
   };
 
   const fetchNavItems = async () => {
     try {
       const response = await getNavigationItems();
-      
-      if (response.error) {
-        setFallbackNavigation();
-        return;
-      }
       
       if (response.data && response.data.length > 0) {
         const sortedItems = response.data.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
@@ -177,6 +186,22 @@ const TopBar = () => {
       default: return 'top-16';
     }
   };
+
+  // Показываем базовую версию пока не загрузилось
+  if (!mounted) {
+    return (
+      <header className="topbar topbar-standard">
+        <div className="container flex items-center justify-between">
+          <Link to="/" className="flex items-center">
+            <Logo className="h-10 w-auto" inverted={theme === 'dark'} />
+          </Link>
+          <div className="flex items-center space-x-4">
+            <div className="w-6 h-6 animate-pulse bg-gray-300 rounded"></div>
+          </div>
+        </div>
+      </header>
+    );
+  }
 
   return (
     <header className={`topbar ${topbarHeightClass}`}>
