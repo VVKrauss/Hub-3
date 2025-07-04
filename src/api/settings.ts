@@ -1,13 +1,13 @@
- // src/api/settings.ts
-// API для работы с настройками сайта с добавлением курсов в навигацию
-
+// src/api/settings.ts - Обновленная версия для работы только с sh_site_settings
 import { supabase, createApiResponse, type ApiResponse } from '../lib/supabase';
 
-// Безопасное получение настроек сайта с fallback значениями
+// Получение настроек сайта ТОЛЬКО из новой таблицы sh_site_settings
 export const getSiteSettings = async (): Promise<ApiResponse<any>> => {
   try {
-    // Пытаемся получить настройки из новой таблицы sh_site_settings
-    const { data: newSettings, error: newError } = await supabase
+    console.log('🔍 Загружаем настройки из sh_site_settings...');
+    
+    // Получаем настройки ТОЛЬКО из новой таблицы
+    const { data: settings, error } = await supabase
       .from('sh_site_settings')
       .select('*')
       .eq('is_active', true)
@@ -15,23 +15,25 @@ export const getSiteSettings = async (): Promise<ApiResponse<any>> => {
       .limit(1)
       .maybeSingle();
 
-    if (!newError && newSettings) {
-      return createApiResponse(newSettings);
+    if (error) {
+      console.error('❌ Ошибка при получении настроек:', error);
+      throw error;
     }
 
-    // Если новая таблица недоступна, пытаемся получить из старой
-    const { data: oldSettings, error: oldError } = await supabase
-      .from('site_settings')
-      .select('*')
-      .limit(1)
-      .maybeSingle();
-
-    if (!oldError && oldSettings) {
-      return createApiResponse(oldSettings);
+    if (!settings) {
+      console.warn('⚠️ Активных настроек не найдено, создаем дефолтные');
+      // Если нет активных настроек, создаем их
+      const defaultSettings = await createDefaultSiteSettings();
+      return defaultSettings;
     }
 
-    // Если обе таблицы недоступны, возвращаем значения по умолчанию
-    console.warn('Unable to fetch site settings, using defaults');
+    console.log('✅ Настройки успешно загружены:', settings);
+    return createApiResponse(settings);
+
+  } catch (error) {
+    console.error('💥 Критическая ошибка при получении настроек:', error);
+    
+    // В случае любой ошибки, возвращаем hardcoded дефолты с курсами
     return createApiResponse({
       site_title: 'Science Hub',
       site_description: 'Научное сообщество в Сербии',
@@ -55,26 +57,26 @@ export const getSiteSettings = async (): Promise<ApiResponse<any>> => {
           youtube: 'https://youtube.com/sciencehub'
         }
       },
-      topbar_settings: {
-        alignment: 'center',
+      navigation_style: {
         style: 'classic',
         spacing: 'normal',
-        height: 'standard',
+        alignment: 'center',
         showBorder: true,
         showShadow: true,
-        backgroundColor: 'white',
-        animation: 'slide',
-        mobileCollapse: true,
-        showIcons: false,
-        showBadges: true,
         stickyHeader: true,
-        maxWidth: 'container'
-      }
+        mobileCollapse: true
+      },
+      is_active: true
     });
-  } catch (error) {
-    console.error('Error fetching site settings:', error);
-    // Возвращаем базовые настройки при любой ошибке
-    return createApiResponse({
+  }
+};
+
+// Создание дефолтных настроек сайта
+const createDefaultSiteSettings = async (): Promise<ApiResponse<any>> => {
+  try {
+    console.log('🔧 Создаем дефолтные настройки сайта...');
+    
+    const defaultData = {
       site_title: 'Science Hub',
       site_description: 'Научное сообщество в Сербии',
       navigation_items: [
@@ -86,243 +88,144 @@ export const getSiteSettings = async (): Promise<ApiResponse<any>> => {
         { id: 'rent', label: 'Аренда', path: '/rent', visible: true, order: 5 },
         { id: 'about', label: 'О нас', path: '/about', visible: true, order: 6 }
       ],
+      navigation_style: {
+        style: 'classic',
+        spacing: 'normal',
+        alignment: 'center',
+        showBorder: true,
+        showShadow: true,
+        stickyHeader: true,
+        mobileCollapse: true
+      },
       footer_settings: {
-        email: '',
-        phone: '',
-        address: '',
-        workingHours: '',
+        email: 'info@sciencehub.site',
+        phone: '+381 123 456 789',
+        address: 'Science Hub, Панчево, Сербия',
+        customText: '',
         socialLinks: {
-          telegram: '',
-          instagram: '',
-          youtube: ''
-        }
+          telegram: 'https://t.me/sciencehub',
+          instagram: 'https://instagram.com/sciencehub',
+          youtube: 'https://youtube.com/sciencehub'
+        },
+        workingHours: 'Пн-Пт: 9:00-22:00, Сб-Вс: 10:00-20:00',
+        showCopyright: true
       },
-      topbar_settings: {
-        height: 'standard'
-      }
-    });
-  }
-};
-
-// Получение настроек конкретной страницы
-export const getPageSettings = async (page: string): Promise<ApiResponse<any>> => {
-  try {
-    const siteSettings = await getSiteSettings();
-    
-    if (siteSettings.error || !siteSettings.data) {
-      // Возвращаем настройки по умолчанию для страницы
-      const defaultPageSettings = getDefaultPageSettings(page);
-      return createApiResponse(defaultPageSettings);
-    }
-
-    const settings = siteSettings.data;
-    
-    // Извлекаем настройки для конкретной страницы
-    switch (page) {
-      case 'events':
-        return createApiResponse(settings.events_page_settings || {
-          title: 'Мероприятия',
-          defaultView: 'grid',
-          showFilters: true,
-          itemsPerPage: 12,
-          metaDescription: 'Научные мероприятия и события в Сербии'
-        });
-      
-      case 'courses':
-        return createApiResponse(settings.courses_page_settings || {
-          title: 'Курсы и обучение',
-          defaultView: 'grid',
-          showFilters: true,
-          itemsPerPage: 12,
-          metaDescription: 'Курсы и обучающие программы для научного сообщества'
-        });
-      
-      case 'speakers':
-        return createApiResponse(settings.speakers_page_settings || {
-          title: 'Спикеры',
-          defaultView: 'grid',
-          itemsPerPage: 16,
-          showBio: true,
-          metaDescription: 'Спикеры научного сообщества'
-        });
-      
-      case 'about':
-        return createApiResponse(settings.about_page_settings || {
-          title: 'О нас',
-          projectInfo: '',
-          teamMembers: [],
-          contributors: [],
-          supportPlatforms: [],
-          contactInfo: {},
-          metaDescription: 'О научном сообществе Science Hub'
-        });
-      
-      case 'rent':
-        return createApiResponse(settings.rent_page_settings || {
-          title: 'Аренда пространства',
-          description: '',
-          photos: [],
-          amenities: [],
-          pricelist: [],
-          contactInfo: {},
-          metaDescription: 'Аренда пространства для мероприятий'
-        });
-      
-      case 'coworking':
-        return createApiResponse(settings.coworking_page_settings || {
-          title: 'Коворкинг',
-          description: '',
-          services: [],
-          metaDescription: 'Коворкинг пространство для работы'
-        });
-      
-      case 'homepage':
-        return createApiResponse(settings.homepage_settings || {
-          hero_section: {
-            title: 'Science Hub',
-            subtitle: 'Место для научного сообщества',
-            enabled: true
-          },
-          about_section: {
-            title: 'О нас',
-            enabled: true
-          },
-          events_section: {
-            title: 'Ближайшие события',
-            enabled: true,
-            showCount: 3
-          },
-          services_section: {
-            title: 'Наши услуги',
-            enabled: true,
-            items: []
-          }
-        });
-      
-      default:
-        return createApiResponse({});
-    }
-  } catch (error) {
-    console.error('Error fetching page settings:', error);
-    const defaultPageSettings = getDefaultPageSettings(page);
-    return createApiResponse(defaultPageSettings);
-  }
-};
-
-// Значения по умолчанию для страниц
-const getDefaultPageSettings = (page: string) => {
-  const defaults: Record<string, any> = {
-    events: {
-      title: 'Мероприятия',
-      defaultView: 'grid',
-      showFilters: true,
-      itemsPerPage: 12,
-      metaDescription: 'Научные мероприятия и события в Сербии'
-    },
-    courses: {
-      title: 'Курсы и обучение',
-      defaultView: 'grid',
-      showFilters: true,
-      itemsPerPage: 12,
-      metaDescription: 'Курсы и обучающие программы для научного сообщества'
-    },
-    speakers: {
-      title: 'Спикеры',
-      defaultView: 'grid',
-      itemsPerPage: 16,
-      showBio: true,
-      metaDescription: 'Спикеры научного сообщества'
-    },
-    about: {
-      title: 'О нас',
-      projectInfo: '',
-      teamMembers: [],
-      contributors: [],
-      supportPlatforms: [],
-      contactInfo: {},
-      metaDescription: 'О научном сообществе Science Hub'
-    },
-    rent: {
-      title: 'Аренда пространства',
-      description: '',
-      photos: [],
-      amenities: [],
-      pricelist: [],
-      contactInfo: {},
-      metaDescription: 'Аренда пространства для мероприятий'
-    },
-    coworking: {
-      title: 'Коворкинг',
-      description: '',
-      services: [],
-      metaDescription: 'Коворкинг пространство для работы'
-    },
-    homepage: {
-      hero_section: {
+      homepage_hero_section: {
+        style: 'centered',
         title: 'Science Hub',
+        enabled: true,
         subtitle: 'Место для научного сообщества',
-        enabled: true
+        ctaButton: {
+          link: '/about',
+          text: 'Узнать больше'
+        },
+        backgroundImage: ''
       },
-      about_section: {
+      homepage_about_section: {
+        image: '',
+        order: 1,
         title: 'О нас',
-        enabled: true
+        enabled: true,
+        description: ''
       },
-      events_section: {
+      homepage_events_section: {
+        order: 2,
         title: 'Ближайшие события',
         enabled: true,
-        showCount: 3
+        showCount: 3,
+        showFilters: true
       },
-      services_section: {
+      homepage_services_section: {
+        items: [],
+        order: 3,
         title: 'Наши услуги',
-        enabled: true,
-        items: []
-      }
-    }
-  };
+        enabled: true
+      },
+      about_page_settings: {
+        title: 'О нас',
+        heroImage: '',
+        contactInfo: {},
+        projectInfo: 'Science Hub - это место для научного сообщества в Сербии',
+        teamMembers: [],
+        contributors: [],
+        metaDescription: '',
+        supportPlatforms: []
+      },
+      rent_page_settings: {
+        title: 'Аренда пространства',
+        photos: [],
+        amenities: [],
+        heroImage: '',
+        pricelist: [],
+        mainPrices: {},
+        contactInfo: {},
+        description: '',
+        metaDescription: '',
+        includedServices: []
+      },
+      coworking_page_settings: {
+        title: 'Коворкинг',
+        services: [],
+        heroImage: '',
+        description: '',
+        mainServices: [],
+        metaDescription: ''
+      },
+      events_page_settings: {
+        title: 'Мероприятия',
+        heroImage: '',
+        defaultView: 'grid',
+        showFilters: true,
+        itemsPerPage: 12,
+        metaDescription: ''
+      },
+      speakers_page_settings: {
+        title: 'Спикеры',
+        showBio: true,
+        heroImage: '',
+        defaultView: 'grid',
+        itemsPerPage: 16,
+        metaDescription: ''
+      },
+      is_active: true
+    };
 
-  return defaults[page] || {};
-};
-
-// Обновление настроек сайта
-export const updateSiteSettings = async (settings: any): Promise<ApiResponse<any>> => {
-  try {
-    // Пытаемся обновить в новой таблице
-    const { data, error } = await supabase
+    // Деактивируем все старые записи
+    await supabase
       .from('sh_site_settings')
-      .upsert([{
-        ...settings,
-        is_active: true,
-        updated_at: new Date().toISOString()
-      }])
+      .update({ is_active: false })
+      .eq('is_active', true);
+
+    // Создаем новую запись
+    const { data: newSettings, error } = await supabase
+      .from('sh_site_settings')
+      .insert([defaultData])
       .select()
       .single();
 
     if (error) {
-      // Если новая таблица недоступна, пытаемся обновить старую
-      const { data: oldData, error: oldError } = await supabase
-        .from('site_settings')
-        .upsert([settings])
-        .select()
-        .single();
-
-      if (oldError) throw oldError;
-      return createApiResponse(oldData);
+      console.error('❌ Ошибка при создании дефолтных настроек:', error);
+      throw error;
     }
 
-    return createApiResponse(data);
+    console.log('✅ Дефолтные настройки успешно созданы:', newSettings);
+    return createApiResponse(newSettings);
+
   } catch (error) {
-    console.error('Error updating site settings:', error);
-    return createApiResponse(null, error);
+    console.error('💥 Ошибка при создании дефолтных настроек:', error);
+    throw error;
   }
 };
 
 // Получение навигационных элементов
 export const getNavigationItems = async (): Promise<ApiResponse<any[]>> => {
   try {
+    console.log('🔍 Загружаем элементы навигации...');
+    
     const siteSettings = await getSiteSettings();
     
     if (siteSettings.error || !siteSettings.data?.navigation_items) {
-      // Возвращаем навигацию по умолчанию с курсами
+      console.warn('⚠️ Навигация не найдена, используем дефолт с курсами');
       return createApiResponse([
         { id: 'home', label: 'Главная', path: '/', visible: true, order: 0 },
         { id: 'events', label: 'События', path: '/events', visible: true, order: 1 },
@@ -334,9 +237,10 @@ export const getNavigationItems = async (): Promise<ApiResponse<any[]>> => {
       ]);
     }
 
+    console.log('✅ Навигация загружена:', siteSettings.data.navigation_items);
     return createApiResponse(siteSettings.data.navigation_items);
   } catch (error) {
-    console.error('Error fetching navigation items:', error);
+    console.error('💥 Ошибка при загрузке навигации:', error);
     return createApiResponse([
       { id: 'home', label: 'Главная', path: '/', visible: true, order: 0 },
       { id: 'events', label: 'События', path: '/events', visible: true, order: 1 },
@@ -349,6 +253,101 @@ export const getNavigationItems = async (): Promise<ApiResponse<any[]>> => {
   }
 };
 
+// Обновление настроек сайта (только новая таблица)
+export const updateSiteSettings = async (settings: any): Promise<ApiResponse<any>> => {
+  try {
+    console.log('💾 Обновляем настройки сайта...');
+    
+    // Получаем текущие активные настройки
+    const { data: currentSettings } = await supabase
+      .from('sh_site_settings')
+      .select('id')
+      .eq('is_active', true)
+      .single();
+
+    if (currentSettings) {
+      // Обновляем существующую запись
+      const { data, error } = await supabase
+        .from('sh_site_settings')
+        .update({
+          ...settings,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', currentSettings.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      console.log('✅ Настройки обновлены:', data);
+      return createApiResponse(data);
+    } else {
+      // Создаем новую запись если активной нет
+      const { data, error } = await supabase
+        .from('sh_site_settings')
+        .insert([{
+          ...settings,
+          is_active: true
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      console.log('✅ Новые настройки созданы:', data);
+      return createApiResponse(data);
+    }
+  } catch (error) {
+    console.error('💥 Ошибка при обновлении настроек:', error);
+    return createApiResponse(null, error);
+  }
+};
+
+// Обновление навигации
+export const updateNavigation = async (navigationItems: any[], navigationStyle?: any): Promise<ApiResponse<any>> => {
+  try {
+    console.log('🔄 Обновляем навигацию...');
+    
+    const updates: any = {
+      navigation_items: navigationItems,
+      updated_at: new Date().toISOString()
+    };
+
+    if (navigationStyle) {
+      updates.navigation_style = navigationStyle;
+    }
+
+    const result = await updateSiteSettings(updates);
+    
+    if (result.error) {
+      throw new Error(result.error);
+    }
+
+    console.log('✅ Навигация обновлена');
+    return result;
+  } catch (error) {
+    console.error('💥 Ошибка при обновлении навигации:', error);
+    return createApiResponse(null, error);
+  }
+};
+
+// Получение или создание настроек сайта
+export const getOrCreateSiteSettings = async (): Promise<ApiResponse<any>> => {
+  try {
+    const settings = await getSiteSettings();
+    
+    if (settings.data) {
+      return settings;
+    }
+    
+    // Если настроек нет, создаем дефолтные
+    return await createDefaultSiteSettings();
+  } catch (error) {
+    console.error('💥 Ошибка при получении/создании настроек:', error);
+    return createApiResponse(null, error);
+  }
+};
+
 // Получение настроек футера
 export const getFooterSettings = async (): Promise<ApiResponse<any>> => {
   try {
@@ -356,14 +355,14 @@ export const getFooterSettings = async (): Promise<ApiResponse<any>> => {
     
     if (siteSettings.error || !siteSettings.data?.footer_settings) {
       return createApiResponse({
-        email: '',
-        phone: '',
-        address: '',
-        workingHours: '',
+        email: 'info@sciencehub.site',
+        phone: '+381 123 456 789',
+        address: 'Science Hub, Панчево, Сербия',
+        workingHours: 'Пн-Пт: 9:00-22:00, Сб-Вс: 10:00-20:00',
         socialLinks: {
-          telegram: '',
-          instagram: '',
-          youtube: ''
+          telegram: 'https://t.me/sciencehub',
+          instagram: 'https://instagram.com/sciencehub',
+          youtube: 'https://youtube.com/sciencehub'
         }
       });
     }
@@ -384,23 +383,3 @@ export const getFooterSettings = async (): Promise<ApiResponse<any>> => {
     });
   }
 };
-
-// Получение настроек топбара
-export const getTopbarSettings = async (): Promise<ApiResponse<any>> => {
-  try {
-    const siteSettings = await getSiteSettings();
-    
-    if (siteSettings.error || !siteSettings.data?.topbar_settings) {
-      return createApiResponse({
-        height: 'standard'
-      });
-    }
-
-    return createApiResponse(siteSettings.data.topbar_settings);
-  } catch (error) {
-    console.error('Error fetching topbar settings:', error);
-    return createApiResponse({
-      height: 'standard'
-    });
-  }
-};   
