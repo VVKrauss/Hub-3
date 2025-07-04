@@ -633,4 +633,4 @@ const CoursesPage = () => {
   );
 };
 
-export default CoursesPage;
+export default CoursesPage;  
