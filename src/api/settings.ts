@@ -383,3 +383,145 @@ export const getFooterSettings = async (): Promise<ApiResponse<any>> => {
     });
   }
 };
+
+// Получение настроек топбара
+export const getTopbarSettings = async (): Promise<ApiResponse<any>> => {
+  try {
+    const siteSettings = await getSiteSettings();
+    
+    if (siteSettings.error || !siteSettings.data?.navigation_style) {
+      return createApiResponse({
+        height: 'standard',
+        alignment: 'center',
+        style: 'classic',
+        spacing: 'normal',
+        showBorder: true,
+        showShadow: true,
+        stickyHeader: true,
+        mobileCollapse: true
+      });
+    }
+
+    // Преобразуем navigation_style в формат, ожидаемый TopBar
+    const navigationStyle = siteSettings.data.navigation_style;
+    return createApiResponse({
+      height: navigationStyle.height || 'standard',
+      alignment: navigationStyle.alignment || 'center',
+      style: navigationStyle.style || 'classic',
+      spacing: navigationStyle.spacing || 'normal',
+      showBorder: navigationStyle.showBorder !== false,
+      showShadow: navigationStyle.showShadow !== false,
+      stickyHeader: navigationStyle.stickyHeader !== false,
+      mobileCollapse: navigationStyle.mobileCollapse !== false
+    });
+  } catch (error) {
+    console.error('Error fetching topbar settings:', error);
+    return createApiResponse({
+      height: 'standard',
+      alignment: 'center',
+      style: 'classic',
+      spacing: 'normal',
+      showBorder: true,
+      showShadow: true,
+      stickyHeader: true,
+      mobileCollapse: true
+    });
+  }
+};
+
+// Получение настроек конкретной страницы
+export const getPageSettings = async (page: string): Promise<ApiResponse<any>> => {
+  try {
+    const siteSettings = await getSiteSettings();
+    
+    if (siteSettings.error || !siteSettings.data) {
+      return getDefaultPageSettings(page);
+    }
+
+    // Возвращаем настройки для конкретной страницы
+    const pageSettingsKey = `${page}_page_settings`;
+    const pageSettings = siteSettings.data[pageSettingsKey];
+    
+    if (pageSettings) {
+      return createApiResponse(pageSettings);
+    }
+    
+    return getDefaultPageSettings(page);
+  } catch (error) {
+    console.error(`Error fetching ${page} page settings:`, error);
+    return getDefaultPageSettings(page);
+  }
+};
+
+// Получение дефолтных настроек страницы
+const getDefaultPageSettings = (page: string): ApiResponse<any> => {
+  const defaults: Record<string, any> = {
+    about: {
+      title: 'О нас',
+      heroImage: '',
+      contactInfo: {},
+      projectInfo: 'Science Hub - это место для научного сообщества в Сербии',
+      teamMembers: [],
+      contributors: [],
+      metaDescription: '',
+      supportPlatforms: []
+    },
+    rent: {
+      title: 'Аренда пространства',
+      photos: [],
+      amenities: [],
+      heroImage: '',
+      pricelist: [],
+      mainPrices: {},
+      contactInfo: {},
+      description: '',
+      metaDescription: '',
+      includedServices: []
+    },
+    coworking: {
+      title: 'Коворкинг',
+      services: [],
+      heroImage: '',
+      description: '',
+      mainServices: [],
+      metaDescription: ''
+    },
+    events: {
+      title: 'Мероприятия',
+      heroImage: '',
+      defaultView: 'grid',
+      showFilters: true,
+      itemsPerPage: 12,
+      metaDescription: ''
+    },
+    speakers: {
+      title: 'Спикеры',
+      showBio: true,
+      heroImage: '',
+      defaultView: 'grid',
+      itemsPerPage: 16,
+      metaDescription: ''
+    },
+    homepage: {
+      hero_section: {
+        style: 'centered',
+        title: 'Science Hub',
+        enabled: true,
+        subtitle: 'Место для научного сообщества',
+        ctaButton: { link: '/about', text: 'Узнать больше' },
+        backgroundImage: ''
+      },
+      about_section: {
+        image: '', order: 1, title: 'О нас', enabled: true, description: ''
+      },
+      events_section: {
+        order: 2, title: 'Ближайшие события', enabled: true, showCount: 3, showFilters: true
+      },
+      services_section: {
+        items: [], order: 3, title: 'Наши услуги', enabled: true
+      }
+    }
+  };
+
+  return createApiResponse(defaults[page] || {});
+};
