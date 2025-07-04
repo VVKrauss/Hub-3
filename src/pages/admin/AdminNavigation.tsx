@@ -1,4 +1,5 @@
 // src/pages/admin/AdminNavigation.tsx - Обновленная версия для работы с sh_site_settings
+// ЧАСТЬ 1 из 2
 import { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { 
@@ -247,6 +248,8 @@ const AdminNavigation = () => {
       setSaving(false);
     }
   };
+
+  // ЧАСТЬ 2 из 2 - Продолжение AdminNavigation.tsx
 
   if (loading) {
     return (
@@ -501,35 +504,7 @@ const AdminNavigation = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div>
-                <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={footerSettings.showCopyright}
-                  onChange={(e) => setFooterSettings(prev => ({ ...prev, showCopyright: e.target.checked }))}
-                />
-                <span className="text-gray-900 dark:text-white">Показывать копирайт</span>
-              </label>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Success message */}
-      {!loading && (
-        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            <span className="text-sm text-green-700 dark:text-green-300">
-              Подключено к новой системе (sh_site_settings). Изменения будут применены к TopBar сразу после сохранения.
-            </span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default AdminNavigation; className="block text-sm font-medium mb-2">Выравнивание</label>
+                <label className="block text-sm font-medium mb-2">Выравнивание</label>
                 <select
                   value={topBarSettings.alignment}
                   onChange={(e) => setTopBarSettings(prev => ({ ...prev, alignment: e.target.value as any }))}
@@ -744,4 +719,32 @@ export default AdminNavigation; className="block text-sm font-medium mb-2">Вы�
                 />
               </div>
 
-              <label
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={footerSettings.showCopyright}
+                  onChange={(e) => setFooterSettings(prev => ({ ...prev, showCopyright: e.target.checked }))}
+                />
+                <span className="text-gray-900 dark:text-white">Показывать копирайт</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success message */}
+      {!loading && (
+        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+            <span className="text-sm text-green-700 dark:text-green-300">
+              Подключено к новой системе (sh_site_settings). Изменения будут применены к TopBar сразу после сохранения.
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default AdminNavigation;
