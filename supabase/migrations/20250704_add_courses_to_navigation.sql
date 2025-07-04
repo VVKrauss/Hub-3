@@ -57,4 +57,4 @@ SELECT
 WHERE NOT EXISTS (SELECT 1 FROM site_settings LIMIT 1);
 
 -- Комментарий
-COMMENT ON COLUMN site_settings.navigation_items IS 'JSON массив элементов навигации с курсами';
+COMMENT ON COLUMN site_settings.navigation_items IS 'JSON массив элементов навигации с курсами'; 
