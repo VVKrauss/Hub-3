@@ -29,11 +29,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const checkUser = async () => {
       try {
-        console.log('Checking auth session...');
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
-          console.error('Auth session error:', error);
           if (mounted) {
             setUser(null);
             setLoading(false);
@@ -41,8 +39,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
           return;
         }
-
-        console.log('Session found:', !!session);
         
         if (mounted) {
           setUser(session?.user ? {
@@ -71,8 +67,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Настраиваем слушатель изменений состояния аутентификации
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state changed:', event, !!session);
-        
         if (mounted) {
           if (session?.user) {
             setUser({
@@ -102,7 +96,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const timeout = setTimeout(() => {
       if (loading && !initialCheckDone) {
-        console.warn('Auth check timeout, setting loading to false');
         setLoading(false);
         setInitialCheckDone(true);
       }
