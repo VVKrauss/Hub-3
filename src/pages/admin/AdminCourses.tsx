@@ -669,4 +669,4 @@ const AdminCourses = () => {
   );
 };
 
-export default AdminCourses;
+export default AdminCourses; 
