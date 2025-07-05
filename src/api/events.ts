@@ -181,110 +181,71 @@ export const getEventById = async (eventId: string): Promise<ApiResponse<EventWi
   }
 };
 
-// Main function to get events with pagination and filters
-export const getEvents = async (
-  filters: {
-    event_type?: string;
-    status?: string;
-    search?: string;
-    featured?: boolean;
-    upcoming?: boolean;
-    past?: boolean;
-  } = {},
-  page: number = 1,
-  limit: number = 12
-): Promise<PaginatedResponse<EventWithDetails>> => {
-  try {
-    console.log('Fetching events with filters:', filters, 'page:', page, 'limit:', limit);
+// src/api/events.ts - БЫСТРОЕ ИСПРАВЛЕНИЕ
 
+export const getEvents = async (filters = {}, page = 1, limit = 12) => {
+  try {
     let query = supabase
       .from('sh_events')
-      .select(`
-        *,
-        sh_event_speakers (
-          id,
-          role,
-          display_order,
-          speaker_id
-        )
-      `, { count: 'exact' })
+      .select('*, sh_event_speakers(id, role, display_order, speaker_id)')
       .eq('is_public', true)
       .in('status', ['active', 'past']);
 
-    // Apply filters
-    if (filters.event_type) {
-      query = query.eq('event_type', filters.event_type);
+    // УБИРАЕМ проблемный фильтр по event_type
+    // if (filters.event_type?.length) {
+    //   query = query.in('event_type', filters.event_type);
+    // }
+
+    if (filters.search?.trim()) {
+      query = query.ilike('title', `%${filters.search}%`);
     }
 
-    if (filters.status) {
-      query = query.eq('status', filters.status);
-    }
-
-    if (filters.featured) {
-      query = query.eq('is_featured', true);
-    }
-
-    if (filters.search) {
-      query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
-    }
-
-    if (filters.upcoming) {
-      query = query.gte('start_at', new Date().toISOString());
-    }
-
-    if (filters.past) {
-      query = query.lt('start_at', new Date().toISOString());
-    }
-
-    // Apply pagination
     const from = (page - 1) * limit;
-    const to = from + limit - 1;
-    query = query.range(from, to);
+    query = query.range(from, from + limit - 1).order('start_at', { ascending: false });
 
-    // Order by start date (upcoming first, then past events)
-    query = query.order('start_at', { ascending: false });
-
-    const { data, error, count } = await query;
-
+    const { data, error } = await query;
     if (error) throw error;
 
-    // Enrich events with speaker data and registration counts
-    const eventsWithDetails = await Promise.all(
-      (data || []).map(async (event) => {
-        try {
-          // Get speakers data
-          const speakersWithData = await enrichEventSpeakers(event.sh_event_speakers || []);
-          
-          // Get registration count
-          const registrationsCount = await getRegistrationCounts(event.id);
+    return {
+      data: data || [],
+      hasNext: (data?.length || 0) === limit,
+    };
+  } catch (error) {
+    return { data: [], hasNext: false, error: error.message };
+  }
+};// src/api/events.ts - БЫСТРОЕ ИСПРАВЛЕНИЕ
 
-          const availableSpots = event.max_attendees 
-            ? Math.max(0, event.max_attendees - registrationsCount)
-            : null;
+export const getEvents = async (filters = {}, page = 1, limit = 12) => {
+  try {
+    let query = supabase
+      .from('sh_events')
+      .select('*, sh_event_speakers(id, role, display_order, speaker_id)')
+      .eq('is_public', true)
+      .in('status', ['active', 'past']);
 
-          return {
-            ...event,
-            sh_event_speakers: speakersWithData,
-            speakers: speakersWithData, // Alias for backward compatibility
-            schedule: [], // Can be loaded separately if needed
-            ticket_types: [], // Can be loaded separately if needed
-            registrations_count: registrationsCount,
-            available_spots: availableSpots
-          };
-        } catch (error) {
-          console.warn(`Error loading details for event ${event.id}:`, error);
-          return {
-            ...event,
-            sh_event_speakers: [],
-            speakers: [],
-            schedule: [],
-            ticket_types: [],
-            registrations_count: 0,
-            available_spots: null
-          };
-        }
-      })
-    );
+    // УБИРАЕМ проблемный фильтр по event_type
+    // if (filters.event_type?.length) {
+    //   query = query.in('event_type', filters.event_type);
+    // }
+
+    if (filters.search?.trim()) {
+      query = query.ilike('title', `%${filters.search}%`);
+    }
+
+    const from = (page - 1) * limit;
+    query = query.range(from, from + limit - 1).order('start_at', { ascending: false });
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    return {
+      data: data || [],
+      hasNext: (data?.length || 0) === limit,
+    };
+  } catch (error) {
+    return { data: [], hasNext: false, error: error.message };
+  }
+}
 
     const totalPages = Math.ceil((count || 0) / limit);
 
