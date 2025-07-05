@@ -7,7 +7,6 @@ import { toast } from 'react-hot-toast';
 import { Tooltip } from 'react-tooltip';
 
 
-
 // === КОНСТАНТЫ ===
 const WORKING_HOURS = { start: 9, end: 23 };
 const VIEW_MODES = ['day', 'week', 'month'] as const;
