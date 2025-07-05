@@ -82,3 +82,4 @@ export const getEventsBySpeaker = async (
     return createApiResponse(null, error);
   }
 };
+
