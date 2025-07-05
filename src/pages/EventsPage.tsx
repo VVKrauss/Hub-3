@@ -264,15 +264,8 @@ const EventsSlideshow = ({ events }: { events: EventWithDetails[] }) => {
 
 // КОМПОНЕНТ ПРОШЕДШИХ МЕРОПРИЯТИЙ
 const PastEventsPanel = ({ events }: { events: EventWithDetails[] }) => {
-  // Фильтруем только действительно прошедшие события
-  const pastEvents = events.filter(event => {
-    if (event.status === 'past') return true;
-    if (event.end_at && new Date(event.end_at) < new Date()) return true;
-    if (!event.end_at && new Date(event.start_at) < new Date()) return true;
-    return false;
-  });
-
-  if (pastEvents.length === 0) return null;
+  // Теперь просто показываем события со статусом 'past' - без дополнительных проверок
+  if (events.length === 0) return null;
 
   return (
     <div className="bg-white dark:bg-dark-800 rounded-xl shadow-lg p-6">
@@ -282,7 +275,7 @@ const PastEventsPanel = ({ events }: { events: EventWithDetails[] }) => {
       </h3>
       
       <div className="space-y-3">
-        {pastEvents.slice(0, 10).map((event) => (
+        {events.slice(0, 10).map((event) => (
           <Link
             key={event.id}
             to={`/events/${event.id}`}
@@ -310,10 +303,10 @@ const PastEventsPanel = ({ events }: { events: EventWithDetails[] }) => {
         ))}
       </div>
       
-      {pastEvents.length > 10 && (
+      {events.length > 10 && (
         <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
           <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
-            И ещё {pastEvents.length - 10} мероприятий...
+            И ещё {events.length - 10} мероприятий...
           </p>
         </div>
       )}
@@ -323,14 +316,9 @@ const PastEventsPanel = ({ events }: { events: EventWithDetails[] }) => {
 
 // КОМПОНЕНТ КАРТОЧКИ СОБЫТИЯ
 const EventCard = ({ event, viewMode }: { event: EventWithDetails; viewMode: ViewMode }) => {
+  // Теперь просто проверяем статус - никаких дополнительных проверок дат!
   const isEventInPast = () => {
-    // Проверяем и по статусу, и по дате
-    if (event.status === 'past') return true;
-    if (event.end_at) {
-      return new Date(event.end_at) < new Date();
-    }
-    // Если нет end_at, проверяем start_at
-    return new Date(event.start_at) < new Date();
+    return event.status === 'past';
   };
 
   if (viewMode === 'list') {
@@ -585,14 +573,14 @@ const EventsPage = () => {
 
         setActiveEvents(activeEventsData || []);
 
-        // Загружаем прошедшие события
+        // Загружаем прошедшие события - теперь просто по статусу
         const { data: pastEventsData } = await supabase
           .from('sh_events')
           .select(`
             id, title, start_at, end_at, cover_image_url, status
           `)
           .eq('is_public', true)
-          .or('status.eq.past,end_at.lt.' + new Date().toISOString())
+          .eq('status', 'past')
           .order('start_at', { ascending: false })
           .limit(15);
 
@@ -610,15 +598,9 @@ const EventsPage = () => {
   const filterAndSortEvents = () => {
     let filtered = [...events];
 
-    // Исключаем прошедшие события из основного списка, если не включен фильтр "показать прошедшие"
+    // Теперь просто исключаем прошедшие события по статусу - без проверок дат!
     if (!filters.showPast) {
-      filtered = filtered.filter(event => {
-        // Проверяем статус и дату
-        if (event.status === 'past') return false;
-        if (event.end_at && new Date(event.end_at) < new Date()) return false;
-        if (!event.end_at && new Date(event.start_at) < new Date()) return false;
-        return true;
-      });
+      filtered = filtered.filter(event => event.status !== 'past');
     }
 
     // Поиск
