@@ -65,6 +65,33 @@ const getEventTypeLabel = (eventType: string): string => {
   return EVENT_TYPE_LABELS[eventType] || eventType;
 };
 
+// ФУНКЦИЯ ДЛЯ ПОЛУЧЕНИЯ ЯЗЫКА
+const getEventLanguage = (event: any): string => {
+  if (event.language_code) {
+    const languageMap: Record<string, string> = {
+      'ru': 'РУ',
+      'en': 'EN', 
+      'sr': 'СР',
+      'de': 'DE',
+      'fr': 'FR',
+      'es': 'ES'
+    };
+    return languageMap[event.language_code] || event.language_code.toUpperCase();
+  }
+  if (event.languages && event.languages.length > 0) {
+    return event.languages.join(', ').toUpperCase();
+  }
+  return 'РУ'; // По умолчанию
+};
+
+// ФУНКЦИЯ ДЛЯ ПОЛУЧЕНИЯ ВОЗРАСТНОЙ КАТЕГОРИИ
+const getAgeCategory = (event: any): string => {
+  if (event.age_category) {
+    return event.age_category;
+  }
+  return '18+'; // По умолчанию
+};
+
 // ФУНКЦИЯ ДЛЯ ПОЛУЧЕНИЯ ИЗОБРАЖЕНИЯ СОБЫТИЯ
 const getEventImage = (event: any): string => {
   if (event.cover_image_url) {
@@ -327,6 +354,12 @@ const EventCard = ({ event, viewMode }: { event: EventWithDetails; viewMode: Vie
                   <span className="inline-flex items-center bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 px-2 py-1 rounded text-sm font-medium">
                     {getEventTypeLabel(event.event_type)}
                   </span>
+                  <span className="inline-flex items-center bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded text-xs font-medium">
+                    {getEventLanguage(event)}
+                  </span>
+                  <span className="inline-flex items-center bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-2 py-1 rounded text-xs font-medium">
+                    {getAgeCategory(event)}
+                  </span>
                   {isEventInPast() && (
                     <span className="inline-flex items-center bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 px-2 py-1 rounded text-sm">
                       Завершено
@@ -397,10 +430,18 @@ const EventCard = ({ event, viewMode }: { event: EventWithDetails; viewMode: Vie
             Завершено
           </div>
         )}
-        <div className="absolute top-3 right-3">
+        <div className="absolute top-3 right-3 flex flex-col gap-1 items-end">
           <span className="bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300 px-2 py-1 rounded-lg text-xs font-medium">
             {getEventTypeLabel(event.event_type)}
           </span>
+          <div className="flex gap-1">
+            <span className="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-lg text-xs font-medium">
+              {getEventLanguage(event)}
+            </span>
+            <span className="bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 px-2 py-1 rounded-lg text-xs font-medium">
+              {getAgeCategory(event)}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -826,7 +867,10 @@ const EventsPage = () => {
                     </div>
                   )}
                 </div>
+              </div>
 
+              {/* Отступ между фильтрами и списком событий */}
+              <div className="mt-8">
                 {/* Список событий */}
                 {filteredAndSortedEvents.length > 0 ? (
                   <>
@@ -880,11 +924,11 @@ const EventsPage = () => {
                   </div>
                 )}
               </div>
+            </div>
 
-              {/* ПРАВАЯ КОЛОНКА - ПРОШЕДШИЕ МЕРОПРИЯТИЯ */}
-              <div className="w-80 flex-shrink-0">
-                <PastEventsPanel events={pastEvents} />
-              </div>
+            {/* ПРАВАЯ КОЛОНКА - ПРОШЕДШИЕ МЕРОПРИЯТИЯ */}
+            <div className="w-80 flex-shrink-0">
+              <PastEventsPanel events={pastEvents} />
             </div>
           </div>
         </div>
