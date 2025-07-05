@@ -17,7 +17,7 @@ const Layout = ({ children }: LayoutProps) => {
         {children}
       </main>
       <LoadingDebug />
-      <Footer />
+      <Footer /> 
     </div>
   );
 };
