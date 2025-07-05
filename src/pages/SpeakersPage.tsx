@@ -1,16 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Search, Heart, Filter } from 'lucide-react';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase';
 import Layout from '../components/layout/Layout';
 import PageHeader from '../components/ui/PageHeader';
 import SpeakersGrid, { Speaker } from '../components/speakers/SpeakersGrid';
 import { useAuth } from '../contexts/AuthContext';
 import { useFavoriteSpeakers } from '../hooks/useFavorites';
 
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
 
 type SortOption = 'name-asc' | 'name-desc' | 'field-asc' | 'field-desc';
 type FilterOption = 'all' | 'favorites';
