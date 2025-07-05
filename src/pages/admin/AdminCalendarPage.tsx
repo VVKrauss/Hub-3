@@ -1,15 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { createClient } from '@supabase/supabase-js';
 import { Calendar, ChevronLeft, ChevronRight, Grid, List, Plus } from 'lucide-react';
 import { format, addDays, addWeeks, addMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, isToday, setHours, setMinutes, parseISO, isBefore } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { toast } from 'react-hot-toast';
 import { Tooltip } from 'react-tooltip';
+import { supabase } from '../lib/supabase';
 
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
 
 // === КОНСТАНТЫ ===
 const WORKING_HOURS = { start: 9, end: 23 };
