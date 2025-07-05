@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../../lib/supabase';  // ✅ Правильный путь
 import { Plus, Search, Edit, Eye, Calendar, Users, MapPin, Trash2, Filter, Loader2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useNavigate, Link } from 'react-router-dom';
