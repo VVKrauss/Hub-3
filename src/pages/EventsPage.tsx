@@ -1,34 +1,132 @@
-// src/pages/EventsPage.tsx - НОВАЯ ВЕРСИЯ с современным дизайном
-
-import { useState, useEffect } from 'react';
-import { Search, Filter, Grid, List, Calendar, Clock, MapPin, Users, Tag } from 'lucide-react';
-import Layout from '../components/layout/Layout';
-import { getEvents } from '../api/events';
-import { getSupabaseImageUrl } from '../utils/imageUtils';
-import { formatRussianDate, formatTimeFromTimestamp } from '../utils/dateTimeUtils';
-import type { EventWithDetails } from '../types/database';
+// src/pages/EventsPage.tsx - ПОЛНАЯ ИСПРАВЛЕННАЯ ВЕРСИЯ
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { Calendar, Clock, MapPin, Users, Grid, List, Search, Filter, ChevronDown, X } from 'lucide-react';
+import Layout from '../components/layout/Layout';
+import { supabase } from '../lib/supabase';
+import { formatRussianDate, formatTimeFromTimestamp } from '../utils/dateTimeUtils';
+import { getSupabaseImageUrl } from '../utils/imageUtils';
+
+// ЛЕЙБЛЫ ДЛЯ ПРАВИЛЬНОГО ОТОБРАЖЕНИЯ
+const EVENT_TYPE_LABELS: Record<string, string> = {
+  'lecture': 'Лекция',
+  'workshop': 'Мастер-класс',
+  'discussion': 'Дискуссия',
+  'conference': 'Конференция',
+  'seminar': 'Семинар',
+  'festival': 'Фестиваль',
+  'concert': 'Концерт',
+  'standup': 'Стенд-ап',
+  'excursion': 'Экскурсия',
+  'quiz': 'Квиз',
+  'swap': 'Своп',
+  'meetup': 'Митап',
+  'webinar': 'Вебинар',
+  'training': 'Тренинг',
+  'other': 'Другое',
+  // Legacy значения
+  'Lecture': 'Лекция',
+  'Workshop': 'Мастер-класс',
+  'Conference': 'Конференция',
+  'Seminar': 'Семинар',
+  'Discussion': 'Дискуссия',
+  'Festival': 'Фестиваль',
+  'Concert': 'Концерт',
+  'Standup': 'Стенд-ап',
+  'Excursion': 'Экскурсия',
+  'Quiz': 'Квиз',
+  'Swap': 'Своп',
+  'Other': 'Другое'
+};
+
+const LANGUAGE_LABELS: Record<string, string> = {
+  'sr': 'Српски',
+  'en': 'English',
+  'ru': 'Русский',
+  'Русский': 'Русский',
+  'Английский': 'English',
+  'Сербский': 'Српски'
+};
+
+// ФУНКЦИИ ДЛЯ ПРАВИЛЬНОГО ОТОБРАЖЕНИЯ ДАННЫХ
+const getEventPrice = (event: any): string => {
+  if (event.payment_type === 'free') return 'Бесплатно';
+  if (event.payment_type === 'donation') return 'Донейшн';
+  
+  if (event.payment_type === 'paid') {
+    if (event.base_price && event.base_price > 0) {
+      return `${event.base_price} ${event.currency || 'RSD'}`;
+    }
+    if (event.price && event.price > 0) {
+      return `${event.price} ${event.currency || 'RSD'}`;
+    }
+    return 'Цена уточняется';
+  }
+  
+  if (event.price === 0 || event.price === null) return 'Бесплатно';
+  if (event.price && event.price > 0) {
+    return `${event.price} ${event.currency || 'RSD'}`;
+  }
+  return 'Бесплатно';
+};
+
+const getEventTypeLabel = (eventType: string): string => {
+  return EVENT_TYPE_LABELS[eventType] || eventType;
+};
+
+const getEventLanguage = (event: any): string => {
+  if (event.language_code) {
+    return LANGUAGE_LABELS[event.language_code] || event.language_code;
+  }
+  if (event.languages && Array.isArray(event.languages) && event.languages.length > 0) {
+    const firstLang = event.languages[0];
+    return LANGUAGE_LABELS[firstLang] || firstLang;
+  }
+  return 'Не указан';
+};
 
 type ViewMode = 'grid' | 'list';
-type SortOption = 'date_asc' | 'date_desc' | 'title_asc' | 'title_desc';
+type SortBy = 'date' | 'title' | 'price' | 'popularity';
+
+interface EventWithDetails {
+  id: string;
+  title: string;
+  short_description?: string;
+  description?: string;
+  start_at: string;
+  end_at: string;
+  event_type: string;
+  payment_type: string;
+  base_price?: number;
+  price?: number;
+  currency: string;
+  cover_image_url?: string;
+  bg_image?: string;
+  venue_name?: string;
+  language_code?: string;
+  languages?: string[];
+  registrations_count?: number;
+  status: string;
+  age_category?: string;
+}
 
 const EventsPage = () => {
-  // Состояние
   const [events, setEvents] = useState<EventWithDetails[]>([]);
+  const [filteredAndSortedEvents, setFilteredAndSortedEvents] = useState<EventWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Фильтры и сортировка
-  const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
-  const [sortBy, setSortBy] = useState<SortOption>('date_asc');
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
-  const [showFilters, setShowFilters] = useState(false);
-  
-  // Пагинация
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(1);
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [sortBy, setSortBy] = useState<SortBy>('date');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filters, setFilters] = useState({
+    eventType: '',
+    paymentType: '',
+    dateRange: '',
+    showPast: false
+  });
+  const [showFilters, setShowFilters] = useState(false);
 
   // Загрузка событий
   const fetchEvents = async (pageNum: number = 1, append: boolean = false) => {
@@ -36,472 +134,195 @@ const EventsPage = () => {
       if (pageNum === 1) setLoading(true);
       else setLoadingMore(true);
 
-      const filters = {
-        search: searchQuery,
-        event_type: selectedTypes,
-        status: ['active', 'past'] as const
-      };
+      let query = supabase
+        .from('sh_events')
+        .select(`
+          id, title, short_description, description, start_at, end_at, 
+          event_type, payment_type, base_price, currency, cover_image_url,
+          venue_name, language_code, status, age_category
+        `)
+        .eq('is_public', true)
+        .order('start_at', { ascending: false })
+        .range((pageNum - 1) * 20, pageNum * 20 - 1);
 
-      const result = await getEvents(filters, pageNum, 12);
-
-      if (result.error) {
-        throw new Error(result.error);
+      // Фильтр по статусу (показывать прошедшие или нет)
+      if (!filters.showPast) {
+        query = query.eq('status', 'active');
       }
 
-      if (result.data) {
-        if (append) {
-          setEvents(prev => [...prev, ...result.data]);
-        } else {
-          setEvents(result.data);
+      const { data: newEvents, error } = await query;
+
+      if (error) {
+        // Fallback к старой таблице events
+        let legacyQuery = supabase
+          .from('events')
+          .select('*')
+          .order('start_at', { ascending: false })
+          .range((pageNum - 1) * 20, pageNum * 20 - 1);
+
+        if (!filters.showPast) {
+          legacyQuery = legacyQuery.eq('status', 'active');
         }
-        setHasMore(result.hasNext);
+
+        const { data: legacyEvents, error: legacyError } = await legacyQuery;
+        
+        if (legacyError) throw legacyError;
+        
+        if (append) {
+          setEvents(prev => [...prev, ...(legacyEvents || [])]);
+        } else {
+          setEvents(legacyEvents || []);
+        }
+        setHasMore((legacyEvents || []).length === 20);
+      } else {
+        if (append) {
+          setEvents(prev => [...prev, ...(newEvents || [])]);
+        } else {
+          setEvents(newEvents || []);
+        }
+        setHasMore((newEvents || []).length === 20);
       }
-    } catch (err) {
-      console.error('Error fetching events:', err);
-      setError('Ошибка при загрузке мероприятий');
+    } catch (error) {
+      console.error('Error fetching events:', error);
     } finally {
       setLoading(false);
       setLoadingMore(false);
     }
   };
 
-  // Эффекты
+  // Фильтрация и сортировка
   useEffect(() => {
-    setPage(1);
-    fetchEvents(1, false);
-  }, [searchQuery, selectedTypes, sortBy]);
+    let filtered = [...events];
 
-  // Обработчики
+    // Поиск
+    if (searchQuery) {
+      filtered = filtered.filter(event => 
+        event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (event.description && event.description.toLowerCase().includes(searchQuery.toLowerCase()))
+      );
+    }
+
+    // Фильтры
+    if (filters.eventType) {
+      filtered = filtered.filter(event => event.event_type === filters.eventType);
+    }
+
+    if (filters.paymentType) {
+      filtered = filtered.filter(event => event.payment_type === filters.paymentType);
+    }
+
+    // Сортировка
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'date':
+          return new Date(b.start_at).getTime() - new Date(a.start_at).getTime();
+        case 'title':
+          return a.title.localeCompare(b.title);
+        case 'price':
+          const priceA = a.base_price || a.price || 0;
+          const priceB = b.base_price || b.price || 0;
+          return priceA - priceB;
+        default:
+          return 0;
+      }
+    });
+
+    setFilteredAndSortedEvents(filtered);
+  }, [events, searchQuery, filters, sortBy]);
+
+  useEffect(() => {
+    fetchEvents();
+  }, [filters.showPast]);
+
   const handleLoadMore = () => {
     const nextPage = page + 1;
     setPage(nextPage);
     fetchEvents(nextPage, true);
   };
 
-  const handleTypeToggle = (type: string) => {
-    setSelectedTypes(prev => 
-      prev.includes(type) 
-        ? prev.filter(t => t !== type)
-        : [...prev, type]
-    );
-  };
-
   const clearFilters = () => {
-    setSelectedTypes([]);
     setSearchQuery('');
+    setFilters({
+      eventType: '',
+      paymentType: '',
+      dateRange: '',
+      showPast: false
+    });
   };
 
-  // Получаем уникальные типы событий
-  const eventTypes = Array.from(new Set(events.map(e => e.event_type)));
+  // Компонент карточки события
+  const EventCard = ({ event, viewMode }: { event: EventWithDetails; viewMode: ViewMode }) => {
+    const isGridMode = viewMode === 'grid';
+    const isPast = new Date(event.end_at || event.start_at) < new Date();
 
-  // Фильтрация и сортировка
-  const filteredAndSortedEvents = events
-    .filter(event => {
-      // Поиск
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        return event.title.toLowerCase().includes(query) ||
-               event.description?.toLowerCase().includes(query);
-      }
-      return true;
-    })
-    .sort((a, b) => {
-      switch (sortBy) {
-        case 'date_asc':
-          return new Date(a.start_at).getTime() - new Date(b.start_at).getTime();
-        case 'date_desc':
-          return new Date(b.start_at).getTime() - new Date(a.start_at).getTime();
-        case 'title_asc':
-          return a.title.localeCompare(b.title);
-        case 'title_desc':
-          return b.title.localeCompare(a.title);
-        default:
-          return 0;
-      }
-    });
-
-  if (loading && page === 1) {
-    return (
-      <Layout>
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-        </div>
-      </Layout>
-    );
-  }
-
-  if (error) {
-    return (
-      <Layout>
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <p className="text-red-600 mb-4">{error}</p>
-            <button 
-              onClick={() => fetchEvents(1, false)}
-              className="btn-primary"
-            >
-              Попробовать снова
-            </button>
-          </div>
-        </div>
-      </Layout>
-    );
-  }
-
-  return (
-    <Layout>
-      {/* Заголовок страницы */}
-      <div className="bg-gradient-to-r from-primary-600 to-primary-800 text-white">
-        <div className="container mx-auto px-4 py-16">
-          <h1 className="text-4xl font-bold mb-4">Мероприятия</h1>
-          <p className="text-xl opacity-90">
-            Открывайте новые знания вместе с нами
-          </p>
-        </div>
-      </div>
-
-      <main className="bg-gray-50 dark:bg-dark-900 min-h-screen">
-        <div className="container mx-auto px-4 py-8">
-          {/* Панель управления */}
-          <div className="bg-white dark:bg-dark-800 rounded-xl shadow-lg p-6 mb-8">
-            {/* Поиск и кнопки */}
-            <div className="flex flex-col lg:flex-row gap-4 mb-6">
-              {/* Поиск */}
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Поиск мероприятий..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                />
-              </div>
-
-              {/* Кнопки управления */}
-              <div className="flex gap-3">
-                {/* Фильтры */}
-                <button
-                  onClick={() => setShowFilters(!showFilters)}
-                  className={`flex items-center gap-2 px-4 py-3 rounded-lg border transition-colors ${
-                    selectedTypes.length > 0
-                      ? 'bg-primary-100 border-primary-300 text-primary-700 dark:bg-primary-900 dark:border-primary-600 dark:text-primary-300'
-                      : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-600'
-                  }`}
-                >
-                  <Filter className="h-5 w-5" />
-                  Фильтры
-                  {selectedTypes.length > 0 && (
-                    <span className="bg-primary-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                      {selectedTypes.length}
-                    </span>
-                  )}
-                </button>
-
-                {/* Сортировка */}
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as SortOption)}
-                  className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="date_asc">Дата: сначала ближайшие</option>
-                  <option value="date_desc">Дата: сначала дальние</option>
-                  <option value="title_asc">Название: А-Я</option>
-                  <option value="title_desc">Название: Я-А</option>
-                </select>
-
-                {/* Вид отображения */}
-                <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
-                  <button
-                    onClick={() => setViewMode('grid')}
-                    className={`p-3 ${viewMode === 'grid' 
-                      ? 'bg-primary-500 text-white' 
-                      : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                    }`}
-                  >
-                    <Grid className="h-5 w-5" />
-                  </button>
-                  <button
-                    onClick={() => setViewMode('list')}
-                    className={`p-3 ${viewMode === 'list' 
-                      ? 'bg-primary-500 text-white' 
-                      : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                    }`}
-                  >
-                    <List className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Панель фильтров */}
-            {showFilters && (
-              <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-                <div className="flex flex-wrap gap-3 mb-4">
-                  <h3 className="font-medium text-gray-900 dark:text-white w-full mb-2">
-                    Типы мероприятий:
-                  </h3>
-                  {eventTypes.map(type => (
-                    <button
-                      key={type}
-                      onClick={() => handleTypeToggle(type)}
-                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        selectedTypes.includes(type)
-                          ? 'bg-primary-500 text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
-                      }`}
-                    >
-                      {type}
-                    </button>
-                  ))}
-                </div>
-                {selectedTypes.length > 0 && (
-                  <button
-                    onClick={clearFilters}
-                    className="text-primary-600 dark:text-primary-400 text-sm hover:underline"
-                  >
-                    Очистить фильтры
-                  </button>
-                )}
+    if (isGridMode) {
+      return (
+        <Link 
+          to={`/events/${event.id}`}
+          className="group bg-white dark:bg-dark-800 rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1"
+        >
+          <div className="relative h-48 overflow-hidden">
+            <img
+              src={event.cover_image_url 
+                ? getSupabaseImageUrl(event.cover_image_url)
+                : event.bg_image 
+                  ? getSupabaseImageUrl(event.bg_image)
+                  : 'https://via.placeholder.com/400x200?text=No+Image'
+              }
+              alt={event.title}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            />
+            {isPast && (
+              <div className="absolute top-3 left-3 bg-gray-500 text-white px-2 py-1 rounded-lg text-xs font-medium">
+                Завершено
               </div>
             )}
-
-            {/* Активные фильтры */}
-            {selectedTypes.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {selectedTypes.map(type => (
-                  <span
-                    key={type}
-                    className="inline-flex items-center gap-1 px-3 py-1 bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300 rounded-full text-sm"
-                  >
-                    {type}
-                    <button
-                      onClick={() => handleTypeToggle(type)}
-                      className="hover:text-primary-900 dark:hover:text-primary-100"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
+            <div className="absolute top-3 right-3 bg-primary-500 text-white px-2 py-1 rounded-lg text-xs font-medium">
+              {getEventTypeLabel(event.event_type)}
+            </div>
           </div>
 
-          {/* Список событий */}
-          {filteredAndSortedEvents.length === 0 ? (
-            <div className="text-center py-12">
-              <Calendar className="h-16 w-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                Мероприятия не найдены
-              </h3>
-              <p className="text-gray-500 dark:text-gray-400 mb-4">
-                Попробуйте изменить фильтры или поисковый запрос
-              </p>
-              <button
-                onClick={clearFilters}
-                className="btn-primary"
-              >
-                Очистить фильтры
-              </button>
-            </div>
-          ) : (
-            <>
-              {/* Сетка событий */}
-              <div className={viewMode === 'grid' 
-                ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
-                : 'space-y-4'
-              }>
-                {filteredAndSortedEvents.map(event => (
-                  <EventCard 
-                    key={event.id} 
-                    event={event} 
-                    viewMode={viewMode}
-                  />
-                ))}
+          <div className="p-6">
+            <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-2 line-clamp-2 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+              {event.title}
+            </h3>
+            
+            <p className="text-gray-600 dark:text-gray-400 text-sm mb-4 line-clamp-2">
+              {event.short_description || event.description}
+            </p>
+
+            <div className="space-y-2 mb-4">
+              <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                <Calendar className="h-4 w-4 mr-2" />
+                {formatRussianDate(event.start_at)}
+              </div>
+              
+              <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                <Clock className="h-4 w-4 mr-2" />
+                {formatTimeFromTimestamp(event.start_at)}
               </div>
 
-              {/* Кнопка "Загрузить еще" */}
-              {hasMore && (
-                <div className="text-center mt-8">
-                  <button
-                    onClick={handleLoadMore}
-                    disabled={loadingMore}
-                    className="btn-primary disabled:opacity-50"
-                  >
-                    {loadingMore ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Загрузка...
-                      </>
-                    ) : (
-                      'Загрузить еще'
-                    )}
-                  </button>
+              {event.venue_name && (
+                <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                  <MapPin className="h-4 w-4 mr-2" />
+                  {event.venue_name}
                 </div>
               )}
-            </>
-          )}
-        </div>
-      </main>
-    </Layout>
-  );
-};
 
-// Компонент карточки события
-const EventCard = ({ event, viewMode }: { 
-  event: EventWithDetails; 
-  viewMode: ViewMode 
-}) => {
-  const isGridMode = viewMode === 'grid';
-  const isPast = new Date(event.end_at) < new Date();
-
-  if (isGridMode) {
-    return (
-      <Link 
-        to={`/events/${event.id}`}
-        className="group bg-white dark:bg-dark-800 rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1"
-      >
-        {/* Изображение */}
-        <div className="relative h-48 overflow-hidden">
-          <img
-            src={event.cover_image_url 
-              ? getSupabaseImageUrl(event.cover_image_url)
-              : 'https://via.placeholder.com/400x200?text=No+Image'
-            }
-            alt={event.title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-          />
-          {isPast && (
-            <div className="absolute top-3 left-3 bg-gray-500 text-white px-2 py-1 rounded-lg text-xs font-medium">
-              Завершено
-            </div>
-          )}
-          <div className="absolute top-3 right-3 bg-primary-500 text-white px-2 py-1 rounded-lg text-xs font-medium">
-            {event.event_type}
-          </div>
-        </div>
-
-        {/* Контент */}
-        <div className="p-6">
-          <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-2 line-clamp-2 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
-            {event.title}
-          </h3>
-          
-          <p className="text-gray-600 dark:text-gray-400 text-sm mb-4 line-clamp-2">
-            {event.short_description || event.description}
-          </p>
-
-          <div className="space-y-2">
-            <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-              <Calendar className="h-4 w-4 mr-2" />
-              {formatRussianDate(event.start_at)}
-            </div>
-            
-            <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-              <Clock className="h-4 w-4 mr-2" />
-              {formatTimeFromTimestamp(event.start_at)}
+              {event.registrations_count !== undefined && (
+                <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                  <Users className="h-4 w-4 mr-2" />
+                  {event.registrations_count} участников
+                </div>
+              )}
             </div>
 
-            {event.venue_name && (
-              <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                <MapPin className="h-4 w-4 mr-2" />
-                {event.venue_name}
-              </div>
-            )}
-
-            {event.registrations_count !== undefined && (
-              <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                <Users className="h-4 w-4 mr-2" />
-                {event.registrations_count} участников
-              </div>
-            )}
-          </div>
-
-          {/* Цена */}
-          {event.payment_type === 'paid' && event.base_price > 0 && (
             <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
               <span className="text-lg font-bold text-primary-600 dark:text-primary-400">
-                {event.base_price} {event.currency}
+                {getEventPrice(event)}
               </span>
             </div>
-          )}
-        </div>
-      </Link>
-    );
-  }
-
-  // Режим списка
-  return (
-    <Link 
-      to={`/events/${event.id}`}
-      className="group bg-white dark:bg-dark-800 rounded-xl shadow-lg p-6 hover:shadow-xl transition-all duration-300 flex gap-6"
-    >
-      {/* Изображение */}
-      <div className="relative w-32 h-24 flex-shrink-0 overflow-hidden rounded-lg">
-        <img
-          src={event.cover_image_url 
-            ? getSupabaseImageUrl(event.cover_image_url)
-            : 'https://via.placeholder.com/200x150?text=No+Image'
-          }
-          alt={event.title}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-        />
-        {isPast && (
-          <div className="absolute top-1 left-1 bg-gray-500 text-white px-1 py-0.5 rounded text-xs">
-            Завершено
           </div>
-        )}
-      </div>
-
-      {/* Контент */}
-      <div className="flex-1">
-        <div className="flex justify-between items-start mb-2">
-          <h3 className="font-bold text-lg text-gray-900 dark:text-white group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
-            {event.title}
-          </h3>
-          <span className="bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300 px-2 py-1 rounded-lg text-xs font-medium">
-            {event.event_type}
-          </span>
-        </div>
-
-        <p className="text-gray-600 dark:text-gray-400 text-sm mb-3 line-clamp-2">
-          {event.short_description || event.description}
-        </p>
-
-        <div className="flex flex-wrap gap-4 text-sm text-gray-500 dark:text-gray-400">
-          <div className="flex items-center">
-            <Calendar className="h-4 w-4 mr-1" />
-            {formatRussianDate(event.start_at)}
-          </div>
-          
-          <div className="flex items-center">
-            <Clock className="h-4 w-4 mr-1" />
-            {formatTimeFromTimestamp(event.start_at)}
-          </div>
-
-          {event.venue_name && (
-            <div className="flex items-center">
-              <MapPin className="h-4 w-4 mr-1" />
-              {event.venue_name}
-            </div>
-          )}
-
-          {event.registrations_count !== undefined && (
-            <div className="flex items-center">
-              <Users className="h-4 w-4 mr-1" />
-              {event.registrations_count} участников
-            </div>
-          )}
-
-          {event.payment_type === 'paid' && event.base_price > 0 && (
-            <div className="font-bold text-primary-600 dark:text-primary-400">
-              {event.base_price} {event.currency}
-            </div>
-          )}
-        </div>
-      </div>
-    </Link>
-  );
-};
-
-export default EventsPage;
+        </Link>
+      );
+    }
