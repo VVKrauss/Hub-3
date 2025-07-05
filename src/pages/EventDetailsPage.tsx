@@ -25,7 +25,7 @@ import Layout from '../components/layout/Layout';
 import { useAuth } from '../contexts/AuthContext';
 import { useFavoriteEvents } from '../hooks/useFavorites';
 import FavoriteButton from '../components/favorites/FavoriteButton';
-import RegisterEventModal from '../components/events/RegisterEventModal';
+import RegistrationModal from '../components/events/RegistrationModal';
 import { getEventById } from '../api/events';
 import type { EventWithDetails } from '../types/database';
 import { formatRussianDate, formatTimeFromTimestamp } from '../utils/dateTimeUtils';
@@ -309,10 +309,10 @@ const EventDetailsPage = () => {
                       </div>
                       <div>
                         <p className="font-medium text-gray-900 dark:text-white">
-                          {formatDate(event.start_at)}
+                          {formatRussianDate(event.start_at)}
                         </p>
                         <p className="text-gray-600 dark:text-gray-400">
-                          {formatTime(event.start_at)} - {formatTime(event.end_at)}
+                          {formatTimeFromTimestamp(event.start_at)} - {formatTimeFromTimestamp(event.end_at)}
                         </p>
                       </div>
                     </div>
@@ -645,7 +645,7 @@ const EventDetailsPage = () => {
 
         {/* Модал регистрации */}
         {isRegistering && event && (
-          <RegisterEventModal
+          <RegistrationModal
             event={event}
             isOpen={isRegistering}
             onClose={() => setIsRegistering(false)}
