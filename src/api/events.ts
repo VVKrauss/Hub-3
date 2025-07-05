@@ -67,6 +67,120 @@ const getRegistrationCounts = async (eventId: string): Promise<number> => {
   }
 };
 
+// Helper function to get event schedule
+const getEventSchedule = async (eventId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('sh_event_schedule')
+      .select('*')
+      .eq('event_id', eventId)
+      .order('date', { ascending: true })
+      .order('start_time', { ascending: true });
+
+    if (error) {
+      console.warn(`Error getting schedule for event ${eventId}:`, error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.warn(`Error getting schedule for event ${eventId}:`, error);
+    return [];
+  }
+};
+
+// Helper function to get event ticket types
+const getEventTicketTypes = async (eventId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('sh_event_ticket_types')
+      .select('*')
+      .eq('event_id', eventId)
+      .eq('is_active', true)
+      .order('display_order', { ascending: true });
+
+    if (error) {
+      console.warn(`Error getting ticket types for event ${eventId}:`, error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.warn(`Error getting ticket types for event ${eventId}:`, error);
+    return [];
+  }
+};
+
+// Get single event by ID with all details
+export const getEventById = async (eventId: string): Promise<ApiResponse<EventWithDetails>> => {
+  try {
+    console.log('Fetching event by ID:', eventId);
+
+    // First, get the event with speakers
+    const { data: event, error } = await supabase
+      .from('sh_events')
+      .select(`
+        *,
+        sh_event_speakers (
+          id,
+          role,
+          display_order,
+          speaker_id,
+          bio_override
+        )
+      `)
+      .eq('id', eventId)
+      .eq('is_public', true)
+      .in('status', ['active', 'past'])
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        throw new Error('Мероприятие не найдено');
+      }
+      throw error;
+    }
+
+    if (!event) {
+      throw new Error('Мероприятие не найдено');
+    }
+
+    // Enrich with speaker data
+    const speakersWithData = await enrichEventSpeakers(event.sh_event_speakers || []);
+    
+    // Get registration count
+    const registrationsCount = await getRegistrationCounts(event.id);
+
+    // Get schedule
+    const schedule = await getEventSchedule(event.id);
+
+    // Get ticket types
+    const ticketTypes = await getEventTicketTypes(event.id);
+
+    // Calculate available spots
+    const availableSpots = event.max_attendees 
+      ? Math.max(0, event.max_attendees - registrationsCount)
+      : null;
+
+    const eventWithDetails: EventWithDetails = {
+      ...event,
+      sh_event_speakers: speakersWithData,
+      speakers: speakersWithData, // Alias for backward compatibility
+      schedule,
+      ticket_types: ticketTypes,
+      registrations_count: registrationsCount,
+      available_spots: availableSpots
+    };
+
+    console.log(`Event ${eventId} loaded successfully with ${speakersWithData.length} speakers`);
+
+    return createApiResponse(eventWithDetails);
+  } catch (error) {
+    console.error('Error in getEventById:', error);
+    return createApiResponse(null, error);
+  }
+};
+
 // Main function to get events with pagination and filters
 export const getEvents = async (
   filters: {
