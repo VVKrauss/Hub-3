@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { supabase } from '../../lib/supabase'; // ← ДОБАВИТЬ ЭТУ СТРОКУ
 import { toast } from 'react-hot-toast';
 import { 
   Save, 
@@ -30,9 +31,11 @@ import {
 } from 'lucide-react';
 import { parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
-// Import existing components (will need to be adapted)
-// import EventSpeakersSection from '../../components/admin/EventSpeakersSection';
-// import EventFestivalProgramSection from '../../components/admin/EventFestivalProgramSection';
+
+// Весь остальной код остается точно таким же...
+// (далее идет весь существующий код без изменений)
+
+
 
 // Updated types for sh_ system
 type ShEventType = 'lecture' | 'workshop' | 'festival' | 'conference' | 'seminar' | 'other';
