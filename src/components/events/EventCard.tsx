@@ -1,5 +1,6 @@
 // src/components/events/EventCard.tsx
-// Временный файл для совместимости с обновленным EventsList
+// Файл совместимости - использует существующий EventCardWithFavorite
 
-// Экспортируем существующий EventCardWithFavorite как EventCard
-export { default } from './EventCardWithFavorite';   
+import EventCardWithFavorite from './EventCardWithFavorite';
+
+export default EventCardWithFavorite;
