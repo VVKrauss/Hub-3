@@ -1,6 +1,6 @@
 // src/pages/admin/AdminExport.tsx - компактная версия
 import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase';
 import { 
   Download, 
   Database, 
@@ -19,11 +19,6 @@ import {
 import { toast } from 'react-hot-toast';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
 
 type TableInfo = {
   name: string;
