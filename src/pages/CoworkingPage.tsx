@@ -4,10 +4,7 @@ import Layout from '../components/layout/Layout';
 import PageHeader from '../components/ui/PageHeader';
 import Modal from '../components/ui/Modal'; // Предполагается, что у вас есть компонент Modal
 
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
+import { supabase } from '../lib/supabase';
 
 const TELEGRAM_BOT_TOKEN = import.meta.env.VITE_TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = import.meta.env.VITE_TELEGRAM_CHAT_ID;
