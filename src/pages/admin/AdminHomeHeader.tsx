@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../../lib/supabase';  // ✅ Правильный путь
 import { toast } from 'react-hot-toast';
 import { Plus, ArrowUp, ArrowDown, Edit, Trash2, Image as ImageIcon, Save, Home, Calendar, Upload, Users } from 'lucide-react';
 
