@@ -97,11 +97,6 @@ const SHORT_DESC_MAX_LENGTH = 300;
 const DESC_MAX_LENGTH = 5000;
 const SLUG_MAX_LENGTH = 100;
 
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
-
 // Updated interface for sh_events
 interface ShEvent {
   id?: string;
