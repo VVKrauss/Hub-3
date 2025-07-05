@@ -2,12 +2,7 @@ import { useState, useEffect } from 'react';
 import Layout from '../components/layout/Layout';
 import PageHeader from '../components/ui/PageHeader';
 import { Mail, Phone, MapPin } from 'lucide-react';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
+import { supabase } from '../lib/supabase';
 
 interface AboutData {
   project_info: string;
