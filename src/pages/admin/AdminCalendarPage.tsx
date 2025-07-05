@@ -6,10 +6,7 @@ import { ru } from 'date-fns/locale';
 import { toast } from 'react-hot-toast';
 import { Tooltip } from 'react-tooltip';
 
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
+
 
 // === КОНСТАНТЫ ===
 const WORKING_HOURS = { start: 9, end: 23 };
