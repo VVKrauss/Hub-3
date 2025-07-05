@@ -1,5 +1,5 @@
-// src/components/layout/TopBar.tsx - Исправленная версия без бесконечной загрузки
-import { useState, useEffect, useRef } from 'react';
+// src/components/layout/TopBar.tsx - ИСПРАВЛЕНО от бесконечных циклов
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu, X, Sun, Moon, LogIn } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -34,113 +34,22 @@ const TopBar = () => {
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [topbarHeight, setTopbarHeight] = useState<'compact' | 'standard' | 'large'>('standard');
+  const [initialized, setInitialized] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  const mountedRef = useRef(true);
   const menuRef = useRef<HTMLDivElement>(null);
-  const [mounted, setMounted] = useState(false);
+  const authListenerRef = useRef<any>(null);
 
-  useEffect(() => {
-    let isMounted = true;
-    
-    const initialize = async () => {
-      if (!isMounted) return;
-      
-      try {
-        // Проверяем пользователя
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session && isMounted) {
-          await fetchUserProfile(session.user.id);
-        }
-
-        // Загружаем навигацию
-        if (isMounted) {
-          await fetchNavItems();
-        }
-
-        // Загружаем настройки топбара
-        if (isMounted) {
-          await fetchTopbarSettings();
-        }
-
-        if (isMounted) {
-          setMounted(true);
-        }
-      } catch (error) {
-        console.error('Error initializing TopBar:', error);
-        if (isMounted) {
-          setFallbackNavigation();
-          setMounted(true);
-        }
-      }
-    };
-
-    initialize();
-
-    // Auth listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!isMounted) return;
-      
-      if (event === 'SIGNED_IN' && session) {
-        await fetchUserProfile(session.user.id);
-        setLoginModalOpen(false);
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-      }
-    });
-
-    // Click outside handler
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setMobileMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []); // Пустой массив зависимостей - выполняется только один раз
-
-  const fetchUserProfile = async (userId: string) => {
-    try {
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      setUser({
-        id: userId,
-        email: session?.user.email || '',
-        name: profile?.name || session?.user.user_metadata?.name,
-        role: profile?.role,
-        avatar: profile?.avatar
-      });
-    } catch (error) {
-      console.error('Error fetching user profile:', error);
+  // Безопасная установка состояния
+  const safeSetState = useCallback((setter: () => void) => {
+    if (mountedRef.current) {
+      setter();
     }
-  };
+  }, []);
 
-  const fetchNavItems = async () => {
-    try {
-      const response = await getNavigationItems();
-      
-      if (response.data && response.data.length > 0) {
-        const sortedItems = response.data.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
-        setNavItems(sortedItems);
-      } else {
-        setFallbackNavigation();
-      }
-    } catch (error) {
-      console.error('Error fetching navigation:', error);
-      setFallbackNavigation();
-    }
-  };
-
-  const setFallbackNavigation = () => {
+  // Фоллбэк навигация
+  const setFallbackNavigation = useCallback(() => {
     const fallbackItems = [
       { id: 'home', label: 'Главная', path: '/', visible: true, order: 0 },
       { id: 'events', label: 'События', path: '/events', visible: true, order: 1 },
@@ -150,19 +59,169 @@ const TopBar = () => {
       { id: 'rent', label: 'Аренда', path: '/rent', visible: true, order: 5 },
       { id: 'about', label: 'О нас', path: '/about', visible: true, order: 6 }
     ];
-    setNavItems(fallbackItems);
-  };
+    safeSetState(() => setNavItems(fallbackItems));
+  }, [safeSetState]);
 
-  const fetchTopbarSettings = async () => {
+  // Загрузка профиля пользователя
+  const fetchUserProfile = useCallback(async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, name, role, avatar')
+        .eq('id', userId)
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        const session = await supabase.auth.getSession();
+        const userWithEmail = {
+          ...data,
+          email: session.data.session?.user?.email || ''
+        };
+        safeSetState(() => setUser(userWithEmail));
+      }
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      safeSetState(() => setUser(null));
+    }
+  }, [safeSetState]);
+
+  // Загрузка навигационных элементов
+  const fetchNavItems = useCallback(async () => {
+    try {
+      const response = await getNavigationItems();
+      if (response.data && response.data.length > 0) {
+        const sortedItems = response.data
+          .filter(item => item.visible)
+          .sort((a, b) => (a.order || 0) - (b.order || 0));
+        safeSetState(() => setNavItems(sortedItems));
+      } else {
+        setFallbackNavigation();
+      }
+    } catch (error) {
+      console.error('Error fetching navigation:', error);
+      safeSetState(() => setError('Ошибка загрузки навигации'));
+      setFallbackNavigation();
+    }
+  }, [safeSetState, setFallbackNavigation]);
+
+  // Загрузка настроек топбара
+  const fetchTopbarSettings = useCallback(async () => {
     try {
       const response = await getTopbarSettings();
       if (response.data?.height) {
-        setTopbarHeight(response.data.height);
+        safeSetState(() => setTopbarHeight(response.data.height));
       }
     } catch (error) {
       console.error('Error fetching topbar settings:', error);
+      // Не критичная ошибка, используем дефолтные настройки
     }
-  };
+  }, [safeSetState]);
+
+  // Инициализация компонента
+  useEffect(() => {
+    let cleanup = false;
+
+    const initialize = async () => {
+      if (cleanup || !mountedRef.current) return;
+
+      try {
+        // Проверяем текущую сессию
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.error('Session error:', sessionError);
+        }
+
+        if (session?.user && !cleanup && mountedRef.current) {
+          await fetchUserProfile(session.user.id);
+        }
+
+        // Загружаем навигацию и настройки
+        if (!cleanup && mountedRef.current) {
+          await Promise.all([
+            fetchNavItems(),
+            fetchTopbarSettings()
+          ]);
+        }
+
+        if (!cleanup && mountedRef.current) {
+          setInitialized(true);
+        }
+      } catch (error) {
+        console.error('Error initializing TopBar:', error);
+        if (!cleanup && mountedRef.current) {
+          setError('Ошибка инициализации');
+          setFallbackNavigation();
+          setInitialized(true);
+        }
+      }
+    };
+
+    initialize();
+
+    return () => {
+      cleanup = true;
+    };
+  }, []); // Пустой массив зависимостей - выполняется только один раз
+
+  // Обработчик изменения авторизации
+  useEffect(() => {
+    if (!initialized) return;
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mountedRef.current) return;
+
+      switch (event) {
+        case 'SIGNED_IN':
+          if (session?.user) {
+            await fetchUserProfile(session.user.id);
+          }
+          break;
+        case 'SIGNED_OUT':
+          safeSetState(() => setUser(null));
+          break;
+        case 'TOKEN_REFRESHED':
+          // Не требует дополнительных действий
+          break;
+        default:
+          break;
+      }
+    });
+
+    authListenerRef.current = subscription;
+
+    return () => {
+      if (authListenerRef.current) {
+        authListenerRef.current.unsubscribe();
+      }
+    };
+  }, [initialized, fetchUserProfile, safeSetState]);
+
+  // Обработчик клика вне мобильного меню
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMobileMenuOpen(false);
+      }
+    };
+
+    if (mobileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [mobileMenuOpen]);
+
+  // Очистка при размонтировании
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      if (authListenerRef.current) {
+        authListenerRef.current.unsubscribe();
+      }
+    };
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -174,29 +233,24 @@ const TopBar = () => {
 
   const visibleNavItems = navItems.filter(item => item.visible);
 
-  // Определяем класс высоты топбара
-  const topbarHeightClass = `topbar-${topbarHeight}`;
+  const topbarHeightClass = {
+    'compact': 'h-12',
+    'standard': 'h-16', 
+    'large': 'h-20'
+  }[topbarHeight];
 
-  // Определяем высоту для мобильного меню
-  const getMobileMenuTop = () => {
-    switch (topbarHeight) {
-      case 'compact': return 'top-12';
-      case 'standard': return 'top-14';
-      case 'large': return 'top-20';
-      default: return 'top-16';
-    }
-  };
-
-  // Показываем базовую версию пока не загрузилось
-  if (!mounted) {
+  // Показываем заглушку во время инициализации
+  if (!initialized) {
     return (
-      <header className="topbar topbar-standard">
-        <div className="container flex items-center justify-between">
-          <Link to="/" className="flex items-center">
-            <Logo className="h-10 w-auto" inverted={theme === 'dark'} />
-          </Link>
-          <div className="flex items-center space-x-4">
-            <div className="w-6 h-6 animate-pulse bg-gray-300 rounded"></div>
+      <header className={`bg-white dark:bg-gray-900 shadow-sm border-b border-gray-200 dark:border-gray-700 ${topbarHeightClass}`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full">
+          <div className="flex justify-between items-center h-full">
+            <div className="flex items-center">
+              <Logo />
+            </div>
+            <div className="animate-pulse">
+              <div className="w-24 h-8 bg-gray-200 dark:bg-gray-700 rounded"></div>
+            </div>
           </div>
         </div>
       </header>
@@ -204,195 +258,115 @@ const TopBar = () => {
   }
 
   return (
-    <header className={`topbar ${topbarHeightClass}`}>
-      <div className="container flex items-center justify-between">
-        <Link to="/" className="flex items-center" onClick={() => setMobileMenuOpen(false)}>
-          <Logo className="h-10 w-auto" inverted={theme === 'dark'} />
-        </Link>
-        
-        {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center justify-center flex-1 space-x-8">
-          {visibleNavItems.map(item => (
-            <Link 
-              key={item.id}
-              to={item.path} 
-              className={`font-medium relative py-4 transition-colors duration-200 ${
-                location.pathname === item.path 
-                  ? 'text-primary dark:text-primary-400 after:content-[""] after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-primary-600 dark:after:bg-primary-400' 
-                  : 'text-gray-700 dark:text-gray-300 hover:text-primary dark:hover:text-primary-400'
-              }`}
-            >
-              {item.label}
-              {item.badge && (
-                <span className="ml-1 bg-primary-600 text-white text-xs rounded-full px-2 py-0.5">
-                  {item.badge}
-                </span>
-              )}
-            </Link>
-          ))}
-        </nav>
+    <>
+      <header className={`bg-white dark:bg-gray-900 shadow-sm border-b border-gray-200 dark:border-gray-700 ${topbarHeightClass}`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full">
+          <div className="flex justify-between items-center h-full">
+            {/* Логотип */}
+            <div className="flex items-center">
+              <Logo />
+            </div>
 
-        {/* Desktop User Menu & Theme Toggle */}
-        <div className="hidden md:flex items-center space-x-4">
-          <button 
-            onClick={toggleTheme} 
-            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          >
-            {theme === 'dark' ? (
-              <Sun className="h-5 w-5" />
-            ) : (
-              <Moon className="h-5 w-5" />
-            )}
-          </button>
-
-          {user ? (
-            <UserProfileDropdown 
-              user={user} 
-              onLogout={handleLogout} 
-            />
-          ) : (
-            <button
-              onClick={() => setLoginModalOpen(true)}
-              className="flex items-center gap-2 p-2 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-md transition-colors"
-            >
-              <LogIn className="h-5 w-5" />
-              <span className="hidden sm:inline">Войти</span>
-            </button>
-          )}
-        </div>
-
-        {/* Mobile menu button */}
-        <button
-          className="md:hidden p-2 text-gray-700 dark:text-gray-300"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-        >
-          {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-        </button>
-      </div>
-
-      {/* Mobile Navigation */}
-      {mobileMenuOpen && (
-        <div 
-          ref={menuRef}
-          className={`md:hidden absolute ${getMobileMenuTop()} left-0 right-0 bg-white dark:bg-gray-900 shadow-lg z-50`}
-        >
-          <nav className="container py-5 flex flex-col space-y-4">
-            {visibleNavItems.map(item => (
-              <Link 
-                key={item.id}
-                to={item.path} 
-                className={`py-2 font-medium transition-colors ${
-                  location.pathname === item.path 
-                    ? 'text-primary dark:text-primary-400' 
-                    : 'text-gray-700 dark:text-gray-300 hover:text-primary dark:hover:text-primary-400'
-                }`}
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                <div className="flex items-center justify-between">
-                  <span>{item.label}</span>
-                  {item.badge && (
-                    <span className="bg-primary-600 text-white text-xs rounded-full px-2 py-0.5">
-                      {item.badge}
-                    </span>
-                  )}
-                </div>
-              </Link>
-            ))}
-            
-            {/* Mobile Theme Toggle */}
-            <button 
-              onClick={toggleTheme} 
-              className="flex items-center gap-2 py-2 text-gray-700 dark:text-gray-300 hover:text-primary dark:hover:text-primary-400 transition-colors"
-            >
-              {theme === 'dark' ? (
-                <>
-                  <Sun className="h-5 w-5" />
-                  Светлая тема
-                </>
-              ) : (
-                <>
-                  <Moon className="h-5 w-5" />
-                  Тёмная тема
-                </>
-              )}
-            </button>
-            
-            {/* Mobile Auth Section */}
-            <div className="pt-4 border-t border-gray-200 dark:border-gray-600">
-              {user ? (
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-3 px-2 py-2">
-                    <div className="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center">
-                      <span className="text-white text-sm font-medium">
-                        {user.name?.[0] || user.email[0].toUpperCase()}
-                      </span>
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900 dark:text-white">{user.name || 'Пользователь'}</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
-                    </div>
-                  </div>
-                  
+            {/* Основная навигация (десктоп) */}
+            <nav className="hidden md:flex space-x-8">
+              {visibleNavItems.map((item) => {
+                const isActive = location.pathname === item.path;
+                return (
                   <Link
-                    to="/profile"
-                    className="flex items-center py-2 px-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                    onClick={() => setMobileMenuOpen(false)}
+                    key={item.id}
+                    to={item.path}
+                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20'
+                        : 'text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400'
+                    }`}
                   >
-                    Профиль
+                    {item.label}
+                    {item.badge && item.badge > 0 && (
+                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary-100 dark:bg-primary-900/30 text-primary-800 dark:text-primary-200">
+                        {item.badge}
+                      </span>
+                    )}
                   </Link>
-                  
-                  {(user.role === 'Admin' || user.role === 'admin') && (
-                    <Link
-                      to="/admin"
-                      className="flex items-center py-2 px-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                      onClick={() => setMobileMenuOpen(false)}
-                    >
-                      Админ панель
-                    </Link>
-                  )}
-                  
-                  <button
-                    onClick={() => {
-                      handleLogout();
-                      setMobileMenuOpen(false);
-                    }}
-                    className="flex items-center w-full py-2 px-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                  >
-                    Выйти
-                  </button>
-                </div>
+                );
+              })}
+            </nav>
+
+            {/* Правая часть */}
+            <div className="flex items-center space-x-4">
+              {/* Переключатель темы */}
+              <button
+                onClick={toggleTheme}
+                className="p-2 rounded-md text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                aria-label="Переключить тему"
+              >
+                {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+              </button>
+
+              {/* Пользователь или кнопка входа */}
+              {user ? (
+                <UserProfileDropdown user={user} onLogout={handleLogout} />
               ) : (
                 <button
-                  onClick={() => {
-                    setLoginModalOpen(true);
-                    setMobileMenuOpen(false);
-                  }}
-                  className="flex items-center gap-2 py-2 px-2 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors w-full"
+                  onClick={() => setLoginModalOpen(true)}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors"
                 >
-                  <LogIn className="h-5 w-5" />
+                  <LogIn className="h-4 w-4 mr-2" />
                   Войти
                 </button>
               )}
+
+              {/* Мобильное меню */}
+              <div className="md:hidden" ref={menuRef}>
+                <button
+                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                  className="p-2 rounded-md text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  aria-label="Меню"
+                >
+                  {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+                </button>
+
+                {/* Мобильная навигация */}
+                {mobileMenuOpen && (
+                  <div className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
+                    <div className="py-1">
+                      {visibleNavItems.map((item) => {
+                        const isActive = location.pathname === item.path;
+                        return (
+                          <Link
+                            key={item.id}
+                            to={item.path}
+                            onClick={() => setMobileMenuOpen(false)}
+                            className={`block px-4 py-2 text-sm transition-colors ${
+                              isActive
+                                ? 'text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20'
+                                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                            }`}
+                          >
+                            {item.label}
+                            {item.badge && item.badge > 0 && (
+                              <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary-100 dark:bg-primary-900/30 text-primary-800 dark:text-primary-200">
+                                {item.badge}
+                              </span>
+                            )}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          </nav>
+          </div>
         </div>
-      )}
+      </header>
 
-      {/* Login Modal */}
-      <LoginModal 
-        isOpen={loginModalOpen} 
-        onClose={() => setLoginModalOpen(false)} 
+      {/* Модальное окно входа */}
+      <LoginModal
+        isOpen={loginModalOpen}
+        onClose={() => setLoginModalOpen(false)}
       />
-
-      {/* Overlay for mobile menu */}
-      {mobileMenuOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden"
-          onClick={() => setMobileMenuOpen(false)}
-        />
-      )}
-    </header>
+    </>
   );
 };
 
