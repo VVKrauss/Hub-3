@@ -1,7 +1,6 @@
 import { ReactNode } from 'react';
 import TopBar from './TopBar';
 import Footer from './Footer';
-import LoadingDebug from '../debug/LoadingDebug';
 
 
 
@@ -16,7 +15,6 @@ const Layout = ({ children }: LayoutProps) => {
       <main className="flex-grow">
         {children}
       </main>
-      <LoadingDebug />
       <Footer /> 
     </div>
   );
