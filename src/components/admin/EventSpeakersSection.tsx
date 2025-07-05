@@ -371,4 +371,4 @@ const EventSpeakersSection = ({
   );
 };
 
-export default EventSpeakersSection;
+export default EventSpeakersSection; 
