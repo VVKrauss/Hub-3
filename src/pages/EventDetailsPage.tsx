@@ -28,7 +28,7 @@ import FavoriteButton from '../components/favorites/FavoriteButton';
 import RegisterEventModal from '../components/events/RegisterEventModal';
 import { getEventById } from '../api/events';
 import type { EventWithDetails } from '../types/database';
-import { formatDate, formatTime } from '../utils/dateUtils';
+import { formatRussianDate, formatTimeFromTimestamp } from '../utils/dateTimeUtils';
 import { getSupabaseImageUrl } from '../utils/imageUtils';
 
 const EventDetailsPage = () => {
@@ -712,4 +712,3 @@ const EventDetailsPage = () => {
 };
 
 export default EventDetailsPage;
-
