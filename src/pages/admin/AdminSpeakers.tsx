@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase';
 import { Plus, Search, Edit, Eye, User, Trash2, X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import CreateSpeakerModal from '../../components/admin/CreateSpeakerModal';
