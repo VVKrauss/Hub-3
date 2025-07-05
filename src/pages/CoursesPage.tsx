@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { supabase } from '../src/lib/supabase';
+import { supabase } from '/src/lib/supabase';
 import { 
   Search, 
   Filter, 
