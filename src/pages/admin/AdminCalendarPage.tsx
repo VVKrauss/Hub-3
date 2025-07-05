@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '../lib/supabase';
 import { Calendar, ChevronLeft, ChevronRight, Grid, List, Plus } from 'lucide-react';
 import { format, addDays, addWeeks, addMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, isToday, setHours, setMinutes, parseISO, isBefore } from 'date-fns';
 import { ru } from 'date-fns/locale';
