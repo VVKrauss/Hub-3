@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
 import Layout from '../components/layout/Layout';
 import PageHeader from '../components/ui/PageHeader';
 import Modal from '../components/ui/Modal'; // Предполагается, что у вас есть компонент Modal
