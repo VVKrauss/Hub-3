@@ -31,7 +31,7 @@ import type { SpeakerWithSocials, EventWithDetails } from '../types/database';
 import { formatRussianDate, formatTimeFromTimestamp } from '../utils/dateTimeUtils';
 import { getSupabaseImageUrl } from '../utils/imageUtils';
 
-const SpeakerProfilePage = () => {
+const SpeakerProfilePage = () => { 
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
