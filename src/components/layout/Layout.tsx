@@ -16,6 +16,7 @@ const Layout = ({ children }: LayoutProps) => {
       <main className="flex-grow">
         {children}
       </main>
+      <LoadingDebug />
       <Footer />
     </div>
   );
