@@ -5,10 +5,6 @@ import { toast } from 'react-hot-toast';
 import CreateSpeakerModal from '../../components/admin/CreateSpeakerModal';
 import SpeakerPhotoGallery from '../../components/admin/SpeakerPhotoGallery';
 
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
 
 type Speaker = {
   id: string;
