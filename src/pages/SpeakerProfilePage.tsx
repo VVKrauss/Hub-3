@@ -25,7 +25,7 @@ import EventCard from '../components/events/EventCard';
 import { useAuth } from '../contexts/AuthContext';
 import { useFavoriteSpeakers } from '../hooks/useFavorites';
 import FavoriteButton from '../components/favorites/FavoriteButton';
-import { getSpeakerById } from '../api/speakers';
+import { getSpeaker } from '../api/speakers';
 import { getEventsBySpeaker } from '../api/events';
 import type { SpeakerWithSocials, EventWithDetails } from '../types/database';
 import { formatRussianDate, formatTimeFromTimestamp } from '../utils/dateTimeUtils';
@@ -74,7 +74,7 @@ const SpeakerProfilePage = () => {
 
       console.log('Fetching speaker:', speakerId);
       
-      const result = await getSpeakerById(speakerId);
+      const result = await getSpeaker(speakerId);
       
       if (result.error) {
         throw new Error(result.error);
