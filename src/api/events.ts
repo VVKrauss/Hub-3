@@ -181,6 +181,10 @@ export const getEventById = async (eventId: string): Promise<ApiResponse<EventWi
   }
 };
 
+
+
+
+
 // src/api/events.ts - БЫСТРОЕ ИСПРАВЛЕНИЕ
 
 export const getEvents = async (filters = {}, page = 1, limit = 12) => {
@@ -213,74 +217,12 @@ export const getEvents = async (filters = {}, page = 1, limit = 12) => {
   } catch (error) {
     return { data: [], hasNext: false, error: error.message };
   }
-};// src/api/events.ts - БЫСТРОЕ ИСПРАВЛЕНИЕ
-
-export const getEvents = async (filters = {}, page = 1, limit = 12) => {
-  try {
-    let query = supabase
-      .from('sh_events')
-      .select('*, sh_event_speakers(id, role, display_order, speaker_id)')
-      .eq('is_public', true)
-      .in('status', ['active', 'past']);
-
-    // УБИРАЕМ проблемный фильтр по event_type
-    // if (filters.event_type?.length) {
-    //   query = query.in('event_type', filters.event_type);
-    // }
-
-    if (filters.search?.trim()) {
-      query = query.ilike('title', `%${filters.search}%`);
-    }
-
-    const from = (page - 1) * limit;
-    query = query.range(from, from + limit - 1).order('start_at', { ascending: false });
-
-    const { data, error } = await query;
-    if (error) throw error;
-
-    return {
-      data: data || [],
-      hasNext: (data?.length || 0) === limit,
-    };
-  } catch (error) {
-    return { data: [], hasNext: false, error: error.message };
-  }
-}
-
-    const totalPages = Math.ceil((count || 0) / limit);
-
-    console.log(`Found ${eventsWithDetails.length} events (page ${page}/${totalPages})`);
-
-    return {
-      data: eventsWithDetails,
-      pagination: {
-        page,
-        limit,
-        total: count || 0,
-        totalPages,
-        hasNext: page < totalPages,
-        hasPrev: page > 1
-      },
-      error: null,
-      success: true
-    };
-  } catch (error) {
-    console.error('Error in getEvents:', error);
-    return {
-      data: [],
-      pagination: {
-        page,
-        limit,
-        total: 0,
-        totalPages: 0,
-        hasNext: false,
-        hasPrev: false
-      },
-      error: error instanceof Error ? error.message : 'An error occurred',
-      success: false
-    };
-  }
 };
+
+
+
+
+
 
 // Получение событий конкретного спикера
 export const getEventsBySpeaker = async (
