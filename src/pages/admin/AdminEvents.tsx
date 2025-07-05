@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase';
 import { Plus, Search, Edit, Eye, Calendar, Users, MapPin, Trash2, Filter, Loader2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useNavigate, Link } from 'react-router-dom';
@@ -13,10 +13,6 @@ import {
   formatDateTimeForDisplay 
 } from '../../utils/dateTimeUtils';
 
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
 
 type SortOption = 'date-asc' | 'date-desc' | 'title-asc' | 'title-desc' | 'chronological';
 type FilterStatus = 'active' | 'draft' | 'past';
