@@ -712,3 +712,4 @@ const EventDetailsPage = () => {
 };
 
 export default EventDetailsPage;
+
