@@ -6,7 +6,7 @@ import { Search, Filter, Grid, List, Calendar, MapPin, Users, Clock } from 'luci
 import EventCard from './EventCard';
 import { getEvents } from '../../api/events';
 import type { EventWithDetails, EventFilters, ShEventType, ShEventStatus } from '../../types/database';
-import { formatDate, formatTime } from '../../utils/dateUtils';
+import { formatRussianDate, formatTimeFromTimestamp } from '../../utils/dateTimeUtils';
 
 interface EventsListProps {
   initialFilters?: Partial<EventFilters>;
@@ -29,6 +29,15 @@ const EventsList: React.FC<EventsListProps> = ({
   compact = false,
   className = ''
 }) => {
+  // Функции форматирования
+  const formatDate = (dateString: string): string => {
+    return formatRussianDate(dateString, 'd MMMM yyyy');
+  };
+
+  const formatTime = (dateString: string): string => {
+    return formatTimeFromTimestamp(dateString);
+  };
+
   // Состояние
   const [events, setEvents] = useState<EventWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
