@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { supabase } from '/src/lib/supabase';
+
 import { 
   Search, 
   Filter, 
@@ -21,10 +21,7 @@ import {
 } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
+import { supabase } from '../lib/supabase';
 
 // Типы для курсов (используем только существующие в БД)
 // Основываемся на схеме из MD файла
