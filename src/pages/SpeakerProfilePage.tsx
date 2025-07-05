@@ -28,13 +28,22 @@ import FavoriteButton from '../components/favorites/FavoriteButton';
 import { getSpeakerById } from '../api/speakers';
 import { getEventsBySpeaker } from '../api/events';
 import type { SpeakerWithSocials, EventWithDetails } from '../types/database';
-import { formatDate, formatTime } from '../utils/dateUtils';
+import { formatRussianDate, formatTimeFromTimestamp } from '../utils/dateTimeUtils';
 import { getSupabaseImageUrl } from '../utils/imageUtils';
 
 const SpeakerProfilePage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  
+  // Функции форматирования
+  const formatDate = (dateString: string): string => {
+    return formatRussianDate(dateString, 'd MMMM yyyy');
+  };
+
+  const formatTime = (dateString: string): string => {
+    return formatTimeFromTimestamp(dateString);
+  };
   
   // Состояние
   const [speaker, setSpeaker] = useState<SpeakerWithSocials | null>(null);
