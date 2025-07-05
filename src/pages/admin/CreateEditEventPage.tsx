@@ -32,10 +32,6 @@ import {
 import { parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
-// Весь остальной код остается точно таким же...
-// (далее идет весь существующий код без изменений)
-
-
 
 // Updated types for sh_ system
 type ShEventType = 'lecture' | 'workshop' | 'festival' | 'conference' | 'seminar' | 'other';
