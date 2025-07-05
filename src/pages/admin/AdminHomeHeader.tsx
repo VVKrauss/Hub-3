@@ -1,12 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { Plus, ArrowUp, ArrowDown, Edit, Trash2, Image as ImageIcon, Save, Home, Calendar, Upload, Users } from 'lucide-react';
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
 
 type HeaderStyle = 'centered' | 'slideshow';
 type Slide = {
