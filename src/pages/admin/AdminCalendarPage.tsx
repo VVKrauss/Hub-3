@@ -326,28 +326,30 @@ const fetchTimeSlots = useCallback(async () => {
     setCurrentDate(navigators[viewMode](currentDate, direction === 'prev' ? -1 : 1));
   }, [currentDate, viewMode]);
 
-  const handleTimeSlotClick = useCallback((date: Date, hour: number) => {
-    const startAt = new Date(date);
-    startAt.setHours(hour, 0, 0, 0);
-    const endAt = new Date(startAt);
-    endAt.setHours(hour + 1, 0, 0, 0);
-    
-    setModalState({
-      isOpen: true,
-      mode: 'create',
-      data: {
-        id: '',
-        start_at: startAt.toISOString(),
-        end_at: endAt.toISOString(),
-        slot_type: 'rent',
-        slot_status: 'active',
-        title: '',
-        is_public: true,
-        is_booked: false
-      }
-    });
-  }, []);
 
+const handleTimeSlotClick = useCallback((date: Date, hour: number) => {
+  const startAt = new Date(date);
+  startAt.setHours(hour, 0, 0, 0);
+  const endAt = new Date(startAt);
+  endAt.setHours(hour + 1, 0, 0, 0);
+  
+  setModalState({
+    isOpen: true,
+    mode: 'create',
+    data: {
+      // ИСПРАВЛЕНО: Убираем id для новых слотов или используем null
+      start_at: startAt.toISOString(),
+      end_at: endAt.toISOString(),
+      slot_type: 'rent',
+      slot_status: 'active',
+      title: '',
+      is_public: true,
+      is_booked: false
+    }
+  });
+}, []);
+
+  
   const handleEditSlot = useCallback((slot: TimeSlot) => {
     setModalState({
       isOpen: true,
