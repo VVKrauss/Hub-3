@@ -1,10 +1,5 @@
 import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
+import { supabase } from '../lib/supabase'; // Используем единый экземпляр
 
 interface TimeSlot {
   id: string;
@@ -80,13 +75,15 @@ const DateTimePicker = ({
           });
         });
 
-        const availabilities: DateAvailability[] = [];
-        dateMap.forEach((value, date) => {
-          let status: 'free' | 'partial' | 'busy' = 'busy';
-          if (value.available === value.total) status = 'free';
-          else if (value.available > 0) status = 'partial';
+        const availabilities: DateAvailability[] = Array.from(dateMap.entries()).map(([date, stats]) => {
+          const ratio = stats.available / stats.total;
+          let status: 'free' | 'partial' | 'busy';
           
-          availabilities.push({ date, status });
+          if (ratio === 1) status = 'free';
+          else if (ratio > 0) status = 'partial';
+          else status = 'busy';
+
+          return { date, status };
         });
 
         setDateAvailabilities(availabilities);
@@ -97,16 +94,14 @@ const DateTimePicker = ({
       }
     };
 
-    if (showPicker) {
-      fetchDateAvailabilities();
-    }
-  }, [showPicker]);
+    fetchDateAvailabilities();
+  }, []);
 
   // Fetch time slots for selected date
   useEffect(() => {
+    if (!currentDate) return;
+
     const fetchTimeSlots = async () => {
-      if (!currentDate) return;
-      
       setLoading(true);
       try {
         const { data, error } = await supabase
@@ -116,189 +111,164 @@ const DateTimePicker = ({
           .order('start_time', { ascending: true });
 
         if (error) throw error;
-
         setTimeSlots(data || []);
       } catch (error) {
         console.error('Error fetching time slots:', error);
+        setTimeSlots([]);
       } finally {
         setLoading(false);
       }
     };
 
-    if (showPicker && currentDate) {
-      fetchTimeSlots();
-    }
-  }, [showPicker, currentDate]);
+    fetchTimeSlots();
+  }, [currentDate]);
 
   const handleDateChange = (date: string) => {
     setCurrentDate(date);
+    // Reset times when date changes
     setStartTime('');
     setEndTime('');
+    onDateTimeChange(date, '', '');
   };
 
-  const handleTimeSelect = (time: string) => {
-    if (!startTime || endTime) {
-      setStartTime(time);
+  const handleStartTimeChange = (time: string) => {
+    setStartTime(time);
+    // Clear end time if it's before start time
+    if (endTime && time >= endTime) {
       setEndTime('');
+      onDateTimeChange(currentDate, time, '');
     } else {
-      if (time > startTime) {
-        setEndTime(time);
-        onDateTimeChange(currentDate, startTime, time);
-        setShowPicker(false);
-      } else {
-        alert('Время окончания должно быть позже времени начала');
-      }
+      onDateTimeChange(currentDate, time, endTime);
     }
   };
 
-  const getDateStatus = (date: string) => {
-    const availability = dateAvailabilities.find(d => d.date === date);
-    return availability ? availability.status : 'busy';
+  const handleEndTimeChange = (time: string) => {
+    setEndTime(time);
+    onDateTimeChange(currentDate, startTime, time);
   };
 
   const isTimeSlotAvailable = (time: string) => {
-    if (!currentDate) return false;
-    
-    const slot = timeSlots.find(s => 
-      s.start_time <= `${currentDate}T${time}:00` && 
-      s.end_time >= `${currentDate}T${time}:00`
+    return timeSlots.some(slot => 
+      slot.start_time <= time && 
+      slot.end_time > time && 
+      slot.is_available
     );
+  };
+
+  const getAvailableEndTimes = () => {
+    if (!startTime) return [];
     
-    return slot ? slot.is_available : false;
+    return timeIntervals
+      .filter(slot => slot.time > startTime)
+      .filter(slot => isTimeSlotAvailable(slot.time));
   };
 
   const formatDisplayDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString('ru-RU', {
-      weekday: 'short',
       day: 'numeric',
-      month: 'short'
+      month: 'long',
+      year: 'numeric'
     });
   };
 
+  const getDateAvailabilityStatus = (date: string) => {
+    const availability = dateAvailabilities.find(a => a.date === date);
+    return availability?.status || 'unknown';
+  };
+
+  const getDateStatusColor = (status: string) => {
+    switch (status) {
+      case 'free': return 'text-green-600 bg-green-50';
+      case 'partial': return 'text-yellow-600 bg-yellow-50';
+      case 'busy': return 'text-red-600 bg-red-50';
+      default: return 'text-gray-600 bg-gray-50';
+    }
+  };
+
   return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setShowPicker(!showPicker)}
-        className="flex items-center gap-2 px-4 py-2 border rounded-lg bg-white hover:bg-gray-50"
-      >
-        <span>
-          {currentDate || 'Выберите дату'} 
-          {startTime && ` ${startTime} - ${endTime}`}
-        </span>
-        <svg 
-          xmlns="http://www.w3.org/2000/svg" 
-          className={`h-5 w-5 transition-transform ${showPicker ? 'rotate-180' : ''}`} 
-          viewBox="0 0 20 20" 
-          fill="currentColor"
-        >
-          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-        </svg>
-      </button>
-      
-      {showPicker && (
-        <div className="absolute z-10 mt-2 w-full max-w-2xl bg-white rounded-lg shadow-xl border p-4">
-          {loading ? (
-            <div className="flex justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+    <div className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Дата мероприятия
+        </label>
+        <input
+          type="date"
+          value={currentDate}
+          onChange={(e) => handleDateChange(e.target.value)}
+          min={new Date().toISOString().split('T')[0]}
+          className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+        />
+        {currentDate && (
+          <div className="mt-2 flex items-center gap-2">
+            <div className={`px-2 py-1 rounded text-xs font-medium ${getDateStatusColor(getDateAvailabilityStatus(currentDate))}`}>
+              {getDateAvailabilityStatus(currentDate) === 'free' && 'Свободно'}
+              {getDateAvailabilityStatus(currentDate) === 'partial' && 'Частично занято'}
+              {getDateAvailabilityStatus(currentDate) === 'busy' && 'Занято'}
+              {getDateAvailabilityStatus(currentDate) === 'unknown' && 'Статус неизвестен'}
             </div>
-          ) : (
-            <>
-              {/* Date selection */}
-              <div className="mb-6">
-                <h3 className="font-medium mb-3">Выберите дату</h3>
-                <div className="flex overflow-x-auto pb-2 gap-2">
-                  {dateAvailabilities.map(({ date }) => {
-                    const status = getDateStatus(date);
-                    const bgColor = {
-                      'free': 'bg-green-500 hover:bg-green-600',
-                      'partial': 'bg-yellow-500 hover:bg-yellow-600',
-                      'busy': 'bg-gray-300 hover:bg-gray-400'
-                    }[status];
+            <span className="text-sm text-gray-600">
+              {formatDisplayDate(currentDate)}
+            </span>
+          </div>
+        )}
+      </div>
 
-                    return (
-                      <button
-                        key={date}
-                        type="button"
-                        onClick={() => handleDateChange(date)}
-                        className={`flex-shrink-0 px-4 py-2 rounded-lg text-white ${bgColor} ${
-                          date === currentDate ? 'ring-2 ring-offset-2 ring-blue-500' : ''
-                        }`}
-                      >
-                        <div className="text-center">
-                          <div className="font-medium">{new Date(date).getDate()}</div>
-                          <div className="text-xs opacity-80">
-                            {new Date(date).toLocaleDateString('ru-RU', { weekday: 'short' })}
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              
-              {/* Time selection */}
-              {currentDate && (
-                <div>
-                  <h3 className="font-medium mb-3">
-                    Выберите время ({formatDisplayDate(currentDate)})
-                  </h3>
-                  
-                  <div className="grid grid-cols-4 gap-2">
-                    {timeIntervals.map(({ time, display }) => {
-                      const isAvailable = isTimeSlotAvailable(time);
-                      const isSelected = time === startTime || time === endTime;
-                      const isBetween = startTime && endTime && time > startTime && time < endTime;
+      {currentDate && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Время начала
+            </label>
+            <select
+              value={startTime}
+              onChange={(e) => handleStartTimeChange(e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              disabled={loading}
+            >
+              <option value="">Выберите время начала</option>
+              {timeIntervals
+                .filter(slot => isTimeSlotAvailable(slot.time))
+                .map((slot) => (
+                  <option key={slot.time} value={slot.time}>
+                    {slot.display}
+                  </option>
+                ))
+              }
+            </select>
+          </div>
 
-                      return (
-                        <button
-                          key={time}
-                          type="button"
-                          disabled={!isAvailable}
-                          onClick={() => handleTimeSelect(time)}
-                          className={`p-2 border rounded-lg text-center ${
-                            isAvailable
-                              ? 'bg-green-100 hover:bg-green-200 border-green-300'
-                              : 'bg-gray-100 border-gray-300 cursor-not-allowed'
-                          } ${
-                            isSelected ? 'bg-blue-100 border-blue-400' : ''
-                          } ${
-                            isBetween ? 'bg-blue-50' : ''
-                          }`}
-                        >
-                          {display}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-              
-              <div className="flex justify-end mt-6 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowPicker(false)}
-                  className="px-4 py-2 border rounded-lg hover:bg-gray-50"
-                >
-                  Отмена
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (currentDate && startTime && endTime) {
-                      onDateTimeChange(currentDate, startTime, endTime);
-                      setShowPicker(false);
-                    }
-                  }}
-                  disabled={!currentDate || !startTime || !endTime}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
-                >
-                  Применить
-                </button>
-              </div>
-            </>
-          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Время окончания
+            </label>
+            <select
+              value={endTime}
+              onChange={(e) => handleEndTimeChange(e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              disabled={loading || !startTime}
+            >
+              <option value="">Выберите время окончания</option>
+              {getAvailableEndTimes().map((slot) => (
+                <option key={slot.time} value={slot.time}>
+                  {slot.display}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+
+      {loading && (
+        <div className="flex items-center justify-center py-4">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600"></div>
+          <span className="ml-2 text-sm text-gray-600">Загрузка доступного времени...</span>
+        </div>
+      )}
+
+      {currentDate && timeSlots.length === 0 && !loading && (
+        <div className="text-center py-4 text-gray-600">
+          <p>Нет доступных временных слотов для выбранной даты</p>
         </div>
       )}
     </div>
