@@ -4,7 +4,7 @@
 import { ReactNode } from 'react';
 import TopBar from './TopBar';
 import Footer from './Footer';
-// import LoadingDebugger from '../debug/LoadingDebugger';
+import LoadingDebugger from '../debug/LoadingDebugger';
 
 type LayoutProps = {
   children: ReactNode;
