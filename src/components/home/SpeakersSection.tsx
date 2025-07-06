@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { User, ArrowRight } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -16,14 +16,23 @@ const SpeakersSection = () => {
   const [displayedSpeakers, setDisplayedSpeakers] = useState<Speaker[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isMountedRef = useRef(true);
 
+  // ИСПРАВЛЕННАЯ ВЕРСИЯ - только один раз загружаем данные
   useEffect(() => {
+    isMountedRef.current = true;
+    
     const fetchSpeakers = async () => {
       try {
+        if (!isMountedRef.current) return;
+        
+        console.log('🚀 Fetching speakers...');
         const { data, error } = await supabase
           .from('speakers')
           .select('*')
           .eq('active', true);
+
+        if (!isMountedRef.current) return;
 
         if (error) throw error;
         
@@ -35,20 +44,30 @@ const SpeakersSection = () => {
           const shuffled = [...data].sort(() => 0.5 - Math.random());
           setDisplayedSpeakers(shuffled.slice(0, 4));
         }
+        
+        console.log(`✅ Loaded ${data?.length || 0} speakers`);
       } catch (err) {
-        console.error('Error fetching speakers:', err);
-        setError('Не удалось загрузить спикеров');
+        console.error('❌ Error fetching speakers:', err);
+        if (isMountedRef.current) {
+          setError('Не удалось загрузить спикеров');
+        }
       } finally {
-        setLoading(false);
+        if (isMountedRef.current) {
+          setLoading(false);
+        }
       }
     };
 
     fetchSpeakers();
-  }, []);
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []); // КРИТИЧНО: пустой массив зависимостей
 
   // Функция для обновления отображаемых спикеров
   const refreshSpeakers = () => {
-    if (speakers.length > 0) {
+    if (speakers.length > 0 && isMountedRef.current) {
       const shuffled = [...speakers].sort(() => 0.5 - Math.random());
       setDisplayedSpeakers(shuffled.slice(0, 4));
     }
@@ -58,11 +77,11 @@ const SpeakersSection = () => {
     return (
       <section className="py-16 bg-gray-50 dark:bg-dark-800">
         <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-semibold mb-12 text-center text-gray-900 dark:text-white">
-            Наши спикеры
-          </h2>
-          <div className="flex justify-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+          <div className="text-center">
+            <div className="animate-pulse space-y-4">
+              <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-64 mx-auto"></div>
+              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-96 mx-auto"></div>
+            </div>
           </div>
         </div>
       </section>
@@ -73,107 +92,70 @@ const SpeakersSection = () => {
     return (
       <section className="py-16 bg-gray-50 dark:bg-dark-800">
         <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-semibold mb-12 text-center text-gray-900 dark:text-white">
-            Наши спикеры
-          </h2>
-          <div className="text-center text-red-600 dark:text-red-400">
-            {error}
+          <div className="text-center text-red-500">
+            <p>{error}</p>
           </div>
         </div>
       </section>
     );
   }
 
-  if (speakers.length === 0) {
-    return (
-      <section className="py-16 bg-gray-50 dark:bg-dark-800">
-        <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-semibold mb-12 text-center text-gray-900 dark:text-white">
-            Наши спикеры
-          </h2>
-          <div className="text-center text-gray-600 dark:text-gray-400">
-            В данный момент нет активных спикеров
-          </div>
-        </div>
-      </section>
-    );
+  if (displayedSpeakers.length === 0) {
+    return null; // Не показываем секцию если нет спикеров
   }
 
   return (
     <section className="py-16 bg-gray-50 dark:bg-dark-800">
       <div className="container mx-auto px-4">
-        <div className="flex flex-col md:flex-row justify-between items-center mb-12">
-          <h2 className="text-3xl font-semibold text-gray-900 dark:text-white mb-4 md:mb-0">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">
             Наши спикеры
           </h2>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={refreshSpeakers}
-              className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium transition-colors"
-            >
-              Показать других
-            </button>
-            <a
-              href="https://forms.gle/2SvevGTqxBbtCs7x5"
-              className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium transition-colors"
-            >
-              + стать спикером
-            </a>
-          </div>
+          <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+            Эксперты и профессионалы, которые делятся знаниями в ScienceHub
+          </p>
         </div>
-        
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {displayedSpeakers.map((speaker) => (
             <Link
               key={speaker.id}
               to={`/speakers/${speaker.id}`}
-              className="group bg-white dark:bg-dark-900 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+              className="group bg-white dark:bg-dark-700 rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300"
             >
-              <div className="relative aspect-square">
-                {speaker.photos?.[0]?.url ? (
+              <div className="aspect-square overflow-hidden">
+                {speaker.photos && speaker.photos.length > 0 ? (
                   <img
                     src={getSupabaseImageUrl(speaker.photos[0].url)}
                     alt={speaker.name}
-                    className="w-full h-full object-cover transition-opacity duration-300 group-hover:opacity-90"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.onerror = null;
-                      target.src = '';
-                      target.parentElement!.className = 'relative aspect-square bg-gray-100 dark:bg-dark-700 flex items-center justify-center';
-                      target.parentElement!.innerHTML = '<User className="w-12 h-12 text-gray-400 dark:text-dark-500" />';
-                    }}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    loading="lazy"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-dark-700">
-                    <User className="w-12 h-12 text-gray-400 dark:text-dark-500" />
+                  <div className="w-full h-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
+                    <User className="w-16 h-16 text-gray-400" />
                   </div>
                 )}
               </div>
-              <div className="p-5">
-                <h3 className="text-lg font-semibold mb-1 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+              <div className="p-4">
+                <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-2 line-clamp-2">
                   {speaker.name}
                 </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+                <p className="text-gray-600 dark:text-gray-300 text-sm line-clamp-2">
                   {speaker.field_of_expertise}
                 </p>
               </div>
             </Link>
           ))}
-          
-          {/* All Speakers Card */}
+        </div>
+
+        <div className="text-center">
           <Link
             to="/speakers"
-            className="group bg-white dark:bg-dark-900 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col items-center justify-center p-6 text-center"
+            className="inline-flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
           >
-            <div className="mb-3 p-3 bg-gray-100 dark:bg-dark-800 rounded-full">
-              <ArrowRight className="h-6 w-6 text-gray-600 dark:text-gray-400 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
-              Все спикеры
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              Познакомиться со всеми
-            </p>
+            <span>Все спикеры</span>
+            <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
       </div>

@@ -1,8 +1,10 @@
+// src/components/layout/Layout.tsx
+// Добавляем отладчик в существующий Layout
+
 import { ReactNode } from 'react';
 import TopBar from './TopBar';
 import Footer from './Footer';
-
-
+// import LoadingDebugger from '../debug/LoadingDebugger';
 
 type LayoutProps = {
   children: ReactNode;
@@ -15,9 +17,13 @@ const Layout = ({ children }: LayoutProps) => {
       <main className="flex-grow">
         {children}
       </main>
-      <Footer /> 
+      <Footer />
+      
+
+      {/* Включаем отладчик */}
+      {/* {process.env.NODE_ENV === 'development' && <LoadingDebugger />} */}
     </div>
   );
 };
 
-export default Layout;
+export default Layout; 

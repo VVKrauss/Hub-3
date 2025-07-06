@@ -1,3 +1,6 @@
+// src/pages/HomePage.tsx
+// Обычная версия HomePage
+
 import Layout from '../components/layout/Layout';
 import HeroSection from '../components/home/HeroSection';
 import InfoSection from '../components/home/InfoSection';
@@ -13,10 +16,10 @@ const HomePage = () => {
       <InfoSection />
       <EventsSection />
       <SpeakersSection />
-      <RentSection/>
-      <CoworkingSection/>
+      <RentSection />
+      <CoworkingSection />
     </Layout>
   );
 };
 
-export default HomePage;
+export default HomePage; 

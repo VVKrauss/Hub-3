@@ -1,4 +1,7 @@
-import { useState, useEffect } from 'react';
+// src/components/home/CoworkingSection.tsx
+// ИСПРАВЛЕННАЯ ВЕРСИЯ - устранение бесконечных циклов
+
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -15,34 +18,56 @@ type CoworkingSectionData = {
 const CoworkingSection = () => {
   const [data, setData] = useState<CoworkingSectionData | null>(null);
   const [loading, setLoading] = useState(true);
+  const isMountedRef = useRef(true);
 
+  // ИСПРАВЛЕННАЯ ВЕРСИЯ - только один раз загружаем данные
   useEffect(() => {
-    fetchCoworkingData();
-  }, []);
+    isMountedRef.current = true;
+    
+    const fetchCoworkingData = async () => {
+      try {
+        if (!isMountedRef.current) return;
+        
+        console.log('🚀 Fetching coworking section data...');
+        const { data: settings, error } = await supabase
+          .from('site_settings')
+          .select('coworking_selection')
+          .single();
 
-  const fetchCoworkingData = async () => {
-    try {
-      setLoading(true);
-      const { data: settings, error } = await supabase
-        .from('site_settings')
-        .select('coworking_selection')
-        .single();
+        if (!isMountedRef.current) return;
 
-      if (error) throw error;
+        if (error) {
+          console.log('No coworking settings found, hiding section');
+          return;
+        }
 
-      // Проверяем наличие данных в поле coworking_selection
-      if (settings?.coworking_selection) {
-        setData(settings.coworking_selection);
+        // Проверяем наличие данных в поле coworking_selection
+        if (settings?.coworking_selection) {
+          setData(settings.coworking_selection);
+          console.log('✅ Coworking section data loaded');
+        }
+      } catch (error) {
+        console.error('❌ Error fetching Coworking section data:', error);
+      } finally {
+        if (isMountedRef.current) {
+          setLoading(false);
+        }
       }
-    } catch (error) {
-      console.error('Error fetching Coworking section data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+
+    fetchCoworkingData();
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []); // КРИТИЧНО: пустой массив зависимостей
 
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <div className="section bg-white dark:bg-dark-900 min-h-[400px] flex items-center justify-center">
+        <div className="animate-pulse">Загрузка...</div>
+      </div>
+    );
   }
 
   if (!data || !data.enabled) {
@@ -59,7 +84,7 @@ const CoworkingSection = () => {
             dangerouslySetInnerHTML={{ __html: data.description }} 
           />
           <Link 
-            to="/about" 
+            to="/coworking" 
             className="inline-flex items-center text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 transition-colors font-medium"
           >
             Занять место
@@ -71,6 +96,7 @@ const CoworkingSection = () => {
             src={getSupabaseImageUrl(data.image)} 
             alt={data.title} 
             className="w-full h-auto rounded-lg shadow-md"
+            loading="lazy"
           />
         </div>
       </div>
@@ -78,4 +104,6 @@ const CoworkingSection = () => {
   );
 };
 
-export default CoworkingSection;
+export default CoworkingSection;   
+
+
