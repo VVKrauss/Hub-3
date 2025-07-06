@@ -1,241 +1,330 @@
 // src/utils/coworkingMigration.ts
-// Скрипт для миграции данных коворкинга из старой схемы в новую
-
 import { supabase } from '../lib/supabase';
-import { updateCoworkingPageSettings } from '../api/coworking';
+import { saveCoworkingPageSettings, type CoworkingPageSettings, type CoworkingService, type CoworkingHeader } from '../api/coworking';
 
-export interface MigrationResult {
-  success: boolean;
-  message: string;
-  migratedServices: number;
-  errors: string[];
-}
-
-// Основная функция миграции
-export const migrateCoworkingData = async (): Promise<MigrationResult> => {
-  const errors: string[] = [];
-  let migratedServices = 0;
-
+/**
+ * Миграция данных коворкинга из старой схемы в новую
+ */
+export async function migrateLegacyCoworkingData(): Promise<boolean> {
   try {
-    console.log('🔄 Starting coworking data migration...');
+    console.log('Начинаем миграцию данных коворкинга...');
 
-    // 1. Получаем данные из старых таблиц
-    const [headerResponse, servicesResponse, oldSettingsResponse] = await Promise.all([
-      supabase
-        .from('coworking_header')
-        .select('*')
-        .single(),
-      supabase
-        .from('coworking_info_table')
-        .select('*')
-        .order('order', { ascending: true }),
-      supabase
-        .from('site_settings')
-        .select('coworking_header_settings')
-        .single()
-    ]);
-
-    console.log('📊 Old data loaded:', {
-      header: !!headerResponse.data,
-      services: servicesResponse.data?.length || 0,
-      oldSettings: !!oldSettingsResponse.data?.coworking_header_settings
-    });
-
-    // 2. Формируем данные для новой схемы
-    const services = servicesResponse.data?.map(service => ({
-      id: service.id,
-      name: service.name || '',
-      description: service.description || '',
-      price: service.price || 0,
-      currency: service.currency || 'euro',
-      period: service.period || 'час',
-      active: service.active !== false,
-      image_url: service.image_url || '',
-      order: service.order || 0,
-      main_service: service.main_service !== false
-    })) || [];
-
-    const migratedSettings = {
-      title: headerResponse.data?.title || 
-             oldSettingsResponse.data?.coworking_header_settings?.title || 
-             'Коворкинг пространство',
-      description: headerResponse.data?.description || 
-                  oldSettingsResponse.data?.coworking_header_settings?.description || 
-                  'Комфортные рабочие места для исследователей и стартапов',
-      heroImage: '',
-      address: oldSettingsResponse.data?.coworking_header_settings?.address || 
-               headerResponse.data?.address || 
-               'Сараевская, 48',
-      phone: oldSettingsResponse.data?.coworking_header_settings?.phone || 
-             headerResponse.data?.phone || 
-             '+381',
-      working_hours: oldSettingsResponse.data?.coworking_header_settings?.working_hours || 
-                     headerResponse.data?.working_hours || 
-                     '10:00-18:00',
-      email: 'info@sciencehub.site',
-      telegram: '@sciencehub',
-      services: services,
-      mainServices: services.filter(s => s.main_service && s.active),
-      metaDescription: 'Современное коворкинг пространство для исследователей и стартапов в Сербии',
-      showBookingForm: true,
-      bookingFormFields: ['name', 'contact', 'phone', 'comment']
-    };
-
-    // 3. Сохраняем в новую схему
-    console.log('💾 Saving to new schema...');
-    const updateResult = await updateCoworkingPageSettings(migratedSettings);
-
-    if (updateResult.error) {
-      throw new Error(`Failed to save migrated data: ${updateResult.error}`);
-    }
-
-    migratedServices = services.length;
-
-    console.log('✅ Migration completed successfully');
-    return {
-      success: true,
-      message: `Миграция завершена успешно. Перенесено ${migratedServices} услуг.`,
-      migratedServices,
-      errors
-    };
-
-  } catch (error) {
-    console.error('❌ Migration failed:', error);
-    errors.push(`Migration error: ${error}`);
-    
-    return {
-      success: false,
-      message: 'Ошибка при миграции данных',
-      migratedServices,
-      errors
-    };
-  }
-};
-
-// Проверка необходимости миграции
-export const checkMigrationNeeded = async (): Promise<boolean> => {
-  try {
-    // Проверяем, есть ли данные в новой схеме
-    const { data: newSettings } = await supabase
-      .from('sh_site_settings')
-      .select('coworking_page_settings')
-      .eq('is_active', true)
+    // 1. Получаем заголовок из старой схемы (site_settings.coworking_header_settings)
+    const { data: headerData, error: headerError } = await supabase
+      .from('site_settings')
+      .select('coworking_header_settings')
       .single();
 
-    if (newSettings?.coworking_page_settings?.services?.length > 0) {
-      console.log('✅ New schema already has data, migration not needed');
+    let migratedHeader: CoworkingHeader = {
+      title: 'Коворкинг пространство',
+      description: 'Комфортные рабочие места для исследователей и стартапов',
+      address: 'Сараевская, 48',
+      phone: '+381',
+      working_hours: '10:00-18:00'
+    };
+
+    if (!headerError && headerData?.coworking_header_settings) {
+      const oldHeader = headerData.coworking_header_settings;
+      migratedHeader = {
+        title: oldHeader.title || migratedHeader.title,
+        description: oldHeader.description || migratedHeader.description,
+        address: oldHeader.address || migratedHeader.address,
+        phone: oldHeader.phone || migratedHeader.phone,
+        working_hours: oldHeader.working_hours || migratedHeader.working_hours
+      };
+      console.log('Заголовок найден в старой схеме:', migratedHeader);
+    } else {
+      console.log('Заголовок не найден в старой схеме, используем дефолтный');
+    }
+
+    // 2. Получаем услуги из старой схемы (coworking_info_table)
+    const { data: servicesData, error: servicesError } = await supabase
+      .from('coworking_info_table')
+      .select('*')
+      .order('order', { ascending: true });
+
+    let migratedServices: CoworkingService[] = [];
+
+    if (!servicesError && servicesData && servicesData.length > 0) {
+      migratedServices = servicesData.map((oldService, index) => ({
+        id: oldService.id || crypto.randomUUID(),
+        name: oldService.name || `Услуга ${index + 1}`,
+        description: oldService.description || '',
+        price: oldService.price || 0,
+        currency: oldService.currency || 'euro',
+        period: oldService.period || 'час',
+        active: oldService.active !== false,
+        image_url: oldService.image_url || '',
+        order: oldService.order || index + 1,
+        main_service: oldService.main_service || false
+      }));
+      console.log(`Найдено ${migratedServices.length} услуг в старой схеме`);
+    } else {
+      console.log('Услуги не найдены в старой схеме');
+    }
+
+    // 3. Создаем новые настройки страницы
+    const newPageSettings: CoworkingPageSettings = {
+      header: migratedHeader,
+      services: migratedServices,
+      lastUpdated: new Date().toISOString()
+    };
+
+    // 4. Сохраняем в новую схему
+    const success = await saveCoworkingPageSettings(newPageSettings);
+
+    if (success) {
+      console.log('Миграция завершена успешно!');
+      console.log('Перенесено:', {
+        header: migratedHeader,
+        servicesCount: migratedServices.length
+      });
+      return true;
+    } else {
+      console.error('Ошибка при сохранении в новую схему');
       return false;
     }
 
-    // Проверяем, есть ли данные в старых таблицах
-    const [servicesResponse] = await Promise.all([
-      supabase
-        .from('coworking_info_table')
-        .select('id')
-        .limit(1)
-    ]);
-
-    const hasOldData = servicesResponse.data && servicesResponse.data.length > 0;
-    
-    console.log(`${hasOldData ? '🔄' : '✅'} Migration ${hasOldData ? 'needed' : 'not needed'}`);
-    return hasOldData;
-
   } catch (error) {
-    console.error('Error checking migration status:', error);
+    console.error('Ошибка при миграции:', error);
     return false;
   }
-};
+}
 
-// Резервное копирование старых данных
-export const backupOldData = async (): Promise<{ success: boolean; message: string }> => {
+/**
+ * Создание резервной копии старых данных перед миграцией
+ */
+export async function backupLegacyCoworkingData(): Promise<boolean> {
   try {
-    console.log('💾 Creating backup of old coworking data...');
+    console.log('Создаем резервную копию старых данных...');
 
-    const [headerResponse, servicesResponse, settingsResponse] = await Promise.all([
-      supabase.from('coworking_header').select('*'),
-      supabase.from('coworking_info_table').select('*'),
-      supabase.from('site_settings').select('coworking_header_settings')
-    ]);
+    // Получаем старый заголовок
+    const { data: headerData } = await supabase
+      .from('site_settings')
+      .select('coworking_header_settings')
+      .single();
 
-    const backup = {
+    // Получаем старые услуги
+    const { data: servicesData } = await supabase
+      .from('coworking_info_table')
+      .select('*');
+
+    // Создаем объект с резервной копией
+    const backupData = {
       timestamp: new Date().toISOString(),
-      coworking_header: headerResponse.data,
-      coworking_info_table: servicesResponse.data,
-      site_settings_coworking: settingsResponse.data,
-      migration_version: '1.0'
+      header: headerData?.coworking_header_settings || null,
+      services: servicesData || [],
+      migration_info: {
+        source: 'legacy_coworking_schema',
+        version: '1.0'
+      }
     };
 
-    // Сохраняем резервную копию в таблицу migration_backups (если существует)
-    // или просто логируем в консоль для ручного сохранения
-    console.log('📋 Backup data (save this manually if needed):', JSON.stringify(backup, null, 2));
+    // Сохраняем в новую схему как backup
+    const { error } = await supabase
+      .from('sh_site_settings')
+      .upsert({
+        id: 1,
+        coworking_legacy_backup: backupData
+      }, {
+        onConflict: 'id'
+      });
 
-    return {
-      success: true,
-      message: 'Резервная копия создана успешно. Данные выведены в консоль.'
-    };
+    if (error) {
+      console.error('Ошибка при создании резервной копии:', error);
+      return false;
+    }
+
+    console.log('Резервная копия создана успешно');
+    return true;
 
   } catch (error) {
-    console.error('❌ Backup failed:', error);
-    return {
-      success: false,
-      message: `Ошибка создания резервной копии: ${error}`
-    };
+    console.error('Ошибка при создании резервной копии:', error);
+    return false;
   }
-};
+}
 
-// Валидация мигрированных данных
-export const validateMigration = async (): Promise<{ success: boolean; message: string; issues: string[] }> => {
+/**
+ * Полная миграция с созданием резервной копии
+ */
+export async function fullMigrationWithBackup(): Promise<boolean> {
+  try {
+    // 1. Создаем резервную копию
+    const backupSuccess = await backupLegacyCoworkingData();
+    if (!backupSuccess) {
+      console.error('Не удалось создать резервную копию');
+      return false;
+    }
+
+    // 2. Выполняем миграцию
+    const migrationSuccess = await migrateLegacyCoworkingData();
+    if (!migrationSuccess) {
+      console.error('Не удалось выполнить миграцию');
+      return false;
+    }
+
+    console.log('Полная миграция с резервной копией завершена успешно!');
+    return true;
+
+  } catch (error) {
+    console.error('Ошибка при полной миграции:', error);
+    return false;
+  }
+}
+
+/**
+ * Восстановление данных из резервной копии
+ */
+export async function restoreFromBackup(): Promise<boolean> {
+  try {
+    console.log('Восстанавливаем данные из резервной копии...');
+
+    // Получаем резервную копию
+    const { data, error } = await supabase
+      .from('sh_site_settings')
+      .select('coworking_legacy_backup')
+      .eq('id', 1)
+      .single();
+
+    if (error || !data?.coworking_legacy_backup) {
+      console.error('Резервная копия не найдена');
+      return false;
+    }
+
+    const backupData = data.coworking_legacy_backup;
+
+    // Восстанавливаем заголовок в старую схему
+    if (backupData.header) {
+      const { error: headerError } = await supabase
+        .from('site_settings')
+        .upsert({
+          id: 1,
+          coworking_header_settings: backupData.header
+        });
+
+      if (headerError) {
+        console.error('Ошибка при восстановлении заголовка:', headerError);
+      }
+    }
+
+    // Восстанавливаем услуги в старую схему
+    if (backupData.services && backupData.services.length > 0) {
+      // Сначала очищаем таблицу
+      await supabase.from('coworking_info_table').delete().neq('id', '');
+
+      // Затем вставляем данные из резервной копии
+      const { error: servicesError } = await supabase
+        .from('coworking_info_table')
+        .insert(backupData.services);
+
+      if (servicesError) {
+        console.error('Ошибка при восстановлении услуг:', servicesError);
+      }
+    }
+
+    console.log('Данные восстановлены из резервной копии');
+    return true;
+
+  } catch (error) {
+    console.error('Ошибка при восстановлении:', error);
+    return false;
+  }
+}
+
+/**
+ * Очистка старых данных после успешной миграции
+ */
+export async function cleanupLegacyData(): Promise<boolean> {
+  try {
+    console.log('Очищаем старые данные...');
+
+    // Очищаем заголовок из старой схемы
+    const { error: headerError } = await supabase
+      .from('site_settings')
+      .update({ coworking_header_settings: null })
+      .eq('id', 1);
+
+    if (headerError) {
+      console.error('Ошибка при очистке заголовка:', headerError);
+    }
+
+    // Помечаем старые услуги как неактивные вместо удаления
+    const { error: servicesError } = await supabase
+      .from('coworking_info_table')
+      .update({ active: false })
+      .eq('active', true);
+
+    if (servicesError) {
+      console.error('Ошибка при деактивации услуг:', servicesError);
+    }
+
+    console.log('Очистка старых данных завершена');
+    return true;
+
+  } catch (error) {
+    console.error('Ошибка при очистке:', error);
+    return false;
+  }
+}
+
+/**
+ * Проверка целостности данных после миграции
+ */
+export async function validateMigration(): Promise<{
+  isValid: boolean;
+  issues: string[];
+}> {
   const issues: string[] = [];
 
   try {
-    console.log('🔍 Validating migration...');
-
-    // Получаем данные из новой схемы
-    const { data: newSettings } = await supabase
+    // Проверяем новые данные
+    const { data: newData, error } = await supabase
       .from('sh_site_settings')
       .select('coworking_page_settings')
-      .eq('is_active', true)
+      .eq('id', 1)
       .single();
 
-    if (!newSettings?.coworking_page_settings) {
-      issues.push('Настройки коворкинга не найдены в новой схеме');
-      return { success: false, message: 'Данные не найдены', issues };
+    if (error || !newData?.coworking_page_settings) {
+      issues.push('Новые данные не найдены в схеме sh_site_settings');
+      return { isValid: false, issues };
     }
 
-    const settings = newSettings.coworking_page_settings;
+    const settings = newData.coworking_page_settings;
 
-    // Проверяем основные поля
-    if (!settings.title) issues.push('Отсутствует заголовок');
-    if (!settings.description) issues.push('Отсутствует описание');
+    // Проверяем заголовок
+    if (!settings.header || !settings.header.title) {
+      issues.push('Отсутствует заголовок или его название');
+    }
+
+    // Проверяем услуги
     if (!settings.services || !Array.isArray(settings.services)) {
-      issues.push('Услуги не найдены или имеют неверный формат');
+      issues.push('Услуги не являются массивом');
     } else {
-      // Проверяем услуги
       settings.services.forEach((service: any, index: number) => {
-        if (!service.id) issues.push(`Услуга ${index + 1}: отсутствует ID`);
-        if (!service.name) issues.push(`Услуга ${index + 1}: отсутствует название`);
-        if (typeof service.price !== 'number') issues.push(`Услуга ${index + 1}: неверная цена`);
+        if (!service.id) {
+          issues.push(`Услуга ${index + 1}: отсутствует ID`);
+        }
+        if (!service.name) {
+          issues.push(`Услуга ${index + 1}: отсутствует название`);
+        }
+        if (typeof service.price !== 'number') {
+          issues.push(`Услуга ${index + 1}: некорректная цена`);
+        }
       });
     }
 
-    const success = issues.length === 0;
-    const message = success 
-      ? `Валидация пройдена. Найдено ${settings.services?.length || 0} услуг.`
-      : `Найдено ${issues.length} проблем при валидации`;
-
-    console.log(success ? '✅' : '⚠️', message);
-    if (issues.length > 0) {
-      console.log('Issues found:', issues);
+    // Проверяем timestamp
+    if (!settings.lastUpdated) {
+      issues.push('Отсутствует timestamp последнего обновления');
     }
 
-    return { success, message, issues };
+    return { isValid: issues.length === 0, issues };
 
   } catch (error) {
-    console.error('❌ Validation failed:', error);
-    return {
-      success: false,
-      message: `Ошибка валидации: ${error}`,
-      issues: [`Validation error: ${error}`]
+    console.error('Ошибка при валидации:', error);
+    return { 
+      isValid: false, 
+      issues: [`Ошибка при валидации: ${error}`] 
     };
   }
-};
+}
