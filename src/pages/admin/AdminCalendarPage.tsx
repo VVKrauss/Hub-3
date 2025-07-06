@@ -520,14 +520,14 @@ const AdminCalendarPage = () => {
 
             return (
               <SlotComponent
-  key={idx}
-  slot={group}
-  groupedSlot={group}
-  onEdit={handleEditSlot}
-  onDelete={deleteTimeSlot}
-  className="absolute left-1 right-1 p-1 text-xs overflow-hidden"
-  style={{ top: `${top}%`, height: `${height}%`, zIndex: 10 + idx }}
-/>
+                key={idx}
+                slot={group}
+                groupedSlot={group}
+                onEdit={handleEditSlot}
+                onDelete={deleteTimeSlot}
+                className="absolute left-1 right-1 p-1 text-xs overflow-hidden"
+                style={{ top: `${top}%`, height: `${height}%`, zIndex: 10 + idx }}
+              />
             );
           })}
         </TimeGrid>
