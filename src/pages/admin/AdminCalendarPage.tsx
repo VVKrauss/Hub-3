@@ -356,101 +356,104 @@ const fetchTimeSlots = useCallback(async () => {
     });
   }, []);
 
-  // ОБНОВЛЕННАЯ ФУНКЦИЯ СОЗДАНИЯ/ОБНОВЛЕНИЯ
-  const createOrUpdateTimeSlot = useCallback(async () => {
-    if (!modalState.data) return;
 
-    try {
-      const { start_at, end_at, title, description, slot_type = 'rent' } = modalState.data;
-      
-      if (!start_at || !end_at || !title) {
-        toast.error('Заполните все обязательные поля');
-        return;
-      }
+const createOrUpdateTimeSlot = useCallback(async () => {
+  if (!modalState.data) return;
 
-      if (new Date(end_at) <= new Date(start_at)) {
-        toast.error('Время окончания должно быть позже времени начала');
-        return;
-      }
-
-      // Проверка пересечений с новой таблицей
-      const { data: overlappingSlots, error: overlapError } = await supabase
-        .from('sh_time_slots')
-        .select('*')
-        .or(`and(start_at.lte.${end_at},end_at.gte.${start_at})`)
-        .neq('id', modalState.mode === 'edit' ? modalState.data.id : '');
-
-      if (overlapError) throw overlapError;
-
-      if (overlappingSlots && overlappingSlots.length > 0) {
-        const overlappingDetails = overlappingSlots.map(slot => {
-          const type = slot.slot_type === 'event' ? 'Мероприятие' : 'Аренда';
-          const title = slot.title || 'Без названия';
-          const time = `${formatSlotTime(slot.start_at)}-${formatSlotTime(slot.end_at)}`;
-          return `• ${type}: ${title} (${time})`;
-        }).join('\n');
-
-        toast.error(`Время пересекается с:\n${overlappingDetails}`, { duration: 8000 });
-        return;
-      }
-
-      const slotData = {
-        start_at,
-        end_at,
-        slot_type,
-        slot_status: 'active',
-        title,
-        description,
-        venue_name: 'Science Hub',
-        contact_name: title,
-        is_public: true,
-        is_booked: slot_type === 'rent'
-      };
-
-      if (modalState.mode === 'edit') {
-        const { error } = await supabase
-          .from('sh_time_slots')
-          .update(slotData)
-          .eq('id', modalState.data.id);
-
-        if (error) throw error;
-        toast.success('Слот обновлен');
-      } else {
-        const { error } = await supabase
-          .from('sh_time_slots')
-          .insert([slotData]);
-
-        if (error) throw error;
-        toast.success('Слот создан');
-      }
-      
-      setModalState({ isOpen: false, mode: 'create', data: null });
-      fetchTimeSlots();
-    } catch (err) {
-      console.error('Error saving time slot:', err);
-      toast.error('Ошибка сохранения слота');
-    }
-  }, [modalState, formatSlotTime, fetchTimeSlots]);
-
-  // ОБНОВЛЕННАЯ ФУНКЦИЯ УДАЛЕНИЯ
-  const deleteTimeSlot = useCallback(async (id: string, type?: string) => {
-    if (type === 'event') {
-      toast.error('Мероприятия удаляются через страницу управления мероприятиями');
+  try {
+    const { start_at, end_at, title, description, slot_type = 'rent' } = modalState.data;
+    
+    if (!start_at || !end_at || !title) {
+      toast.error('Заполните все обязательные поля');
       return;
     }
 
-    if (!window.confirm('Удалить слот?')) return;
-
-    try {
-      const { error } = await supabase.from('sh_time_slots').delete().eq('id', id);
-      if (error) throw error;
-      toast.success('Слот удален');
-      fetchTimeSlots();
-    } catch (err) {
-      console.error('Error deleting time slot:', err);
-      toast.error('Ошибка удаления слота');
+    if (new Date(end_at) <= new Date(start_at)) {
+      toast.error('Время окончания должно быть позже времени начала');
+      return;
     }
-  }, [fetchTimeSlots]);
+
+    // ИЗМЕНЕНО: Проверка пересечений в sh_time_slots
+    const { data: overlappingSlots, error: overlapError } = await supabase
+      .from('sh_time_slots')
+      .select('*')
+      .or(`and(start_at.lte.${end_at},end_at.gte.${start_at})`)
+      .neq('id', modalState.mode === 'edit' ? modalState.data.id : '');
+
+    if (overlapError) throw overlapError;
+
+    if (overlappingSlots && overlappingSlots.length > 0) {
+      const overlappingDetails = overlappingSlots.map(slot => {
+        const type = slot.slot_type === 'event' ? 'Мероприятие' : 'Аренда';
+        const title = slot.title || 'Без названия';
+        const time = `${formatSlotTime(slot.start_at)}-${formatSlotTime(slot.end_at)}`;
+        return `• ${type}: ${title} (${time})`;
+      }).join('\n');
+
+      toast.error(`Время пересекается с:\n${overlappingDetails}`, { duration: 8000 });
+      return;
+    }
+
+    const slotData = {
+      start_at,
+      end_at,
+      slot_type,
+      slot_status: 'active',
+      title,
+      description,
+      venue_name: 'Science Hub',
+      contact_name: title,
+      is_public: true,
+      is_booked: slot_type === 'rent'
+    };
+
+    if (modalState.mode === 'edit') {
+      // ИЗМЕНЕНО: Обновление в sh_time_slots
+      const { error } = await supabase
+        .from('sh_time_slots')
+        .update(slotData)
+        .eq('id', modalState.data.id);
+
+      if (error) throw error;
+      toast.success('Слот обновлен');
+    } else {
+      // ИЗМЕНЕНО: Создание в sh_time_slots
+      const { error } = await supabase
+        .from('sh_time_slots')
+        .insert([slotData]);
+
+      if (error) throw error;
+      toast.success('Слот создан');
+    }
+    
+    setModalState({ isOpen: false, mode: 'create', data: null });
+    fetchTimeSlots();
+  } catch (err) {
+    console.error('Error saving time slot:', err);
+    toast.error('Ошибка сохранения слота');
+  }
+}, [modalState, formatSlotTime, fetchTimeSlots]);
+
+  
+const deleteTimeSlot = useCallback(async (id: string, type?: string) => {
+  if (type === 'event') {
+    toast.error('Мероприятия удаляются через страницу управления мероприятиями');
+    return;
+  }
+
+  if (!window.confirm('Удалить слот?')) return;
+
+  try {
+    // ИЗМЕНЕНО: Удаление из sh_time_slots
+    const { error } = await supabase.from('sh_time_slots').delete().eq('id', id);
+    if (error) throw error;
+    toast.success('Слот удален');
+    fetchTimeSlots();
+  } catch (err) {
+    console.error('Error deleting time slot:', err);
+    toast.error('Ошибка удаления слота');
+  }
+}, [fetchTimeSlots]);
 
   // === МЕТОДЫ РЕНДЕРИНГА ===
   const renderDayView = () => {
