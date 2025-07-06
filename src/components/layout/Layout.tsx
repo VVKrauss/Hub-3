@@ -1,9 +1,8 @@
 // src/components/layout/Layout.tsx
-// ТЕСТИРОВАНИЕ ШАГА 2: TopBar с API навигацией
+// Использует ЕДИНСТВЕННЫЙ файл TopBar.tsx
 
 import { ReactNode } from 'react';
-// import TopBarMinimal from './TopBarMinimal'; // ← Шаг 1
-import TopBar from './TopBar'; // ← Шаг 2: API навигация
+import TopBar from './TopBar'; // ← ЕДИНСТВЕННЫЙ TopBar файл
 import Footer from './Footer';
 
 type LayoutProps = {
@@ -13,8 +12,8 @@ type LayoutProps = {
 const Layout = ({ children }: LayoutProps) => {
   return (
     <div className="flex flex-col min-h-screen">
-      {/* ШАГ 2: TopBar с API навигацией */}
-      <TopBar /> 
+      {/* ЕДИНСТВЕННЫЙ TopBar - все изменения делаем в TopBar.tsx */}
+      <TopBar />
       
       <main className="flex-grow">
         {children}
