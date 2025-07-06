@@ -44,4 +44,4 @@ export const createApiResponse = <T>(data: T | null, error?: any): ApiResponse<T
     data,
     error: error ? (typeof error === 'string' ? error : error.message || 'Unknown error') : null
   };
-};
+}; 
