@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { MapPin, Phone, Clock, Wifi, Coffee, Monitor, Car, Shield } from 'lucide-react';
-import Layout from '../components/Layout';
+import Layout from '../components/layout/Layout';
 import { getCoworkingPageSettings, checkLegacyCoworkingData, type CoworkingPageSettings } from '../api/coworking';
 import { migrateLegacyCoworkingData } from '../utils/coworkingMigration';
 import { toast } from 'react-hot-toast';
