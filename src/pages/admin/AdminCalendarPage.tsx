@@ -613,7 +613,6 @@ const AdminCalendarPage = () => {
 
 
 
-
 const renderMonthView = () => {
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -661,36 +660,18 @@ const renderMonthView = () => {
                 {format(day, 'd')}
               </div>
               
-              <div className="space-y-1">
-                {daySlots.slice(0, 3).map((slot, idx) => {
-                  const isPastSlot = parseTimestamp(slot.end_at) < new Date();
-                  
-                  // ИСПРАВЛЕНО: Используем упрощенный tooltip как в SlotComponent
-                  const tooltipContent = `${slot.title || 'Слот'}
-Время: ${formatSlotTime(slot.start_at)}-${formatSlotTime(slot.end_at)}${slot.slot_status === 'draft' ? '\nСтатус: Черновик' : ''}${isPastSlot ? '\nСтатус: Прошедшее' : ''}`;
-
-                  return (
-                    <div
-                      key={idx}
-                      data-tooltip-id={`month-tooltip-${slot.id}`}
-                      data-tooltip-content={tooltipContent}
-                      className={`text-xs p-1 rounded truncate cursor-pointer ${getSlotColorClasses(slot.slot_type, slot.slot_status, isPastSlot)}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (slot.slot_type === 'rent' && !isPastSlot) {
-                          handleEditSlot(slot);
-                        }
-                      }}
-                    >
-                      {slot.title}
-                      <Tooltip 
-                        id={`month-tooltip-${slot.id}`} 
-                        className="z-50 whitespace-pre-line" 
-                        style={{ zIndex: 9999 }}
-                      />
-                    </div>
-                  );
-                })}
+              <div className="space-y-1 relative">
+                {daySlots.slice(0, 3).map((slot, idx) => (
+                  // ИСПРАВЛЕНО: Используем тот же SlotComponent что и везде
+                  <SlotComponent
+                    key={idx}
+                    slot={slot}
+                    onEdit={handleEditSlot}
+                    onDelete={deleteTimeSlot}
+                    className="text-xs p-1 relative"
+                    style={{}}
+                  />
+                ))}
                 {daySlots.length > 3 && (
                   <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
                     +{daySlots.length - 3} еще
@@ -704,8 +685,6 @@ const renderMonthView = () => {
     </div>
   );
 };
-
-
   
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-900">
