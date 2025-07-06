@@ -15,14 +15,14 @@ const HomePage = () => {
       {/* ВКЛЮЧАЙТЕ ПО ОДНОМУ И ТЕСТИРУЙТЕ */}
       
       {/* Шаг 1: Только HeroSection */}
-      <HeroSection />
+      {/* <HeroSection />
       
       {/* Шаг 2: Добавьте InfoSection и проверьте */}
       <InfoSection />
       
       {/* Шаг 3: Добавьте EventsSection и проверьте */}
-      <EventsSection />
-      
+      {/* <EventsSection /> */}
+       
       {/* Шаг 4: Добавьте SpeakersSection и проверьте */}
       {/* <SpeakersSection /> */}
       
