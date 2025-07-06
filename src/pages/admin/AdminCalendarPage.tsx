@@ -210,13 +210,9 @@ const SlotComponent = ({
   const firstSlot = groupedSlot?.slots[0] || slot;
   const lastSlot = groupedSlot?.slots[groupedSlot?.slots.length - 1] || slot;
   
-  // ИЗМЕНЕНИЕ 1: Упрощенный tooltip
-  const tooltipContent = `
-    ${slot.title || 'Слот'}
-    Время: ${formatSlotTime(firstSlot.start_at)}-${formatSlotTime(lastSlot.end_at)}
-    ${slot.slot_status === 'draft' ? 'Статус: Черновик' : ''}
-    ${isPastSlot ? 'Статус: Прошедшее' : ''}
-  `;
+  // ИСПРАВЛЕНО: Упрощенный tooltip для ВСЕХ представлений
+  const tooltipContent = `${slot.title || 'Слот'}
+Время: ${formatSlotTime(firstSlot.start_at)}-${formatSlotTime(lastSlot.end_at)}${slot.slot_status === 'draft' ? '\nСтатус: Черновик' : ''}${isPastSlot ? '\nСтатус: Прошедшее' : ''}`;
 
   return (
     <div
