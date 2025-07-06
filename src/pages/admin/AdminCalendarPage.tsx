@@ -1,7 +1,7 @@
 // src/pages/admin/AdminCalendarPage.tsx - ОБНОВЛЕННАЯ ВЕРСИЯ ДЛЯ sh_time_slots
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 import { 
   format, 
@@ -448,8 +448,187 @@ const AdminCalendarPage = () => {
     }
   }, [fetchTimeSlots]);
 
-  // ... остальные методы рендеринга остаются такими же ...
-  // (renderMonthView, renderWeekView, renderDayView)
+  // === МЕТОДЫ РЕНДЕРИНГА ===
+  const renderDayView = () => {
+    const dayKey = format(currentDate, 'yyyy-MM-dd');
+    const dayGroupedSlots = Object.values(groupedSlots).filter(
+      group => format(parseTimestamp(group.start_at), 'yyyy-MM-dd') === dayKey
+    );
+
+    return (
+      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-dark-600 overflow-hidden">
+        <h2 className="text-xl font-semibold p-6 pb-4">
+          {format(currentDate, 'EEEE, d MMMM yyyy', { locale: ru })}
+        </h2>
+        
+        <TimeGrid>
+          {generateTimeSlots(currentDate).map((slot, i) => (
+            <div 
+              key={i} 
+              className="h-12 border-b border-gray-100 dark:border-dark-700 relative hover:bg-gray-50 dark:hover:bg-dark-700 cursor-pointer"
+              onClick={() => handleTimeSlotClick(currentDate, WORKING_HOURS.start + i)}
+            >
+              {isToday(currentDate) && new Date().getHours() === slot.time.getHours() && (
+                <div 
+                  className="absolute left-0 right-0 h-0.5 bg-red-500 z-20"
+                  style={{ top: `${(new Date().getMinutes() / 60) * 100}%` }}
+                >
+                  <div className="absolute -top-1.5 -left-1 w-3 h-3 rounded-full bg-red-500" />
+                </div>
+              )}
+            </div>
+          ))}
+
+          {dayGroupedSlots.map((group, idx) => {
+            const firstSlot = group.slots[0];
+            const lastSlot = group.slots[group.slots.length - 1];
+            const { top, height } = getSlotPosition(firstSlot.start_at, lastSlot.end_at);
+
+            return (
+              <SlotComponent
+                key={idx}
+                slot={group}
+                groupedSlot={group}
+                onEdit={handleEditSlot}
+                onDelete={deleteTimeSlot}
+                className="absolute left-2 right-2 p-2 text-sm shadow-sm"
+                style={{ top: `${top}%`, height: `${height}%`, zIndex: 10 + idx }}
+              />
+            );
+          })}
+        </TimeGrid>
+      </div>
+    );
+  };
+
+  const renderWeekView = () => {
+    const weekStart = startOfWeek(currentDate, WEEK_OPTIONS);
+    const weekDays = eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) });
+
+    return (
+      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-dark-600 overflow-hidden">
+        <div className="grid grid-cols-8 border-b border-gray-200 dark:border-dark-600">
+          <div className="p-4 text-sm font-medium text-gray-500 dark:text-gray-400"></div>
+          {weekDays.map(day => (
+            <div key={day.toString()} className={`p-4 text-center border-l border-gray-200 dark:border-dark-600 ${
+              isToday(day) ? 'bg-primary/5' : ''
+            }`}>
+              <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                {format(day, 'EEEEEE', { locale: ru })}
+              </div>
+              <div className={`text-lg font-semibold ${isToday(day) ? 'text-primary' : ''}`}>
+                {format(day, 'd')}
+              </div>
+            </div>
+          ))}
+        </div>
+        
+        <div className="grid grid-cols-8">
+          <TimeGrid>
+            <div></div>
+          </TimeGrid>
+          
+          {weekDays.map(day => {
+            const dayKey = format(day, 'yyyy-MM-dd');
+            const dayGroupedSlots = Object.values(groupedSlots).filter(
+              group => format(parseTimestamp(group.start_at), 'yyyy-MM-dd') === dayKey
+            );
+
+            return (
+              <div key={day.toString()} className="border-l border-gray-200 dark:border-dark-600 relative">
+                {generateTimeSlots(day).map((slot, i) => (
+                  <div 
+                    key={i} 
+                    className="h-12 border-b border-gray-100 dark:border-dark-700 relative hover:bg-gray-50 dark:hover:bg-dark-700 cursor-pointer"
+                    onClick={() => handleTimeSlotClick(day, WORKING_HOURS.start + i)}
+                  />
+                ))}
+
+                {dayGroupedSlots.map((group, idx) => {
+                  const firstSlot = group.slots[0];
+                  const lastSlot = group.slots[group.slots.length - 1];
+                  const { top, height } = getSlotPosition(firstSlot.start_at, lastSlot.end_at);
+
+                  return (
+                    <SlotComponent
+                      key={idx}
+                      slot={group}
+                      groupedSlot={group}
+                      onEdit={handleEditSlot}
+                      onDelete={deleteTimeSlot}
+                      className="absolute left-1 right-1 p-1 text-xs overflow-hidden"
+                      style={{ top: `${top}%`, height: `${height}%`, zIndex: 10 + idx }}
+                    />
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  const renderMonthView = () => {
+    const monthStart = startOfMonth(currentDate);
+    const monthEnd = endOfMonth(currentDate);
+    const startDate = startOfWeek(monthStart, WEEK_OPTIONS);
+    const endDate = endOfWeek(monthEnd, WEEK_OPTIONS);
+    const days = eachDayOfInterval({ start: startDate, end: endDate });
+
+    return (
+      <div className="grid grid-cols-7 gap-1">
+        {/* Заголовки дней недели */}
+        {eachDayOfInterval({ start: startDate, end: addDays(startDate, 6) }).map(day => (
+          <div key={day.toString()} className="text-center py-2 text-sm font-medium text-gray-500 dark:text-gray-400">
+            {format(day, 'EEEEEE', { locale: ru })}
+          </div>
+        ))}
+        
+        {/* Дни месяца */}
+        {days.map(day => {
+          const daySlots = filteredSlots.filter(slot => 
+            isSameDay(parseTimestamp(slot.start_at), day)
+          );
+          const isCurrentMonth = isSameMonth(day, currentDate);
+          const isDayToday = isToday(day);
+
+          return (
+            <div 
+              key={day.toString()}
+              onClick={() => { setCurrentDate(day); setViewMode('day'); }}
+              className={`min-h-24 p-1.5 border rounded-md cursor-pointer ${
+                !isCurrentMonth ? 'bg-gray-50 dark:bg-dark-700 opacity-50' : 
+                isDayToday ? 'bg-primary/5 border-primary' : 'bg-white dark:bg-dark-800 border-gray-200 dark:border-dark-600'
+              }`}
+            >
+              <div className={`text-sm font-medium mb-1 ${
+                isDayToday ? 'text-primary font-bold' : ''
+              }`}>
+                {format(day, 'd')}
+              </div>
+              
+              <div className="space-y-1">
+                {daySlots.slice(0, 3).map((slot, idx) => (
+                  <div
+                    key={idx}
+                    className={`text-xs p-1 rounded truncate ${getSlotColorClasses(slot.slot_type, slot.slot_status)}`}
+                  >
+                    {slot.title}
+                  </div>
+                ))}
+                {daySlots.length > 3 && (
+                  <div className="text-xs text-gray-500 text-center">
+                    +{daySlots.length - 3} еще
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-900">
@@ -533,7 +712,9 @@ const AdminCalendarPage = () => {
           </div>
         ) : (
           <div className="space-y-6">
-            {/* Здесь будут методы рендеринга в зависимости от viewMode */}
+            {viewMode === 'day' && renderDayView()}
+            {viewMode === 'week' && renderWeekView()}
+            {viewMode === 'month' && renderMonthView()}
           </div>
         )}
 
