@@ -87,6 +87,7 @@ const CoworkingPage: React.FC = () => {
       const { data: headerResponse, error: headerError } = await supabase
         .from('site_settings')
         .select('coworking_header_settings')
+        .order('id')
         .limit(1)
         .single();
 
