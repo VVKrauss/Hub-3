@@ -38,3 +38,5 @@ export default AdminLayout;
 // 
 // Должен быть только импорт:
 // import { supabase } from '../../lib/supabase';
+
+
