@@ -1,5 +1,5 @@
 // src/components/debug/LoadingDebugger.tsx
-// УЛУЧШЕННАЯ ВЕРСИЯ существующего отладчика
+// ИСПРАВЛЕННАЯ ВЕРСИЯ без бесконечных циклов
 
 import { useEffect, useState, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
@@ -16,14 +16,24 @@ const LoadingDebugger = () => {
   
   const location = useLocation();
   const renderCountRef = useRef(0);
+  const hasInitialized = useRef(false);
 
-  // ДОБАВЛЯЕМ: Считаем рендеры
-  renderCountRef.current++;
-  setDebugInfo(prev => ({
-    ...prev,
-    renderCount: renderCountRef.current,
-    timestamp: Date.now()
-  }));
+  // ИСПРАВЛЕНО: Считаем рендеры ТОЛЬКО в useEffect, не в рендере
+  useEffect(() => {
+    renderCountRef.current++;
+    
+    // Обновляем состояние только если изменился счетчик
+    setDebugInfo(prev => {
+      if (prev.renderCount !== renderCountRef.current) {
+        return {
+          ...prev,
+          renderCount: renderCountRef.current,
+          timestamp: Date.now()
+        };
+      }
+      return prev;
+    });
+  });
 
   // Считаем effects
   useEffect(() => {
@@ -31,22 +41,26 @@ const LoadingDebugger = () => {
       ...prev,
       effectCalls: prev.effectCalls + 1
     }));
-  });
+  }, []); // ИСПРАВЛЕНО: пустой массив зависимостей
 
   // Сброс при смене страницы
   useEffect(() => {
     renderCountRef.current = 0;
-    setDebugInfo(prev => ({
-      ...prev,
+    setDebugInfo({
       renderCount: 0,
       effectCalls: 0,
       networkCalls: 0,
-      activeRequests: new Set()
-    }));
+      activeRequests: new Set(),
+      lastError: null,
+      timestamp: Date.now()
+    });
   }, [location.pathname]);
 
-  // Перехватываем fetch запросы
+  // Перехват fetch запросов - ТОЛЬКО ОДИН РАЗ
   useEffect(() => {
+    if (hasInitialized.current) return;
+    hasInitialized.current = true;
+
     const originalFetch = window.fetch;
     
     window.fetch = async (...args) => {
@@ -87,8 +101,9 @@ const LoadingDebugger = () => {
 
     return () => {
       window.fetch = originalFetch;
+      hasInitialized.current = false;
     };
-  }, []);
+  }, []); // ИСПРАВЛЕНО: пустой массив зависимостей
 
   // Показываем только в development
   if (process.env.NODE_ENV !== 'development') {
@@ -104,14 +119,14 @@ const LoadingDebugger = () => {
         <button 
           onClick={() => {
             renderCountRef.current = 0;
-            setDebugInfo(prev => ({ 
-              ...prev, 
-              renderCount: 0, 
-              effectCalls: 0, 
+            setDebugInfo({
+              renderCount: 0,
+              effectCalls: 0,
               networkCalls: 0,
               activeRequests: new Set(),
-              lastError: null
-            }));
+              lastError: null,
+              timestamp: Date.now()
+            });
           }}
           className="text-xs text-gray-400 hover:text-white"
         >
@@ -130,7 +145,7 @@ const LoadingDebugger = () => {
           </div>
           <div>
             Effects: 
-            <span className={debugInfo.effectCalls > 30 ? 'text-red-400 font-bold ml-1' : 'text-green-400 ml-1'}>
+            <span className={debugInfo.effectCalls > 10 ? 'text-red-400 font-bold ml-1' : 'text-green-400 ml-1'}>
               {debugInfo.effectCalls}
             </span>
           </div>
@@ -185,22 +200,16 @@ const LoadingDebugger = () => {
           {new Date(debugInfo.timestamp).toLocaleTimeString()}
         </div>
 
-        {/* КРИТИЧЕСКИЕ ПРЕДУПРЕЖДЕНИЯ */}
-        {debugInfo.renderCount > 20 && (
-          <div className="text-red-400 font-bold animate-pulse">
+        {/* ПРЕДУПРЕЖДЕНИЯ */}
+        {debugInfo.renderCount > 10 && (
+          <div className="text-red-400 font-bold">
             ⚠️ TOO MANY RENDERS!
           </div>
         )}
         
-        {debugInfo.effectCalls > 50 && (
-          <div className="text-red-400 font-bold animate-pulse">
+        {debugInfo.effectCalls > 5 && (
+          <div className="text-red-400 font-bold">
             ⚠️ TOO MANY EFFECTS!
-          </div>
-        )}
-
-        {activeRequestsArray.length > 5 && (
-          <div className="text-red-400 font-bold animate-pulse">
-            ⚠️ TOO MANY REQUESTS!
           </div>
         )}
       </div>
