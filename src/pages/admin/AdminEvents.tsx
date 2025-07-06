@@ -162,32 +162,45 @@ const fetchEvents = async () => {
   }
 };
 
+
+const handleDeleteSelected = async () => {
+  if (selectedEvents.length === 0) return;
   
-  const handleDeleteSelected = async () => {
-    if (selectedEvents.length === 0) return;
-    
-    const count = selectedEvents.length;
-    if (!confirm(`Вы уверены, что хотите удалить ${count} ${count === 1 ? 'мероприятие' : 'мероприятия'}?`)) {
-      return;
+  const count = selectedEvents.length;
+  if (!confirm(`Вы уверены, что хотите удалить ${count} ${count === 1 ? 'мероприятие' : 'мероприятия'}?`)) {
+    return;
+  }
+
+  try {
+    // Сначала удаляем связанные временные слоты из новой таблицы
+    const { error: slotsError } = await supabase
+      .from('sh_time_slots')
+      .delete()
+      .in('event_id', selectedEvents);
+
+    if (slotsError) {
+      console.warn('Error deleting time slots:', slotsError);
+      // Не прерываем выполнение, так как события могут не иметь слотов
     }
 
-    try {
-      const { error } = await supabase
-        .from('events')
-        .delete()
-        .in('id', selectedEvents);
+    // Затем удаляем сами события
+    const { error } = await supabase
+      .from('events')
+      .delete()
+      .in('id', selectedEvents);
 
-      if (error) throw error;
+    if (error) throw error;
 
-      toast.success(`Успешно удалено ${count} ${count === 1 ? 'мероприятие' : 'мероприятия'}`);
-      setSelectedEvents([]);
-      fetchEvents();
-    } catch (error) {
-      console.error('Error deleting events:', error);
-      toast.error('Ошибка при удалении мероприятий');
-    }
-  };
+    toast.success(`Успешно удалено ${count} ${count === 1 ? 'мероприятие' : 'мероприятия'}`);
+    fetchEvents();
+    setSelectedEvents([]);
+  } catch (error) {
+    console.error('Error deleting events:', error);
+    toast.error('Ошибка при удалении мероприятий');
+  }
+};
 
+  
   const toggleEventSelection = (eventId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setSelectedEvents(prev => 
