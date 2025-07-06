@@ -183,18 +183,6 @@ const generateTimeSlots = (date: Date) => {
 
 // === КОМПОНЕНТЫ ===
 
-
-// ОТКАТ К ОРИГИНАЛЬНОМУ SlotComponent С МИНИМАЛЬНЫМИ ПРАВКАМИ
-// Замените только SlotComponent на эту версию:
-
-
-
-
-
-
-// ПОЛНЫЙ ОТКАТ К ОРИГИНАЛЬНОМУ SlotComponent
-// Замените SlotComponent на точно такую же версию, как была до моих изменений:
-
 const SlotComponent = ({ 
   slot, 
   groupedSlot, 
@@ -750,88 +738,207 @@ const deleteTimeSlot = useCallback(async (id: string, type?: string) => {
         )}
 
         {/* Модальное окно для создания/редактирования слотов */}
-        {modalState.isOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-dark-800 rounded-lg p-6 w-full max-w-md">
-              <h3 className="text-lg font-semibold mb-4">
-                {modalState.mode === 'edit' ? 'Редактировать слот' : 'Создать слот'}
-              </h3>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Название</label>
-                  <input
-                    type="text"
-                    value={modalState.data?.title || ''}
-                    onChange={(e) => setModalState(prev => ({
-                      ...prev,
-                      data: { ...prev.data, title: e.target.value }
-                    }))}
-                    className="w-full px-3 py-2 border rounded-lg"
-                    placeholder="Название слота"
-                  />
-                </div>
+        
+{modalState.isOpen && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md border dark:border-gray-600">
+      <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+        {modalState.mode === 'edit' ? 'Редактировать слот' : 'Создать слот'}
+      </h3>
+      
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Название</label>
+          <input
+            type="text"
+            value={modalState.data?.title || ''}
+            onChange={(e) => setModalState(prev => ({
+              ...prev,
+              data: { ...prev.data, title: e.target.value }
+            }))}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="Название слота"
+          />
+        </div>
 
-                <div>
-                  <label className="block text-sm font-medium mb-1">Описание</label>
-                  <textarea
-                    value={modalState.data?.description || ''}
-                    onChange={(e) => setModalState(prev => ({
-                      ...prev,
-                      data: { ...prev.data, description: e.target.value }
-                    }))}
-                    className="w-full px-3 py-2 border rounded-lg"
-                    rows={3}
-                    placeholder="Описание слота"
-                  />
-                </div>
+        <div>
+          <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Описание</label>
+          <textarea
+            value={modalState.data?.description || ''}
+            onChange={(e) => setModalState(prev => ({
+              ...prev,
+              data: { ...prev.data, description: e.target.value }
+            }))}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            rows={3}
+            placeholder="Описание слота"
+          />
+        </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Начало</label>
-                    <input
-                      type="datetime-local"
-                      value={modalState.data?.start_at ? formatForInput(modalState.data.start_at) : ''}
-                      onChange={(e) => setModalState(prev => ({
-                        ...prev,
-                        data: { ...prev.data, start_at: new Date(e.target.value).toISOString() }
-                      }))}
-                      className="w-full px-3 py-2 border rounded-lg"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Окончание</label>
-                    <input
-                      type="datetime-local"
-                      value={modalState.data?.end_at ? formatForInput(modalState.data.end_at) : ''}
-                      onChange={(e) => setModalState(prev => ({
-                        ...prev,
-                        data: { ...prev.data, end_at: new Date(e.target.value).toISOString() }
-                      }))}
-                      className="w-full px-3 py-2 border rounded-lg"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 mt-6">
-                <button
-                  onClick={() => setModalState({ isOpen: false, mode: 'create', data: null })}
-                  className="px-4 py-2 text-gray-600 border rounded-lg hover:bg-gray-50"
-                >
-                  Отмена
-                </button>
-                <button
-                  onClick={createOrUpdateTimeSlot}
-                  className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
-                >
-                  {modalState.mode === 'edit' ? 'Обновить' : 'Создать'}
-                </button>
-              </div>
-            </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Начало</label>
+            <input
+              type="datetime-local"
+              value={modalState.data?.start_at ? formatForInput(modalState.data.start_at) : ''}
+              onChange={(e) => setModalState(prev => ({
+                ...prev,
+                data: { ...prev.data, start_at: new Date(e.target.value).toISOString() }
+              }))}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
           </div>
-        )}
+
+          <div>
+            <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Окончание</label>
+            <input
+              type="datetime-local"
+              value={modalState.data?.end_at ? formatForInput(modalState.data.end_at) : ''}
+              onChange={(e) => setModalState(prev => ({
+                ...prev,
+                data: { ...prev.data, end_at: new Date(e.target.value).toISOString() }
+              }))}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-between items-center mt-6">
+        <div>
+          {modalState.mode === 'edit' && modalState.data?.id && modalState.data?.slot_type !== 'event' && (
+            <button
+              onClick={() => {
+                if (window.confirm('Удалить этот слот?')) {
+                  deleteTimeSlot(modalState.data.id!, modalState.data.slot_type);
+                  setModalState({ isOpen: false, mode: 'create', data: null });
+                }
+              }}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Удалить
+            </button>
+          )}
+        </div>
+        
+        <div className="flex gap-3">
+          <button
+            onClick={() => setModalState({ isOpen: false, mode: 'create', data: null })}
+            className="px-4 py-2 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          >
+            Отмена
+          </button>
+          <button
+            onClick={createOrUpdateTimeSlot}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            {modalState.mode === 'edit' ? 'Обновить' : 'Создать'}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+{modalState.isOpen && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md border dark:border-gray-600">
+      <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+        {modalState.mode === 'edit' ? 'Редактировать слот' : 'Создать слот'}
+      </h3>
+      
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Название</label>
+          <input
+            type="text"
+            value={modalState.data?.title || ''}
+            onChange={(e) => setModalState(prev => ({
+              ...prev,
+              data: { ...prev.data, title: e.target.value }
+            }))}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="Название слота"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Описание</label>
+          <textarea
+            value={modalState.data?.description || ''}
+            onChange={(e) => setModalState(prev => ({
+              ...prev,
+              data: { ...prev.data, description: e.target.value }
+            }))}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            rows={3}
+            placeholder="Описание слота"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Начало</label>
+            <input
+              type="datetime-local"
+              value={modalState.data?.start_at ? formatForInput(modalState.data.start_at) : ''}
+              onChange={(e) => setModalState(prev => ({
+                ...prev,
+                data: { ...prev.data, start_at: new Date(e.target.value).toISOString() }
+              }))}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Окончание</label>
+            <input
+              type="datetime-local"
+              value={modalState.data?.end_at ? formatForInput(modalState.data.end_at) : ''}
+              onChange={(e) => setModalState(prev => ({
+                ...prev,
+                data: { ...prev.data, end_at: new Date(e.target.value).toISOString() }
+              }))}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-between items-center mt-6">
+        <div>
+          {modalState.mode === 'edit' && modalState.data?.id && modalState.data?.slot_type !== 'event' && (
+            <button
+              onClick={() => {
+                if (window.confirm('Удалить этот слот?')) {
+                  deleteTimeSlot(modalState.data.id!, modalState.data.slot_type);
+                  setModalState({ isOpen: false, mode: 'create', data: null });
+                }
+              }}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Удалить
+            </button>
+          )}
+        </div>
+        
+        <div className="flex gap-3">
+          <button
+            onClick={() => setModalState({ isOpen: false, mode: 'create', data: null })}
+            className="px-4 py-2 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          >
+            Отмена
+          </button>
+          <button
+            onClick={createOrUpdateTimeSlot}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            {modalState.mode === 'edit' ? 'Обновить' : 'Создать'}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}j
       </div>
     </div>
   );
