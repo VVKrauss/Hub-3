@@ -1,3 +1,5 @@
+// src/components/home/CoworkingSection.tsx
+// ИСПРАВЛЕННАЯ ВЕРСИЯ - устранение бесконечных циклов
 
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
@@ -101,3 +103,5 @@ const CoworkingSection = () => {
     </section>
   );
 };
+
+export default CoworkingSection;
