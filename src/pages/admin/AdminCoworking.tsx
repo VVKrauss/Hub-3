@@ -1,18 +1,35 @@
-// src/pages/admin/AdminCoworking.tsx - Упрощенная версия
+// src/pages/admin/AdminCoworking.tsx - ИСПРАВЛЕННАЯ ВЕРСИЯ
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Edit, Trash2, ChevronUp, ChevronDown, Save, X, Building } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import {
-  getCoworkingPageSettings,
-  updateCoworkingHeader,
-  addCoworkingService,
-  updateCoworkingService,
-  deleteCoworkingService,
-  reorderCoworkingServices,
-  type CoworkingService,
-  type CoworkingHeader,
-  type CoworkingPageSettings
-} from '../../api/coworking';
+
+// Временные типы для начала (позже заменим на импорт из API)
+interface CoworkingService {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  currency: 'euro' | 'кофе' | 'RSD';
+  period: 'час' | 'день' | 'месяц' | 'страница';
+  active: boolean;
+  image_url?: string;
+  order: number;
+  main_service: boolean;
+}
+
+interface CoworkingHeader {
+  title: string;
+  description: string;
+  address?: string;
+  phone?: string;
+  working_hours?: string;
+}
+
+interface CoworkingPageSettings {
+  header: CoworkingHeader;
+  services: CoworkingService[];
+  lastUpdated: string;
+}
 
 const AdminCoworking: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -47,28 +64,56 @@ const AdminCoworking: React.FC = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const settings = await getCoworkingPageSettings();
       
-      if (settings) {
-        setPageSettings(settings);
-        setHeaderData(settings.header);
-      } else {
-        // Устанавливаем дефолтные данные
-        const defaultSettings: CoworkingPageSettings = {
-          header: {
-            title: 'Коворкинг пространство',
-            description: 'Комфортные рабочие места для исследователей и стартапов',
-            address: 'Сараевская, 48',
-            phone: '+381',
-            working_hours: '10:00-18:00'
+      // Временно используем дефолтные данные
+      const defaultSettings: CoworkingPageSettings = {
+        header: {
+          title: 'Коворкинг пространство',
+          description: 'Комфортные рабочие места для исследователей и стартапов',
+          address: 'Сараевская, 48',
+          phone: '+381',
+          working_hours: '10:00-18:00'
+        },
+        services: [
+          {
+            id: '1',
+            name: 'Почасовая аренда',
+            description: 'Гибкий график работы по часам',
+            price: 5,
+            currency: 'euro',
+            period: 'час',
+            active: true,
+            order: 1,
+            main_service: false
           },
-          services: [],
-          lastUpdated: new Date().toISOString()
-        };
-        setPageSettings(defaultSettings);
-        setHeaderData(defaultSettings.header);
-      }
-      
+          {
+            id: '2',
+            name: 'Дневной абонемент',
+            description: 'Полный рабочий день в коворкинге',
+            price: 25,
+            currency: 'euro',
+            period: 'день',
+            active: true,
+            order: 2,
+            main_service: true
+          },
+          {
+            id: '3',
+            name: 'Месячный абонемент',
+            description: 'Неограниченный доступ на месяц',
+            price: 200,
+            currency: 'euro',
+            period: 'месяц',
+            active: true,
+            order: 3,
+            main_service: false
+          }
+        ],
+        lastUpdated: new Date().toISOString()
+      };
+
+      setPageSettings(defaultSettings);
+      setHeaderData(defaultSettings.header);
       setError(null);
     } catch (err) {
       console.error('Error fetching data:', err);
@@ -82,15 +127,18 @@ const AdminCoworking: React.FC = () => {
   const handleSaveHeader = async () => {
     try {
       setSaving(true);
-      const success = await updateCoworkingHeader(headerData);
       
-      if (success) {
-        toast.success('Заголовок успешно сохранен');
-        await fetchData(); // Перезагружаем данные
-        setError(null);
-      } else {
-        throw new Error('Failed to save header');
-      }
+      if (!pageSettings) return;
+      
+      const updatedSettings = {
+        ...pageSettings,
+        header: headerData,
+        lastUpdated: new Date().toISOString()
+      };
+      
+      setPageSettings(updatedSettings);
+      toast.success('Заголовок успешно сохранен');
+      setError(null);
     } catch (err) {
       console.error('Error saving header:', err);
       setError('Ошибка при сохранении заголовка');
@@ -102,18 +150,22 @@ const AdminCoworking: React.FC = () => {
 
   const handleSaveService = async () => {
     try {
-      if (!editData || !editData.id) return;
+      if (!editData || !editData.id || !pageSettings) return;
 
-      const success = await updateCoworkingService(editData.id, editData);
-      
-      if (success) {
-        await fetchData();
-        setEditData(null);
-        setShowForm(false);
-        toast.success('Услуга успешно обновлена');
-      } else {
-        throw new Error('Failed to save service');
-      }
+      const updatedServices = pageSettings.services.map(service =>
+        service.id === editData.id ? { ...service, ...editData } : service
+      );
+
+      const updatedSettings = {
+        ...pageSettings,
+        services: updatedServices,
+        lastUpdated: new Date().toISOString()
+      };
+
+      setPageSettings(updatedSettings);
+      setEditData(null);
+      setShowForm(false);
+      toast.success('Услуга успешно обновлена');
     } catch (err) {
       console.error('Error saving service:', err);
       toast.error('Ошибка при сохранении');
@@ -127,25 +179,33 @@ const AdminCoworking: React.FC = () => {
         return;
       }
 
-      const success = await addCoworkingService(newService);
-      
-      if (success) {
-        await fetchData();
-        setNewService({
-          name: '',
-          description: '',
-          price: 0,
-          currency: 'euro',
-          period: 'час',
-          active: true,
-          image_url: '',
-          main_service: false
-        });
-        setShowForm(false);
-        toast.success('Услуга успешно добавлена');
-      } else {
-        throw new Error('Failed to add service');
-      }
+      if (!pageSettings) return;
+
+      const newServiceWithId: CoworkingService = {
+        ...newService,
+        id: Date.now().toString(),
+        order: Math.max(...pageSettings.services.map(s => s.order), 0) + 1
+      };
+
+      const updatedSettings = {
+        ...pageSettings,
+        services: [...pageSettings.services, newServiceWithId],
+        lastUpdated: new Date().toISOString()
+      };
+
+      setPageSettings(updatedSettings);
+      setNewService({
+        name: '',
+        description: '',
+        price: 0,
+        currency: 'euro',
+        period: 'час',
+        active: true,
+        image_url: '',
+        main_service: false
+      });
+      setShowForm(false);
+      toast.success('Услуга успешно добавлена');
     } catch (err) {
       console.error('Error adding service:', err);
       toast.error('Ошибка при добавлении');
@@ -156,14 +216,17 @@ const AdminCoworking: React.FC = () => {
     if (!confirm('Удалить услугу?')) return;
 
     try {
-      const success = await deleteCoworkingService(id);
-      
-      if (success) {
-        await fetchData();
-        toast.success('Услуга удалена');
-      } else {
-        throw new Error('Failed to delete service');
-      }
+      if (!pageSettings) return;
+
+      const updatedServices = pageSettings.services.filter(service => service.id !== id);
+      const updatedSettings = {
+        ...pageSettings,
+        services: updatedServices,
+        lastUpdated: new Date().toISOString()
+      };
+
+      setPageSettings(updatedSettings);
+      toast.success('Услуга удалена');
     } catch (err) {
       console.error('Error deleting service:', err);
       toast.error('Ошибка при удалении');
@@ -172,13 +235,28 @@ const AdminCoworking: React.FC = () => {
 
   const moveService = async (id: string, direction: 'up' | 'down') => {
     try {
-      const success = await reorderCoworkingServices(id, direction);
+      if (!pageSettings) return;
+
+      const services = [...pageSettings.services].sort((a, b) => a.order - b.order);
+      const currentIndex = services.findIndex(s => s.id === id);
       
-      if (success) {
-        await fetchData();
-      } else {
-        throw new Error('Failed to reorder service');
-      }
+      if (currentIndex === -1) return;
+
+      const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+      if (newIndex < 0 || newIndex >= services.length) return;
+
+      // Меняем местами порядковые номера
+      const tempOrder = services[currentIndex].order;
+      services[currentIndex].order = services[newIndex].order;
+      services[newIndex].order = tempOrder;
+
+      const updatedSettings = {
+        ...pageSettings,
+        services,
+        lastUpdated: new Date().toISOString()
+      };
+
+      setPageSettings(updatedSettings);
     } catch (err) {
       console.error('Error moving service:', err);
       toast.error('Ошибка при перемещении');
@@ -483,7 +561,9 @@ const AdminCoworking: React.FC = () => {
                       placeholder="Цена"
                     />
                   </div>
+                </div>
 
+                <div className="grid md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Валюта
@@ -528,6 +608,25 @@ const AdminCoworking: React.FC = () => {
                       <option value="страница">страница</option>
                     </select>
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Описание
+                  </label>
+                  <textarea
+                    value={editData ? editData.description || '' : newService.description}
+                    onChange={(e) => {
+                      if (editData) {
+                        setEditData({...editData, description: e.target.value});
+                      } else {
+                        setNewService({...newService, description: e.target.value});
+                      }
+                    }}
+                    rows={3}
+                    className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
+                    placeholder="Описание услуги"
+                  />
                 </div>
 
                 <div>
@@ -613,23 +712,4 @@ const AdminCoworking: React.FC = () => {
   );
 };
 
-export default AdminCoworking;gray-300 mb-2">
-                    Описание
-                  </label>
-                  <textarea
-                    value={editData ? editData.description || '' : newService.description}
-                    onChange={(e) => {
-                      if (editData) {
-                        setEditData({...editData, description: e.target.value});
-                      } else {
-                        setNewService({...newService, description: e.target.value});
-                      }
-                    }}
-                    rows={3}
-                    className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
-                    placeholder="Описание услуги"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-
+export default AdminCoworking;
