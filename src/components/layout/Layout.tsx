@@ -3,7 +3,7 @@
 
 import { ReactNode } from 'react';
 // import TopBarMinimal from './TopBarMinimal'; // ← Шаг 1
-import TopBarStep2 from './TopBarStep2Fixed'; // ← Шаг 2: API навигация
+import TopBar from './TopBar'; // ← Шаг 2: API навигация
 import Footer from './Footer';
 
 type LayoutProps = {
@@ -14,7 +14,7 @@ const Layout = ({ children }: LayoutProps) => {
   return (
     <div className="flex flex-col min-h-screen">
       {/* ШАГ 2: TopBar с API навигацией */}
-      <TopBarStep2 /> 
+      <TopBar /> 
       
       <main className="flex-grow">
         {children}
