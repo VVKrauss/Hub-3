@@ -1,40 +1,26 @@
-import { useState, useEffect } from 'react';
+// src/pages/CoworkingPage.tsx
+// Обновленная версия для работы с новой схемой sh_site_settings
+
+import { useState, useEffect, useRef } from 'react';
 import Layout from '../components/layout/Layout';
 import PageHeader from '../components/ui/PageHeader';
-import Modal from '../components/ui/Modal'; // Предполагается, что у вас есть компонент Modal
-
-import { supabase } from '../lib/supabase';
+import Modal from '../components/ui/Modal';
+import { Phone, Mail, Clock, MapPin, MessageCircle } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import { 
+  getCoworkingPageSettings, 
+  getActiveCoworkingServices, 
+  type CoworkingService, 
+  type CoworkingPageSettings 
+} from '../api/coworking';
 
 const TELEGRAM_BOT_TOKEN = import.meta.env.VITE_TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = import.meta.env.VITE_TELEGRAM_CHAT_ID;
 
-type CoworkingService = {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  currency: 'euro' | 'кофе';
-  period: 'час' | 'день' | 'месяц';
-  active: boolean;
-  image_url: string;
-  main_service: boolean;
-};
-
-type CoworkingHeader = {
-  id: string;
-  title: string;
-  description: string;
-  address: string;
-  phone: string;
-  work_hours_weekdays: string;
-  work_hours_weekends: string;
-  working_hours: string;
-};
-
 const CoworkingPage = () => {
   const [mainServices, setMainServices] = useState<CoworkingService[]>([]);
   const [additionalServices, setAdditionalServices] = useState<CoworkingService[]>([]);
-  const [headerData, setHeaderData] = useState<CoworkingHeader | null>(null);
+  const [pageSettings, setPageSettings] = useState<CoworkingPageSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -51,92 +37,70 @@ const CoworkingPage = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
-    let isMounted = true;
-
+    isMountedRef.current = true;
+    
     const fetchData = async () => {
       try {
+        if (!isMountedRef.current) return;
+        
         setLoading(true);
         setError(null);
+        
+        console.log('🏢 Fetching coworking page data...');
 
-        const [headerResponse, servicesResponse] = await Promise.all([
-          supabase
-            .from('coworking_header')
-            .select('*')
-            .single(),
-          supabase
-            .from('coworking_info_table')
-            .select('*')
-            .eq('active', true)
+        // Загружаем настройки страницы и услуги параллельно
+        const [settingsResponse, servicesResponse] = await Promise.all([
+          getCoworkingPageSettings(),
+          getActiveCoworkingServices()
         ]);
 
-        if (!isMounted) return;
+        if (!isMountedRef.current) return;
 
-        if (headerResponse.error) throw headerResponse.error;
-        if (servicesResponse.error) throw servicesResponse.error;
+        if (settingsResponse.error) {
+          throw new Error(settingsResponse.error);
+        }
 
-        setHeaderData(headerResponse.data);
+        if (servicesResponse.error) {
+          console.warn('Error loading services:', servicesResponse.error);
+        }
+
+        setPageSettings(settingsResponse.data);
         
-        // Разделяем услуги на основные и дополнительные
-        const main = servicesResponse.data?.filter(service => service.main_service) || [];
-        const additional = servicesResponse.data?.filter(service => !service.main_service) || [];
+        if (servicesResponse.data) {
+          setMainServices(servicesResponse.data.mainServices || []);
+          setAdditionalServices(servicesResponse.data.additionalServices || []);
+        }
+
+        console.log('✅ Coworking page data loaded successfully');
         
-        setMainServices(main);
-        setAdditionalServices(additional);
       } catch (err) {
-        console.error('Error fetching data:', err);
-        if (isMounted) {
+        console.error('❌ Error fetching coworking data:', err);
+        if (isMountedRef.current) {
           setError('Не удалось загрузить данные. Пожалуйста, попробуйте позже.');
         }
       } finally {
-        if (isMounted) {
+        if (isMountedRef.current) {
           setLoading(false);
         }
       }
     };
 
-    const timeoutId = setTimeout(() => {
-      if (loading) {
-        setError('Превышено время ожидания загрузки данных');
-        setLoading(false);
-      }
-    }, 10000);
-
     fetchData();
 
     return () => {
-      isMounted = false;
-      clearTimeout(timeoutId);
+      isMountedRef.current = false;
     };
   }, []);
 
   const handleBookClick = (service: CoworkingService) => {
     setSelectedService(service);
     setIsModalOpen(true);
+    setFormData({ name: '', contact: '', phone: '', comment: '' });
+    setFormErrors({ name: false, phone: false });
     setSubmitStatus('idle');
-    setFormData({
-      name: '',
-      contact: '',
-      phone: '',
-      comment: ''
-    });
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    
-    // Сбрасываем ошибку при изменении поля
-    if (name === 'name' || name === 'phone') {
-      setFormErrors(prev => ({
-        ...prev,
-        [name]: false
-      }));
-    }
   };
 
   const validateForm = () => {
@@ -146,66 +110,75 @@ const CoworkingPage = () => {
     };
     
     setFormErrors(errors);
-    return !errors.name && !errors.phone;
-  };
-
-  const sendTelegramNotification = async () => {
-    const message = `Новая заявка на бронирование коворкинга:\n\n` +
-      `Услуга: ${selectedService?.name}\n` +
-      `Имя: ${formData.name}\n` +
-      `Контакт: ${formData.contact || 'не указано'}\n` +
-      `Телефон: ${formData.phone}\n` +
-      `Комментарий: ${formData.comment || 'нет комментария'}`;
-
-    try {
-      const response = await fetch(
-        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            chat_id: TELEGRAM_CHAT_ID,
-            text: message,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Ошибка при отправке уведомления');
-      }
-    } catch (error) {
-      console.error('Ошибка отправки в Telegram:', error);
-      throw error;
-    }
+    return !Object.values(errors).some(error => error);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validateForm()) return;
-    
+    if (!validateForm()) {
+      toast.error('Пожалуйста, заполните обязательные поля');
+      return;
+    }
+
     setIsSubmitting(true);
     
     try {
-      await sendTelegramNotification();
+      const message = `🏢 Новая заявка на коворкинг!\n\n` +
+        `📝 Услуга: ${selectedService?.name}\n` +
+        `👤 Имя: ${formData.name}\n` +
+        `📞 Телефон: ${formData.phone}\n` +
+        `📧 Контакт: ${formData.contact}\n` +
+        `💬 Комментарий: ${formData.comment}\n\n` +
+        `💰 Цена: ${selectedService?.price} ${getCurrencySymbol(selectedService?.currency)} / ${selectedService?.period}`;
+
+      const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          chat_id: TELEGRAM_CHAT_ID,
+          text: message,
+          parse_mode: 'HTML'
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to send message');
+      }
+
       setSubmitStatus('success');
-      // Очищаем форму через 2 секунды после успешной отправки
+      toast.success('Заявка отправлена! Мы свяжемся с вами в ближайшее время.');
+      
       setTimeout(() => {
         setIsModalOpen(false);
+        setFormData({ name: '', contact: '', phone: '', comment: '' });
+        setSubmitStatus('idle');
       }, 2000);
+      
     } catch (error) {
+      console.error('Error sending booking request:', error);
       setSubmitStatus('error');
+      toast.error('Произошла ошибка при отправке заявки. Пожалуйста, попробуйте позже.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const getCurrencySymbol = (currency?: string) => {
+    switch (currency) {
+      case 'euro': return '€';
+      case 'кофе': return '☕';
+      case 'RSD': return 'RSD';
+      default: return currency || '€';
     }
   };
 
   if (loading) {
     return (
       <Layout>
-        <PageHeader title="Загрузка...\" description="Загружаем данные о коворкинге" />
+        <PageHeader title="Загрузка..." description="Загружаем данные о коворкинге" />
         <div className="section bg-gray-50 dark:bg-dark-800">
           <div className="container">
             <div className="animate-pulse space-y-4 py-12">
@@ -223,17 +196,107 @@ const CoworkingPage = () => {
     );
   }
 
+  if (error) {
+    return (
+      <Layout>
+        <PageHeader title="Ошибка" description="Не удалось загрузить данные" />
+        <div className="section bg-gray-50 dark:bg-dark-800">
+          <div className="container text-center py-12">
+            <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
+            <button 
+              onClick={() => window.location.reload()} 
+              className="btn-primary"
+            >
+              Попробовать снова
+            </button>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
-      {headerData && (
+      {pageSettings && (
         <PageHeader 
-          title={headerData.title} 
-          description={headerData.description}
+          title={pageSettings.title} 
+          description={pageSettings.description}
+          backgroundImage={pageSettings.heroImage}
         />
       )}
       
       <main className="section bg-gray-50 dark:bg-dark-800">
         <div className="container">
+          
+          {/* Контактная информация */}
+          {pageSettings && (pageSettings.address || pageSettings.phone || pageSettings.working_hours) && (
+            <div className="mb-12 bg-white dark:bg-dark-700 rounded-xl shadow-lg p-6">
+              <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6 text-center">
+                Как нас найти
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {pageSettings.address && (
+                  <div className="flex items-start space-x-3">
+                    <MapPin className="h-5 w-5 text-primary-600 mt-1 flex-shrink-0" />
+                    <div>
+                      <h3 className="font-medium text-gray-900 dark:text-white">Адрес</h3>
+                      <p className="text-gray-600 dark:text-gray-300">{pageSettings.address}</p>
+                    </div>
+                  </div>
+                )}
+                
+                {pageSettings.phone && (
+                  <div className="flex items-start space-x-3">
+                    <Phone className="h-5 w-5 text-primary-600 mt-1 flex-shrink-0" />
+                    <div>
+                      <h3 className="font-medium text-gray-900 dark:text-white">Телефон</h3>
+                      <p className="text-gray-600 dark:text-gray-300">{pageSettings.phone}</p>
+                    </div>
+                  </div>
+                )}
+                
+                {pageSettings.working_hours && (
+                  <div className="flex items-start space-x-3">
+                    <Clock className="h-5 w-5 text-primary-600 mt-1 flex-shrink-0" />
+                    <div>
+                      <h3 className="font-medium text-gray-900 dark:text-white">Время работы</h3>
+                      <p className="text-gray-600 dark:text-gray-300">{pageSettings.working_hours}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Дополнительные контакты */}
+              {(pageSettings.email || pageSettings.telegram) && (
+                <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-600">
+                  <div className="flex flex-wrap gap-4 justify-center">
+                    {pageSettings.email && (
+                      <a 
+                        href={`mailto:${pageSettings.email}`}
+                        className="flex items-center space-x-2 text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+                      >
+                        <Mail className="h-4 w-4" />
+                        <span>{pageSettings.email}</span>
+                      </a>
+                    )}
+                    
+                    {pageSettings.telegram && (
+                      <a 
+                        href={`https://t.me/${pageSettings.telegram.replace('@', '')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center space-x-2 text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                        <span>{pageSettings.telegram}</span>
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Основные услуги */}
           <div className="mb-16">
             <h2 className="text-3xl font-semibold text-gray-900 dark:text-white mb-8 text-center">
@@ -276,141 +339,114 @@ const CoworkingPage = () => {
               </div>
             </div>
           )}
-
-          {/* Контактная информация */}
-          {headerData && (
-            <div className="bg-white dark:bg-dark-700 rounded-xl shadow-lg p-8">
-              <h2 className="text-3xl font-semibold text-gray-900 dark:text-white mb-6 text-center">
-                Контакты
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div className="text-center">
-                  <h3 className="text-xl font-medium text-gray-900 dark:text-white mb-3">Адрес</h3>
-                  <div 
-                    className="text-gray-600 dark:text-gray-300" 
-                    dangerouslySetInnerHTML={{ __html: headerData.address }} 
-                  />
-                </div>
-                <div className="text-center">
-                  <h3 className="text-xl font-medium text-gray-900 dark:text-white mb-3">Телефон</h3>
-                  <div 
-                    className="text-gray-600 dark:text-gray-300" 
-                    dangerouslySetInnerHTML={{ __html: headerData.phone }} 
-                  />
-                </div>
-                <div className="text-center">
-                  <h3 className="text-xl font-medium text-gray-900 dark:text-white mb-3">Часы работы</h3>
-                  <div 
-                    className="text-gray-600 dark:text-gray-300" 
-                    dangerouslySetInnerHTML={{ __html: headerData.working_hours }} 
-                  />
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </main>
 
       {/* Модальное окно бронирования */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
         <div className="p-6">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
             Бронирование: {selectedService?.name}
           </h2>
           
           {submitStatus === 'success' ? (
             <div className="text-center py-8">
-              <div className="text-green-500 text-5xl mb-4">✓</div>
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                Заявка отправлена!
-              </h3>
+              <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Заявка отправлена!</h3>
               <p className="text-gray-600 dark:text-gray-300">
-                Мы свяжемся с вами в ближайшее время.
+                Мы свяжемся с вами в ближайшее время для подтверждения бронирования.
               </p>
             </div>
           ) : (
-            <form onSubmit={handleSubmit}>
-              <div className="space-y-4">
-                <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Ваше имя <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    id="name"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    className={`w-full px-3 py-2 border rounded-lg ${formErrors.name ? 'border-red-500' : 'border-gray-300 dark:border-dark-600'} bg-white dark:bg-dark-800`}
-                    placeholder="Иван Иванов"
-                  />
-                  {formErrors.name && (
-                    <p className="mt-1 text-sm text-red-500">Это поле обязательно для заполнения</p>
-                  )}
-                </div>
-                
-                <div>
-                  <label htmlFor="contact" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Контакт (соцсеть или почта)
-                  </label>
-                  <input
-                    type="text"
-                    id="contact"
-                    name="contact"
-                    value={formData.contact}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-800"
-                    placeholder="telegram: @username или email@example.com"
-                  />
-                </div>
-                
-                <div>
-                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Телефон <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="tel"
-                    id="phone"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    className={`w-full px-3 py-2 border rounded-lg ${formErrors.phone ? 'border-red-500' : 'border-gray-300 dark:border-dark-600'} bg-white dark:bg-dark-800`}
-                    placeholder="+7 (123) 456-78-90"
-                  />
-                  {formErrors.phone && (
-                    <p className="mt-1 text-sm text-red-500">Это поле обязательно для заполнения</p>
-                  )}
-                </div>
-                
-                <div>
-                  <label htmlFor="comment" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Комментарий
-                  </label>
-                  <textarea
-                    id="comment"
-                    name="comment"
-                    value={formData.comment}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-800"
-                    rows={3}
-                    placeholder="Напишите, когда бы вам хотелось у нас поработать"
-                  />
-                </div>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Имя <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white ${
+                    formErrors.name ? 'border-red-500' : 'border-gray-300 dark:border-dark-600'
+                  }`}
+                  placeholder="Введите ваше имя"
+                />
+                {formErrors.name && (
+                  <p className="text-red-500 text-sm mt-1">Имя обязательно</p>
+                )}
               </div>
-              
-              <div className="mt-6 flex justify-end space-x-3">
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Телефон <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="tel"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white ${
+                    formErrors.phone ? 'border-red-500' : 'border-gray-300 dark:border-dark-600'
+                  }`}
+                  placeholder="+381 XX XXX XXXX"
+                />
+                {formErrors.phone && (
+                  <p className="text-red-500 text-sm mt-1">Телефон обязателен</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Email или Telegram (необязательно)
+                </label>
+                <input
+                  type="text"
+                  value={formData.contact}
+                  onChange={(e) => setFormData({ ...formData, contact: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white"
+                  placeholder="email@example.com или @telegram"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Комментарий
+                </label>
+                <textarea
+                  value={formData.comment}
+                  onChange={(e) => setFormData({ ...formData, comment: e.target.value })}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white"
+                  placeholder="Дополнительные пожелания или вопросы"
+                />
+              </div>
+
+              {selectedService && (
+                <div className="bg-gray-50 dark:bg-dark-700 p-4 rounded-lg">
+                  <h4 className="font-medium text-gray-900 dark:text-white mb-2">Выбранная услуга:</h4>
+                  <p className="text-gray-700 dark:text-gray-300">{selectedService.name}</p>
+                  <p className="text-primary-600 dark:text-primary-400 font-semibold">
+                    {selectedService.price} {getCurrencySymbol(selectedService.currency)} / {selectedService.period}
+                  </p>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-4">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-gray-300 dark:border-dark-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors"
-                  disabled={isSubmitting}
+                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-600 transition-colors"
                 >
                   Отмена
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors disabled:opacity-50"
                   disabled={isSubmitting}
+                  className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {isSubmitting ? 'Отправка...' : 'Отправить заявку'}
                 </button>
@@ -429,7 +465,7 @@ const CoworkingPage = () => {
   );
 };
 
-// Обновленный компонент карточки услуги
+// Компонент карточки услуги
 const ServiceCard = ({ 
   service, 
   onBookClick 
@@ -441,6 +477,7 @@ const ServiceCard = ({
     switch (service.currency) {
       case 'euro': return '€';
       case 'кофе': return '☕';
+      case 'RSD': return 'RSD';
       default: return service.currency;
     }
   };
@@ -454,18 +491,35 @@ const ServiceCard = ({
     }
   };
 
+  const getImageUrl = () => {
+    if (!service.image_url) {
+      return `https://via.placeholder.com/400x200?text=${encodeURIComponent(service.name)}`;
+    }
+    
+    // Если это полный URL, возвращаем как есть
+    if (service.image_url.startsWith('http')) {
+      return service.image_url;
+    }
+    
+    // Если это путь в Supabase Storage
+    return `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/images/${service.image_url}`;
+  };
+
   return (
     <div className="bg-white dark:bg-dark-700 rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300 h-full flex flex-col">
-      {service.image_url && (
-        <div className="h-48 overflow-hidden">
-          <img 
-            src={service.image_url} 
-            alt={service.name}
-            className="w-full h-full object-cover"
-            loading="lazy"
-          />
-        </div>
-      )}
+      <div className="h-48 overflow-hidden">
+        <img 
+          src={getImageUrl()}
+          alt={service.name}
+          className="w-full h-full object-cover"
+          loading="lazy"
+          onError={(e) => {
+            // Fallback при ошибке загрузки изображения
+            e.currentTarget.src = `https://via.placeholder.com/400x200?text=${encodeURIComponent(service.name)}`;
+          }}
+        />
+      </div>
+      
       <div className="p-6 flex flex-col flex-grow">
         <div className="flex-grow">
           <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
@@ -476,6 +530,7 @@ const ServiceCard = ({
             dangerouslySetInnerHTML={{ __html: service.description }}
           />
         </div>
+        
         <div className="flex justify-between items-center mt-auto">
           <div>
             <span className="text-2xl font-bold text-primary-600 dark:text-primary-400">
