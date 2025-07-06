@@ -606,3 +606,270 @@ const AdminCalendarPage = () => {
       </div>
     );
   };
+  const renderMonthView = () => {
+    const monthStart = startOfMonth(currentDate);
+    const monthEnd = endOfMonth(currentDate);
+    const startDate = startOfWeek(monthStart, WEEK_OPTIONS);
+    const endDate = endOfWeek(monthEnd, WEEK_OPTIONS);
+    const monthDays = eachDayOfInterval({ start: startDate, end: endDate });
+
+    return (
+      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-dark-600 overflow-hidden">
+        <div className="grid grid-cols-7 border-b border-gray-200 dark:border-dark-600">
+          {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(day => (
+            <div key={day} className="p-4 text-center text-sm font-medium text-gray-500 dark:text-gray-400 border-r border-gray-200 dark:border-dark-600 last:border-r-0">
+              {day}
+            </div>
+          ))}
+        </div>
+        
+        <div className="grid grid-cols-7">
+          {monthDays.map(day => {
+            const dayKey = format(day, 'yyyy-MM-dd');
+            const daySlots = timeSlots.filter(slot => 
+              format(parseTimestamp(slot.start_at), 'yyyy-MM-dd') === dayKey
+            );
+            const isCurrentMonth = isSameMonth(day, currentDate);
+            const isDayToday = isToday(day);
+
+            return (
+              <div
+                key={day.toString()}
+                className={`min-h-32 p-2 border-r border-b border-gray-200 dark:border-dark-600 last:border-r-0 ${
+                  !isCurrentMonth ? 'bg-gray-50 dark:bg-dark-700 opacity-50' : 
+                  isDayToday ? 'bg-primary/5 border-primary' : 'bg-white dark:bg-dark-800 border-gray-200 dark:border-dark-600'
+                }`}
+              >
+                <div className={`text-sm font-medium mb-1 ${
+                  isDayToday ? 'text-primary font-bold' : 'text-gray-900 dark:text-white'
+                }`}>
+                  {format(day, 'd')}
+                </div>
+                
+                <div className="space-y-1">
+                  {daySlots.slice(0, 3).map((slot, idx) => (
+                    <div
+                      key={idx}
+                      className={`text-xs p-1 rounded truncate cursor-pointer ${getSlotColorClasses(slot.slot_type, slot.slot_status, parseTimestamp(slot.end_at) < new Date())}`}
+                      onClick={() => {
+                        if (slot.slot_type === 'rent' && !parseTimestamp(slot.end_at) < new Date()) {
+                          handleEditSlot(slot);
+                        }
+                      }}
+                    >
+                      {slot.title}
+                    </div>
+                  ))}
+                  {daySlots.length > 3 && (
+                    <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                      +{daySlots.length - 3} еще
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-dark-900">
+      <div className="container py-8">
+        {/* Заголовок и навигация */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+            <Calendar className="w-8 h-8 text-primary" />
+            Календарь мероприятий
+          </h1>
+          
+          <div className="flex items-center gap-4">
+            <div className="flex rounded-lg border border-gray-200 dark:border-dark-600 bg-white dark:bg-dark-800">
+              {(['day', 'week', 'month'] as const).map(mode => (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode)}
+                  className={`px-4 py-2 text-sm font-medium transition-colors ${
+                    viewMode === mode
+                      ? 'bg-primary text-white'
+                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-700'
+                  } ${mode === 'day' ? 'rounded-l-lg' : mode === 'month' ? 'rounded-r-lg' : ''}`}
+                >
+                  {mode === 'day' ? 'День' : mode === 'week' ? 'Неделя' : 'Месяц'}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Навигация по датам */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => navigate('prev')}
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700 transition-colors text-gray-600 dark:text-gray-300"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white min-w-48">
+              {viewMode === 'month' 
+                ? format(currentDate, 'LLLL yyyy', { locale: ru })
+                : viewMode === 'week'
+                ? `${format(startOfWeek(currentDate, WEEK_OPTIONS), 'd MMM', { locale: ru })} - ${format(endOfWeek(currentDate, WEEK_OPTIONS), 'd MMM yyyy', { locale: ru })}`
+                : format(currentDate, 'd MMMM yyyy', { locale: ru })
+              }
+            </h2>
+            
+            <button
+              onClick={() => navigate('next')}
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700 transition-colors text-gray-600 dark:text-gray-300"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+
+            <button
+              onClick={() => setCurrentDate(new Date())}
+              className="px-3 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              Сегодня
+            </button>
+          </div>
+
+          <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-green-500 rounded-sm"></div>
+              <span>События</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-blue-500 rounded-sm"></div>
+              <span>Аренда</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-gray-400 rounded-sm"></div>
+              <span>Прошедшие</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Основное содержимое календаря */}
+        {loading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-gray-500 dark:text-gray-400">Загрузка...</div>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {viewMode === 'day' && renderDayView()}
+            {viewMode === 'week' && renderWeekView()}
+            {viewMode === 'month' && renderMonthView()}
+          </div>
+        )}
+
+        {/* Модальное окно для создания/редактирования слотов */}
+        {modalState.isOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md border dark:border-gray-600">
+              <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+                {modalState.mode === 'edit' ? 'Редактировать слот' : 'Создать слот'}
+              </h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Название</label>
+                  <input
+                    type="text"
+                    value={modalState.data?.title || ''}
+                    onChange={(e) => setModalState(prev => ({
+                      ...prev,
+                      data: { ...prev.data, title: e.target.value }
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Название слота"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Описание</label>
+                  <textarea
+                    value={modalState.data?.description || ''}
+                    onChange={(e) => setModalState(prev => ({
+                      ...prev,
+                      data: { ...prev.data, description: e.target.value }
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    rows={3}
+                    placeholder="Описание слота"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Начало</label>
+                    <input
+                      type="datetime-local"
+                      value={modalState.data?.start_at ? formatForInput(modalState.data.start_at) : ''}
+                      onChange={(e) => setModalState(prev => ({
+                        ...prev,
+                        data: { ...prev.data, start_at: new Date(e.target.value).toISOString() }
+                      }))}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Окончание</label>
+                    <input
+                      type="datetime-local"
+                      value={modalState.data?.end_at ? formatForInput(modalState.data.end_at) : ''}
+                      onChange={(e) => setModalState(prev => ({
+                        ...prev,
+                        data: { ...prev.data, end_at: new Date(e.target.value).toISOString() }
+                      }))}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center mt-6">
+                <div>
+                  {modalState.mode === 'edit' && modalState.data?.id && modalState.data?.slot_type !== 'event' && (
+                    <button
+                      onClick={() => {
+                        if (window.confirm('Удалить этот слот?')) {
+                          deleteTimeSlot(modalState.data.id!, modalState.data.slot_type);
+                          setModalState({ isOpen: false, mode: 'create', data: null });
+                        }
+                      }}
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                    >
+                      Удалить
+                    </button>
+                  )}
+                </div>
+                
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setModalState({ isOpen: false, mode: 'create', data: null })}
+                    className="px-4 py-2 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    onClick={createOrUpdateTimeSlot}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    {modalState.mode === 'edit' ? 'Обновить' : 'Создать'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default AdminCalendarPage;
