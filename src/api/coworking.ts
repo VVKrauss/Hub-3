@@ -1,5 +1,5 @@
 // src/api/coworking.ts
-// API для работы с коворкингом в новой схеме sh_site_settings
+// API для работы с коворкингом в новой схеме sh_site_settings + автоматическая миграция
 
 import { supabase, createApiResponse, type ApiResponse } from '../lib/supabase';
 
@@ -32,42 +32,39 @@ export interface CoworkingPageSettings {
   bookingFormFields: string[];
 }
 
-// Получение настроек страницы коворкинга
+// Получение настроек страницы коворкинга с автоматической миграцией
 export const getCoworkingPageSettings = async (): Promise<ApiResponse<CoworkingPageSettings>> => {
   try {
-    console.log('🏢 Fetching coworking page settings from new schema...');
+    console.log('🏢 Fetching coworking page settings...');
     
+    // Сначала пробуем загрузить из новой схемы
     const { data: settings, error } = await supabase
       .from('sh_site_settings')
       .select('coworking_page_settings')
       .eq('is_active', true)
       .single();
 
-    if (error) {
-      console.warn('New schema not found, migrating from old schema...', error);
-      return await migrateAndGetCoworkingSettings();
+    if (!error && settings?.coworking_page_settings?.services?.length > 0) {
+      console.log('✅ Loaded from new schema');
+      return createApiResponse(settings.coworking_page_settings);
     }
 
-    if (!settings?.coworking_page_settings) {
-      console.warn('No coworking settings found, creating defaults...');
-      return await createDefaultCoworkingSettings();
-    }
-
-    console.log('✅ Coworking settings loaded from new schema');
-    return createApiResponse(settings.coworking_page_settings);
+    // Если данных нет в новой схеме, выполняем автоматическую миграцию
+    console.log('🔄 No data in new schema, starting automatic migration...');
+    return await migrateAndGetCoworkingSettings();
 
   } catch (error) {
-    console.error('Error fetching coworking settings:', error);
+    console.error('❌ Error fetching coworking settings:', error);
     return createApiResponse(null, error);
   }
 };
 
-// Миграция данных из старой схемы в новую
+// Автоматическая миграция данных из старой схемы в новую
 const migrateAndGetCoworkingSettings = async (): Promise<ApiResponse<CoworkingPageSettings>> => {
   try {
-    console.log('🔄 Starting migration from old schema...');
+    console.log('📊 Starting automatic data migration...');
     
-    // Получаем данные из старых таблиц
+    // Загружаем данные из старых таблиц
     const [headerResponse, servicesResponse, oldSettingsResponse] = await Promise.all([
       supabase
         .from('coworking_header')
@@ -86,7 +83,26 @@ const migrateAndGetCoworkingSettings = async (): Promise<ApiResponse<CoworkingPa
         .then(res => ({ data: res.data, error: res.error }))
     ]);
 
+    console.log('📋 Migration data collected:', {
+      header: !!headerResponse.data,
+      services: servicesResponse.data?.length || 0,
+      oldSettings: !!oldSettingsResponse.data?.coworking_header_settings
+    });
+
     // Формируем данные для новой схемы
+    const services: CoworkingService[] = servicesResponse.data?.map(service => ({
+      id: service.id,
+      name: service.name || '',
+      description: service.description || '',
+      price: service.price || 0,
+      currency: service.currency || 'euro',
+      period: service.period || 'час',
+      active: service.active !== false,
+      image_url: service.image_url || '',
+      order: service.order || 0,
+      main_service: service.main_service !== false
+    })) || [];
+
     const migratedSettings: CoworkingPageSettings = {
       title: headerResponse.data?.title || 
              oldSettingsResponse.data?.coworking_header_settings?.title || 
@@ -95,50 +111,62 @@ const migrateAndGetCoworkingSettings = async (): Promise<ApiResponse<CoworkingPa
                   oldSettingsResponse.data?.coworking_header_settings?.description || 
                   'Комфортные рабочие места для исследователей и стартапов',
       heroImage: '',
-      address: oldSettingsResponse.data?.coworking_header_settings?.address || 'Сараевская, 48',
-      phone: oldSettingsResponse.data?.coworking_header_settings?.phone || '+381',
-      working_hours: oldSettingsResponse.data?.coworking_header_settings?.working_hours || '10:00-18:00',
+      address: oldSettingsResponse.data?.coworking_header_settings?.address || 
+               headerResponse.data?.address || 
+               'Сараевская, 48',
+      phone: oldSettingsResponse.data?.coworking_header_settings?.phone || 
+             headerResponse.data?.phone || 
+             '+381',
+      working_hours: oldSettingsResponse.data?.coworking_header_settings?.working_hours || 
+                     headerResponse.data?.working_hours || 
+                     '10:00-18:00',
       email: 'info@sciencehub.site',
       telegram: '@sciencehub',
-      services: servicesResponse.data || [],
-      mainServices: servicesResponse.data?.filter(s => s.main_service) || [],
+      services: services,
+      mainServices: services.filter(s => s.main_service && s.active),
       metaDescription: 'Современное коворкинг пространство для исследователей и стартапов в Сербии',
       showBookingForm: true,
       bookingFormFields: ['name', 'contact', 'phone', 'comment']
     };
 
     // Сохраняем в новую схему
-    await updateCoworkingPageSettings(migratedSettings);
+    console.log('💾 Saving migrated data to new schema...');
+    const saveResult = await updateCoworkingPageSettings(migratedSettings);
     
-    console.log('✅ Migration completed successfully');
+    if (saveResult.error) {
+      throw new Error(`Migration save failed: ${saveResult.error}`);
+    }
+
+    console.log('✅ Automatic migration completed successfully!', {
+      services: services.length,
+      mainServices: migratedSettings.mainServices.length
+    });
+    
     return createApiResponse(migratedSettings);
 
   } catch (error) {
-    console.error('❌ Migration failed:', error);
-    return await createDefaultCoworkingSettings();
+    console.error('❌ Automatic migration failed:', error);
+    
+    // Возвращаем значения по умолчанию в случае ошибки
+    const defaultSettings: CoworkingPageSettings = {
+      title: 'Коворкинг пространство',
+      description: 'Комфортные рабочие места для исследователей и стартапов',
+      heroImage: '',
+      address: 'Сараевская, 48',
+      phone: '+381',
+      working_hours: '10:00-18:00',
+      email: 'info@sciencehub.site',
+      telegram: '@sciencehub',
+      services: [],
+      mainServices: [],
+      metaDescription: 'Современное коворкинг пространство для исследователей и стартапов в Сербии',
+      showBookingForm: true,
+      bookingFormFields: ['name', 'contact', 'phone', 'comment']
+    };
+
+    await updateCoworkingPageSettings(defaultSettings);
+    return createApiResponse(defaultSettings);
   }
-};
-
-// Создание настроек по умолчанию
-const createDefaultCoworkingSettings = async (): Promise<ApiResponse<CoworkingPageSettings>> => {
-  const defaultSettings: CoworkingPageSettings = {
-    title: 'Коворкинг пространство',
-    description: 'Комфортные рабочие места для исследователей и стартапов',
-    heroImage: '',
-    address: 'Сараевская, 48',
-    phone: '+381',
-    working_hours: '10:00-18:00',
-    email: 'info@sciencehub.site',
-    telegram: '@sciencehub',
-    services: [],
-    mainServices: [],
-    metaDescription: 'Современное коворкинг пространство для исследователей и стартапов в Сербии',
-    showBookingForm: true,
-    bookingFormFields: ['name', 'contact', 'phone', 'comment']
-  };
-
-  await updateCoworkingPageSettings(defaultSettings);
-  return createApiResponse(defaultSettings);
 };
 
 // Обновление настроек страницы коворкинга
@@ -209,7 +237,7 @@ export const updateCoworkingService = async (service: Partial<CoworkingService>)
 
     const services = [...(currentSettings.data.services || [])];
     
-    if (service.id) {
+    if (service.id && service.id !== '') {
       // Обновляем существующую услугу
       const index = services.findIndex(s => s.id === service.id);
       if (index !== -1) {
