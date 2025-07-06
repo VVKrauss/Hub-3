@@ -187,6 +187,11 @@ const generateTimeSlots = (date: Date) => {
 };
 
 // === КОМПОНЕНТЫ ===
+
+
+// ОТКАТ К ОРИГИНАЛЬНОМУ SlotComponent С МИНИМАЛЬНЫМИ ПРАВКАМИ
+// Замените только SlotComponent на эту версию:
+
 const SlotComponent = ({ 
   slot, 
   groupedSlot, 
@@ -234,10 +239,11 @@ const SlotComponent = ({
         }
       }}
     >
-      <div className="font-medium truncate text-gray-900 dark:text-white">
+      {/* ИСПРАВЛЕНИЕ 1: Добавили dark: классы для текста */}
+      <div className="font-medium truncate text-gray-900 dark:text-gray-100">
         {formatSlotTime(firstSlot.start_at)} {slot.title && `- ${slot.title}`}
-        {slot.slot_status === 'draft' && <span className="text-xs text-gray-600 dark:text-gray-400 ml-1">(черновик)</span>}
-        {isPastSlot && <span className="text-xs text-gray-600 dark:text-gray-400 ml-1">(прошло)</span>}
+        {slot.slot_status === 'draft' && <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">(черновик)</span>}
+        {isPastSlot && <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">(прошло)</span>}
       </div>
       
       {slot.description && (
@@ -247,15 +253,100 @@ const SlotComponent = ({
       )}
       
       {slot.slot_type !== 'event' && !isPastSlot && (
+        /* ИСПРАВЛЕНИЕ 2: Улучшили кнопку удаления */
         <button 
           onClick={(e) => {
             e.stopPropagation();
             onDelete(slot.id, slot.slot_type);
           }}
-          className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity px-1 py-0.5 bg-red-500 hover:bg-red-600 text-white text-xs rounded shadow-sm"
-          title="Удалить слот"
+          className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-red-500 hover:bg-red-600 text-white text-xs rounded px-1 py-0.5 shadow"
+          title="Удалить"
         >
-          ✕
+          ×
+        </button>
+      )}
+      
+      <Tooltip 
+        id={`tooltip-${slot.id}`} 
+        className="z-50 whitespace-pre-line" 
+        style={{ zIndex: 9999 }}
+      />
+    </div>
+  );
+};// ОТКАТ К ОРИГИНАЛЬНОМУ SlotComponent С МИНИМАЛЬНЫМИ ПРАВКАМИ
+// Замените только SlotComponent на эту версию:
+
+const SlotComponent = ({ 
+  slot, 
+  groupedSlot, 
+  onEdit, 
+  onDelete, 
+  style,
+  className = ""
+}: {
+  slot: TimeSlot;
+  groupedSlot?: GroupedSlot;
+  onEdit: (slot: TimeSlot) => void;
+  onDelete: (id: string, type?: string) => void;
+  style?: React.CSSProperties;
+  className?: string;
+}) => {
+  const { formatSlotTime, isSlotPast } = useTimeUtils();
+  const isPastSlot = isSlotPast(slot.end_at);
+  
+  const firstSlot = groupedSlot?.slots[0] || slot;
+  const lastSlot = groupedSlot?.slots[groupedSlot?.slots.length - 1] || slot;
+  
+  const tooltipContent = `
+    ${slot.title || 'Слот'}
+    Время: ${formatSlotTime(firstSlot.start_at)}-${formatSlotTime(lastSlot.end_at)}
+    ${slot.description || ''}
+    ${slot.contact_name ? `Контакт: ${slot.contact_name}` : ''}
+    ${slot.slot_status === 'draft' ? 'Статус: Черновик' : ''}
+    ${isPastSlot ? 'Прошедшее мероприятие' : ''}
+  `;
+
+  return (
+    <div
+      data-tooltip-id={`tooltip-${slot.id}`}
+      data-tooltip-content={tooltipContent}
+      className={`relative rounded cursor-pointer group ${getSlotColorClasses(
+        slot.slot_type, 
+        slot.slot_status, 
+        isPastSlot
+      )} ${className}`}
+      style={style}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (slot.slot_type === 'rent') {
+          onEdit(slot);
+        }
+      }}
+    >
+      {/* ИСПРАВЛЕНИЕ 1: Добавили dark: классы для текста */}
+      <div className="font-medium truncate text-gray-900 dark:text-gray-100">
+        {formatSlotTime(firstSlot.start_at)} {slot.title && `- ${slot.title}`}
+        {slot.slot_status === 'draft' && <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">(черновик)</span>}
+        {isPastSlot && <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">(прошло)</span>}
+      </div>
+      
+      {slot.description && (
+        <div className="text-xs truncate opacity-75 text-gray-700 dark:text-gray-300">
+          {slot.description}
+        </div>
+      )}
+      
+      {slot.slot_type !== 'event' && !isPastSlot && (
+        /* ИСПРАВЛЕНИЕ 2: Улучшили кнопку удаления */
+        <button 
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(slot.id, slot.slot_type);
+          }}
+          className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-red-500 hover:bg-red-600 text-white text-xs rounded px-1 py-0.5 shadow"
+          title="Удалить"
+        >
+          ×
         </button>
       )}
       
@@ -267,6 +358,11 @@ const SlotComponent = ({
     </div>
   );
 };
+
+
+
+
+
 
 const TimeGrid = ({ children }: { children: React.ReactNode }) => (
   <div className="flex">
