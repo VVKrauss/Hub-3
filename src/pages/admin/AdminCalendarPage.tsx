@@ -466,6 +466,10 @@ const AdminCalendarPage = () => {
     }
   }, [fetchTimeSlots]);
 
+
+
+
+  
   // === МЕТОДЫ РЕНДЕРИНГА ===
   const renderDayView = () => {
     const dayKey = format(currentDate, 'yyyy-MM-dd');
