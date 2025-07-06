@@ -1,5 +1,5 @@
 // src/components/debug/LoadingDebugger.tsx
-// Простой компонент для диагностики зависаний страниц
+// УЛУЧШЕННАЯ ВЕРСИЯ существующего отладчика
 
 import { useEffect, useState, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
@@ -8,28 +8,24 @@ const LoadingDebugger = () => {
   const [debugInfo, setDebugInfo] = useState({
     renderCount: 0,
     effectCalls: 0,
-    currentPath: '',
-    lastNavigation: '',
+    networkCalls: 0,
     activeRequests: new Set<string>(),
-    errors: [] as string[],
+    lastError: null as string | null,
     timestamp: Date.now()
   });
   
   const location = useLocation();
   const renderCountRef = useRef(0);
 
-  // Отслеживаем рендеры
-  useEffect(() => {
-    renderCountRef.current++;
-    setDebugInfo(prev => ({
-      ...prev,
-      renderCount: renderCountRef.current,
-      currentPath: location.pathname,
-      timestamp: Date.now()
-    }));
-  });
+  // ДОБАВЛЯЕМ: Считаем рендеры
+  renderCountRef.current++;
+  setDebugInfo(prev => ({
+    ...prev,
+    renderCount: renderCountRef.current,
+    timestamp: Date.now()
+  }));
 
-  // Отслеживаем вызовы useEffect
+  // Считаем effects
   useEffect(() => {
     setDebugInfo(prev => ({
       ...prev,
@@ -37,18 +33,16 @@ const LoadingDebugger = () => {
     }));
   });
 
-  // Отслеживаем навигацию
+  // Сброс при смене страницы
   useEffect(() => {
+    renderCountRef.current = 0;
     setDebugInfo(prev => ({
       ...prev,
-      lastNavigation: `${new Date().toLocaleTimeString()}: ${location.pathname}`,
-      // Сброс счетчиков при смене страницы
       renderCount: 0,
-      effectCalls: 0
+      effectCalls: 0,
+      networkCalls: 0,
+      activeRequests: new Set()
     }));
-    
-    renderCountRef.current = 0;
-    console.log(`🔄 Navigation to: ${location.pathname}`);
   }, [location.pathname]);
 
   // Перехватываем fetch запросы
@@ -60,6 +54,7 @@ const LoadingDebugger = () => {
       
       setDebugInfo(prev => ({
         ...prev,
+        networkCalls: prev.networkCalls + 1,
         activeRequests: new Set([...prev.activeRequests, url])
       }));
 
@@ -82,8 +77,8 @@ const LoadingDebugger = () => {
           newActiveRequests.delete(url);
           return {
             ...prev,
-            activeRequests: newActiveRequests,
-            errors: [...prev.errors.slice(-4), `Fetch error: ${error.message}`]
+            lastError: error.message,
+            activeRequests: newActiveRequests
           };
         });
         throw error;
@@ -95,31 +90,6 @@ const LoadingDebugger = () => {
     };
   }, []);
 
-  // Перехватываем общие ошибки
-  useEffect(() => {
-    const handleError = (event: ErrorEvent) => {
-      setDebugInfo(prev => ({
-        ...prev,
-        errors: [...prev.errors.slice(-4), `JS Error: ${event.message}`]
-      }));
-    };
-
-    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      setDebugInfo(prev => ({
-        ...prev,
-        errors: [...prev.errors.slice(-4), `Promise rejection: ${event.reason}`]
-      }));
-    };
-
-    window.addEventListener('error', handleError);
-    window.addEventListener('unhandledrejection', handleUnhandledRejection);
-    
-    return () => {
-      window.removeEventListener('error', handleError);
-      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
-    };
-  }, []);
-
   // Показываем только в development
   if (process.env.NODE_ENV !== 'development') {
     return null;
@@ -128,11 +98,21 @@ const LoadingDebugger = () => {
   const activeRequestsArray = Array.from(debugInfo.activeRequests);
 
   return (
-    <div className="fixed bottom-4 right-4 bg-black/90 text-white p-3 rounded-lg z-50 text-xs max-w-sm font-mono">
+    <div className="fixed bottom-4 right-4 bg-black/90 text-white p-3 rounded-lg z-50 text-xs font-mono max-w-sm">
       <div className="flex items-center justify-between mb-2">
         <h4 className="font-bold text-yellow-400">🔧 Debug</h4>
         <button 
-          onClick={() => setDebugInfo(prev => ({ ...prev, renderCount: 0, effectCalls: 0, errors: [] }))}
+          onClick={() => {
+            renderCountRef.current = 0;
+            setDebugInfo(prev => ({ 
+              ...prev, 
+              renderCount: 0, 
+              effectCalls: 0, 
+              networkCalls: 0,
+              activeRequests: new Set(),
+              lastError: null
+            }));
+          }}
           className="text-xs text-gray-400 hover:text-white"
         >
           Reset
@@ -140,75 +120,79 @@ const LoadingDebugger = () => {
       </div>
       
       <div className="space-y-1">
-        {/* Основные метрики */}
+        {/* ГЛАВНЫЕ МЕТРИКИ */}
         <div className="grid grid-cols-2 gap-2">
           <div>
             Renders: 
-            <span className={debugInfo.renderCount > 10 ? 'text-red-400 font-bold ml-1' : 'text-green-400 ml-1'}>
+            <span className={debugInfo.renderCount > 15 ? 'text-red-400 font-bold ml-1' : 'text-green-400 ml-1'}>
               {debugInfo.renderCount}
             </span>
           </div>
           <div>
             Effects: 
-            <span className={debugInfo.effectCalls > 20 ? 'text-red-400 font-bold ml-1' : 'text-green-400 ml-1'}>
+            <span className={debugInfo.effectCalls > 30 ? 'text-red-400 font-bold ml-1' : 'text-green-400 ml-1'}>
               {debugInfo.effectCalls}
             </span>
           </div>
         </div>
 
-        {/* Текущий путь */}
-        <div className="text-blue-400 truncate">
-          Path: {debugInfo.currentPath}
-        </div>
-
-        {/* Активные запросы */}
         <div>
-          Active requests: 
-          <span className={activeRequestsArray.length > 3 ? 'text-red-400 font-bold ml-1' : 'text-blue-400 ml-1'}>
+          Network: 
+          <span className={debugInfo.networkCalls > 20 ? 'text-red-400 ml-1' : 'text-blue-400 ml-1'}>
+            {debugInfo.networkCalls}
+          </span>
+        </div>
+        
+        <div>
+          Active: 
+          <span className={activeRequestsArray.length > 3 ? 'text-red-400 font-bold ml-1' : 'text-green-400 ml-1'}>
             {activeRequestsArray.length}
           </span>
         </div>
 
-        {/* Список активных запросов */}
+        {/* Путь */}
+        <div className="text-blue-400 truncate text-xs">
+          {location.pathname}
+        </div>
+
+        {/* Активные запросы */}
         {activeRequestsArray.length > 0 && (
           <div className="text-orange-400">
             <div className="text-xs">Pending:</div>
-            {activeRequestsArray.slice(0, 3).map((url, index) => (
-              <div key={index} className="text-xs truncate pl-2">
+            {activeRequestsArray.slice(0, 2).map((url, i) => (
+              <div key={i} className="text-xs truncate pl-1">
                 • {url.split('/').pop()}
               </div>
             ))}
-            {activeRequestsArray.length > 3 && (
-              <div className="text-xs pl-2">... +{activeRequestsArray.length - 3} more</div>
+            {activeRequestsArray.length > 2 && (
+              <div className="text-xs pl-1">+{activeRequestsArray.length - 2} more</div>
             )}
           </div>
         )}
 
-        {/* Последние ошибки */}
-        {debugInfo.errors.length > 0 && (
+        {/* Ошибки */}
+        {debugInfo.lastError && (
           <div className="text-red-400">
-            <div className="text-xs">Recent errors:</div>
-            {debugInfo.errors.slice(-2).map((error, index) => (
-              <div key={index} className="text-xs truncate pl-2">
-                • {error.substring(0, 40)}...
-              </div>
-            ))}
+            <div className="text-xs">Error:</div>
+            <div className="text-xs truncate pl-1">
+              {debugInfo.lastError.substring(0, 30)}...
+            </div>
           </div>
         )}
 
-        {/* Время последнего обновления */}
+        {/* Время */}
         <div className="text-gray-500 text-xs">
-          Updated: {new Date(debugInfo.timestamp).toLocaleTimeString()}
+          {new Date(debugInfo.timestamp).toLocaleTimeString()}
         </div>
 
-        {/* Предупреждения */}
-        {debugInfo.renderCount > 15 && (
+        {/* КРИТИЧЕСКИЕ ПРЕДУПРЕЖДЕНИЯ */}
+        {debugInfo.renderCount > 20 && (
           <div className="text-red-400 font-bold animate-pulse">
             ⚠️ TOO MANY RENDERS!
           </div>
         )}
         
-        {debugInfo.effectCalls > 30 && (
+        {debugInfo.effectCalls > 50 && (
           <div className="text-red-400 font-bold animate-pulse">
             ⚠️ TOO MANY EFFECTS!
           </div>
