@@ -1,7 +1,5 @@
 // src/api/coworking.ts
-// API для работы с коворкингом в новой схеме sh_site_settings + автоматическая миграция
-
-import { supabase, createApiResponse, type ApiResponse } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 
 export interface CoworkingService {
   id: string;
@@ -9,362 +7,276 @@ export interface CoworkingService {
   description: string;
   price: number;
   currency: 'euro' | 'кофе' | 'RSD';
-  period: 'час' | 'день' | 'месяц';
+  period: 'час' | 'день' | 'месяц' | 'страница';
   active: boolean;
-  image_url: string;
+  image_url?: string;
   order: number;
   main_service: boolean;
 }
 
-export interface CoworkingPageSettings {
+export interface CoworkingHeader {
   title: string;
   description: string;
-  heroImage: string;
   address?: string;
   phone?: string;
   working_hours?: string;
-  email?: string;
-  telegram?: string;
-  services: CoworkingService[];
-  mainServices: CoworkingService[];
-  metaDescription: string;
-  showBookingForm: boolean;
-  bookingFormFields: string[];
 }
 
-// Получение настроек страницы коворкинга с автоматической миграцией
-export const getCoworkingPageSettings = async (): Promise<ApiResponse<CoworkingPageSettings>> => {
+export interface CoworkingPageSettings {
+  header: CoworkingHeader;
+  services: CoworkingService[];
+  lastUpdated: string;
+}
+
+/**
+ * Получить настройки страницы коворкинга из новой схемы
+ */
+export async function getCoworkingPageSettings(): Promise<CoworkingPageSettings | null> {
   try {
-    console.log('🏢 Fetching coworking page settings...');
-    
-    // Сначала пробуем загрузить из новой схемы
-    const { data: settings, error } = await supabase
+    const { data, error } = await supabase
       .from('sh_site_settings')
       .select('coworking_page_settings')
-      .eq('is_active', true)
       .single();
 
-    if (!error && settings?.coworking_page_settings?.services?.length > 0) {
-      console.log('✅ Loaded from new schema');
-      return createApiResponse(settings.coworking_page_settings);
-    }
-
-    // Если данных нет в новой схеме, выполняем автоматическую миграцию
-    console.log('🔄 No data in new schema, starting automatic migration...');
-    return await migrateAndGetCoworkingSettings();
-
-  } catch (error) {
-    console.error('❌ Error fetching coworking settings:', error);
-    return createApiResponse(null, error);
-  }
-};
-
-// Автоматическая миграция данных из старой схемы в новую
-const migrateAndGetCoworkingSettings = async (): Promise<ApiResponse<CoworkingPageSettings>> => {
-  try {
-    console.log('📊 Starting automatic data migration...');
-    
-    // Загружаем данные из старых таблиц
-    const [headerResponse, servicesResponse, oldSettingsResponse] = await Promise.all([
-      supabase
-        .from('coworking_header')
-        .select('*')
-        .single()
-        .then(res => ({ data: res.data, error: res.error })),
-      supabase
-        .from('coworking_info_table')
-        .select('*')
-        .order('order', { ascending: true })
-        .then(res => ({ data: res.data, error: res.error })),
-      supabase
-        .from('site_settings')
-        .select('coworking_header_settings')
-        .single()
-        .then(res => ({ data: res.data, error: res.error }))
-    ]);
-
-    console.log('📋 Migration data collected:', {
-      header: !!headerResponse.data,
-      services: servicesResponse.data?.length || 0,
-      oldSettings: !!oldSettingsResponse.data?.coworking_header_settings
-    });
-
-    // Формируем данные для новой схемы
-    const services: CoworkingService[] = servicesResponse.data?.map(service => ({
-      id: service.id,
-      name: service.name || '',
-      description: service.description || '',
-      price: service.price || 0,
-      currency: service.currency || 'euro',
-      period: service.period || 'час',
-      active: service.active !== false,
-      image_url: service.image_url || '',
-      order: service.order || 0,
-      main_service: service.main_service !== false
-    })) || [];
-
-    const migratedSettings: CoworkingPageSettings = {
-      title: headerResponse.data?.title || 
-             oldSettingsResponse.data?.coworking_header_settings?.title || 
-             'Коворкинг пространство',
-      description: headerResponse.data?.description || 
-                  oldSettingsResponse.data?.coworking_header_settings?.description || 
-                  'Комфортные рабочие места для исследователей и стартапов',
-      heroImage: '',
-      address: oldSettingsResponse.data?.coworking_header_settings?.address || 
-               headerResponse.data?.address || 
-               'Сараевская, 48',
-      phone: oldSettingsResponse.data?.coworking_header_settings?.phone || 
-             headerResponse.data?.phone || 
-             '+381',
-      working_hours: oldSettingsResponse.data?.coworking_header_settings?.working_hours || 
-                     headerResponse.data?.working_hours || 
-                     '10:00-18:00',
-      email: 'info@sciencehub.site',
-      telegram: '@sciencehub',
-      services: services,
-      mainServices: services.filter(s => s.main_service && s.active),
-      metaDescription: 'Современное коворкинг пространство для исследователей и стартапов в Сербии',
-      showBookingForm: true,
-      bookingFormFields: ['name', 'contact', 'phone', 'comment']
-    };
-
-    // Сохраняем в новую схему
-    console.log('💾 Saving migrated data to new schema...');
-    const saveResult = await updateCoworkingPageSettings(migratedSettings);
-    
-    if (saveResult.error) {
-      throw new Error(`Migration save failed: ${saveResult.error}`);
-    }
-
-    console.log('✅ Automatic migration completed successfully!', {
-      services: services.length,
-      mainServices: migratedSettings.mainServices.length
-    });
-    
-    return createApiResponse(migratedSettings);
-
-  } catch (error) {
-    console.error('❌ Automatic migration failed:', error);
-    
-    // Возвращаем значения по умолчанию в случае ошибки
-    const defaultSettings: CoworkingPageSettings = {
-      title: 'Коворкинг пространство',
-      description: 'Комфортные рабочие места для исследователей и стартапов',
-      heroImage: '',
-      address: 'Сараевская, 48',
-      phone: '+381',
-      working_hours: '10:00-18:00',
-      email: 'info@sciencehub.site',
-      telegram: '@sciencehub',
-      services: [],
-      mainServices: [],
-      metaDescription: 'Современное коворкинг пространство для исследователей и стартапов в Сербии',
-      showBookingForm: true,
-      bookingFormFields: ['name', 'contact', 'phone', 'comment']
-    };
-
-    await updateCoworkingPageSettings(defaultSettings);
-    return createApiResponse(defaultSettings);
-  }
-};
-
-// Обновление настроек страницы коворкинга
-export const updateCoworkingPageSettings = async (settings: Partial<CoworkingPageSettings>): Promise<ApiResponse<CoworkingPageSettings>> => {
-  try {
-    console.log('💾 Updating coworking page settings...');
-    
-    // Получаем текущие настройки
-    const { data: currentSettings } = await supabase
-      .from('sh_site_settings')
-      .select('id, coworking_page_settings')
-      .eq('is_active', true)
-      .single();
-
-    if (currentSettings) {
-      // Обновляем существующую запись
-      const updatedSettings = {
-        ...currentSettings.coworking_page_settings,
-        ...settings,
-      };
-
-      const { data, error } = await supabase
-        .from('sh_site_settings')
-        .update({
-          coworking_page_settings: updatedSettings,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', currentSettings.id)
-        .select('coworking_page_settings')
-        .single();
-
-      if (error) throw error;
-      
-      console.log('✅ Coworking settings updated successfully');
-      return createApiResponse(data.coworking_page_settings);
-    } else {
-      // Создаем новую запись, если нет активной
-      const { data, error } = await supabase
-        .from('sh_site_settings')
-        .insert([{
-          site_title: 'Science Hub',
-          site_description: 'Научное сообщество в Сербии',
-          coworking_page_settings: settings,
-          is_active: true
-        }])
-        .select('coworking_page_settings')
-        .single();
-
-      if (error) throw error;
-      
-      console.log('✅ New coworking settings created successfully');
-      return createApiResponse(data.coworking_page_settings);
-    }
-  } catch (error) {
-    console.error('❌ Error updating coworking settings:', error);
-    return createApiResponse(null, error);
-  }
-};
-
-// Добавление/обновление услуги коворкинга
-export const updateCoworkingService = async (service: Partial<CoworkingService>): Promise<ApiResponse<CoworkingService[]>> => {
-  try {
-    const currentSettings = await getCoworkingPageSettings();
-    
-    if (currentSettings.error || !currentSettings.data) {
-      throw new Error('Failed to get current settings');
-    }
-
-    const services = [...(currentSettings.data.services || [])];
-    
-    if (service.id && service.id !== '') {
-      // Обновляем существующую услугу
-      const index = services.findIndex(s => s.id === service.id);
-      if (index !== -1) {
-        services[index] = { ...services[index], ...service } as CoworkingService;
-      }
-    } else {
-      // Добавляем новую услугу
-      const newService: CoworkingService = {
-        id: `service_${Date.now()}`,
-        name: service.name || '',
-        description: service.description || '',
-        price: service.price || 0,
-        currency: service.currency || 'euro',
-        period: service.period || 'час',
-        active: service.active !== false,
-        image_url: service.image_url || '',
-        order: service.order || services.length,
-        main_service: service.main_service !== false
-      };
-      services.push(newService);
-    }
-
-    // Обновляем mainServices
-    const mainServices = services.filter(s => s.main_service && s.active);
-
-    const updateResult = await updateCoworkingPageSettings({
-      services,
-      mainServices
-    });
-
-    if (updateResult.error) throw updateResult.error;
-    
-    return createApiResponse(services);
-  } catch (error) {
-    console.error('Error updating coworking service:', error);
-    return createApiResponse(null, error);
-  }
-};
-
-// Удаление услуги коворкинга
-export const deleteCoworkingService = async (serviceId: string): Promise<ApiResponse<CoworkingService[]>> => {
-  try {
-    const currentSettings = await getCoworkingPageSettings();
-    
-    if (currentSettings.error || !currentSettings.data) {
-      throw new Error('Failed to get current settings');
-    }
-
-    const services = currentSettings.data.services.filter(s => s.id !== serviceId);
-    const mainServices = services.filter(s => s.main_service && s.active);
-
-    const updateResult = await updateCoworkingPageSettings({
-      services,
-      mainServices
-    });
-
-    if (updateResult.error) throw updateResult.error;
-    
-    return createApiResponse(services);
-  } catch (error) {
-    console.error('Error deleting coworking service:', error);
-    return createApiResponse(null, error);
-  }
-};
-
-// Изменение порядка услуг
-export const reorderCoworkingServices = async (serviceIds: string[]): Promise<ApiResponse<CoworkingService[]>> => {
-  try {
-    const currentSettings = await getCoworkingPageSettings();
-    
-    if (currentSettings.error || !currentSettings.data) {
-      throw new Error('Failed to get current settings');
-    }
-
-    const services = [...currentSettings.data.services];
-    
-    // Переупорядочиваем услуги согласно новому порядку
-    const reorderedServices = serviceIds.map((id, index) => {
-      const service = services.find(s => s.id === id);
-      if (service) {
-        return { ...service, order: index };
-      }
+    if (error) {
+      console.error('Error fetching coworking settings:', error);
       return null;
-    }).filter(Boolean) as CoworkingService[];
-
-    // Добавляем услуги, которых нет в новом порядке (на случай ошибок)
-    services.forEach(service => {
-      if (!serviceIds.includes(service.id)) {
-        reorderedServices.push({ ...service, order: reorderedServices.length });
-      }
-    });
-
-    const mainServices = reorderedServices.filter(s => s.main_service && s.active);
-
-    const updateResult = await updateCoworkingPageSettings({
-      services: reorderedServices,
-      mainServices
-    });
-
-    if (updateResult.error) throw updateResult.error;
-    
-    return createApiResponse(reorderedServices);
-  } catch (error) {
-    console.error('Error reordering coworking services:', error);
-    return createApiResponse(null, error);
-  }
-};
-
-// Получение только активных услуг для публичной страницы
-export const getActiveCoworkingServices = async (): Promise<ApiResponse<{
-  mainServices: CoworkingService[];
-  additionalServices: CoworkingService[];
-}>> => {
-  try {
-    const settings = await getCoworkingPageSettings();
-    
-    if (settings.error || !settings.data) {
-      return createApiResponse({ mainServices: [], additionalServices: [] });
     }
 
-    const activeServices = settings.data.services.filter(s => s.active);
-    const mainServices = activeServices.filter(s => s.main_service).sort((a, b) => a.order - b.order);
-    const additionalServices = activeServices.filter(s => !s.main_service).sort((a, b) => a.order - b.order);
-
-    return createApiResponse({ mainServices, additionalServices });
+    return data?.coworking_page_settings || null;
   } catch (error) {
-    console.error('Error getting active coworking services:', error);
-    return createApiResponse({ mainServices: [], additionalServices: [] });
+    console.error('Error in getCoworkingPageSettings:', error);
+    return null;
   }
-};
+}
+
+/**
+ * Сохранить настройки страницы коворкинга в новую схему
+ */
+export async function saveCoworkingPageSettings(settings: CoworkingPageSettings): Promise<boolean> {
+  try {
+    // Добавляем timestamp обновления
+    const settingsWithTimestamp = {
+      ...settings,
+      lastUpdated: new Date().toISOString()
+    };
+
+    const { error } = await supabase
+      .from('sh_site_settings')
+      .upsert({
+        id: 1,
+        coworking_page_settings: settingsWithTimestamp
+      }, {
+        onConflict: 'id'
+      });
+
+    if (error) {
+      console.error('Error saving coworking settings:', error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error in saveCoworkingPageSettings:', error);
+    return false;
+  }
+}
+
+/**
+ * Обновить только заголовок коворкинга
+ */
+export async function updateCoworkingHeader(header: CoworkingHeader): Promise<boolean> {
+  try {
+    // Сначала получаем текущие настройки
+    const currentSettings = await getCoworkingPageSettings();
+    
+    if (!currentSettings) {
+      // Если настроек нет, создаем новые с пустыми услугами
+      const newSettings: CoworkingPageSettings = {
+        header,
+        services: [],
+        lastUpdated: new Date().toISOString()
+      };
+      return await saveCoworkingPageSettings(newSettings);
+    }
+
+    // Обновляем только заголовок
+    const updatedSettings = {
+      ...currentSettings,
+      header,
+      lastUpdated: new Date().toISOString()
+    };
+
+    return await saveCoworkingPageSettings(updatedSettings);
+  } catch (error) {
+    console.error('Error in updateCoworkingHeader:', error);
+    return false;
+  }
+}
+
+/**
+ * Добавить новую услугу коворкинга
+ */
+export async function addCoworkingService(service: Omit<CoworkingService, 'id' | 'order'>): Promise<boolean> {
+  try {
+    const currentSettings = await getCoworkingPageSettings();
+    
+    if (!currentSettings) {
+      console.error('No coworking settings found');
+      return false;
+    }
+
+    // Создаем новую услугу с ID и порядком
+    const newService: CoworkingService = {
+      ...service,
+      id: crypto.randomUUID(),
+      order: Math.max(...currentSettings.services.map(s => s.order), 0) + 1
+    };
+
+    const updatedSettings = {
+      ...currentSettings,
+      services: [...currentSettings.services, newService],
+      lastUpdated: new Date().toISOString()
+    };
+
+    return await saveCoworkingPageSettings(updatedSettings);
+  } catch (error) {
+    console.error('Error in addCoworkingService:', error);
+    return false;
+  }
+}
+
+/**
+ * Обновить существующую услугу коворкинга
+ */
+export async function updateCoworkingService(serviceId: string, serviceData: Partial<CoworkingService>): Promise<boolean> {
+  try {
+    const currentSettings = await getCoworkingPageSettings();
+    
+    if (!currentSettings) {
+      console.error('No coworking settings found');
+      return false;
+    }
+
+    const updatedServices = currentSettings.services.map(service =>
+      service.id === serviceId ? { ...service, ...serviceData } : service
+    );
+
+    const updatedSettings = {
+      ...currentSettings,
+      services: updatedServices,
+      lastUpdated: new Date().toISOString()
+    };
+
+    return await saveCoworkingPageSettings(updatedSettings);
+  } catch (error) {
+    console.error('Error in updateCoworkingService:', error);
+    return false;
+  }
+}
+
+/**
+ * Удалить услугу коворкинга
+ */
+export async function deleteCoworkingService(serviceId: string): Promise<boolean> {
+  try {
+    const currentSettings = await getCoworkingPageSettings();
+    
+    if (!currentSettings) {
+      console.error('No coworking settings found');
+      return false;
+    }
+
+    const updatedServices = currentSettings.services.filter(service => service.id !== serviceId);
+
+    const updatedSettings = {
+      ...currentSettings,
+      services: updatedServices,
+      lastUpdated: new Date().toISOString()
+    };
+
+    return await saveCoworkingPageSettings(updatedSettings);
+  } catch (error) {
+    console.error('Error in deleteCoworkingService:', error);
+    return false;
+  }
+}
+
+/**
+ * Изменить порядок услуг коворкинга
+ */
+export async function reorderCoworkingServices(serviceId: string, direction: 'up' | 'down'): Promise<boolean> {
+  try {
+    const currentSettings = await getCoworkingPageSettings();
+    
+    if (!currentSettings) {
+      console.error('No coworking settings found');
+      return false;
+    }
+
+    const services = [...currentSettings.services].sort((a, b) => a.order - b.order);
+    const currentIndex = services.findIndex(s => s.id === serviceId);
+    
+    if (currentIndex === -1) return false;
+
+    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (newIndex < 0 || newIndex >= services.length) return false;
+
+    // Меняем местами порядковые номера
+    const tempOrder = services[currentIndex].order;
+    services[currentIndex].order = services[newIndex].order;
+    services[newIndex].order = tempOrder;
+
+    const updatedSettings = {
+      ...currentSettings,
+      services,
+      lastUpdated: new Date().toISOString()
+    };
+
+    return await saveCoworkingPageSettings(updatedSettings);
+  } catch (error) {
+    console.error('Error in reorderCoworkingServices:', error);
+    return false;
+  }
+}
+
+/**
+ * Проверить наличие данных в старой схеме
+ */
+export async function checkLegacyCoworkingData(): Promise<{
+  hasLegacyHeader: boolean;
+  hasLegacyServices: boolean;
+  legacyServicesCount: number;
+}> {
+  try {
+    // Проверяем старый заголовок в site_settings
+    const { data: headerData, error: headerError } = await supabase
+      .from('site_settings')
+      .select('coworking_header_settings')
+      .single();
+
+    const hasLegacyHeader = !headerError && headerData?.coworking_header_settings;
+
+    // Проверяем старые услуги в coworking_info_table
+    const { data: servicesData, error: servicesError } = await supabase
+      .from('coworking_info_table')
+      .select('id')
+      .eq('active', true);
+
+    const hasLegacyServices = !servicesError && servicesData && servicesData.length > 0;
+    const legacyServicesCount = servicesData?.length || 0;
+
+    return {
+      hasLegacyHeader: !!hasLegacyHeader,
+      hasLegacyServices: !!hasLegacyServices,
+      legacyServicesCount
+    };
+  } catch (error) {
+    console.error('Error checking legacy data:', error);
+    return {
+      hasLegacyHeader: false,
+      hasLegacyServices: false,
+      legacyServicesCount: 0
+    };
+  }
+}
