@@ -187,7 +187,7 @@ const handleDeleteSelected = async () => {
     fetchEvents();
   } catch (error) {
     console.error('Error deleting events:', error);
-    toast.error('Ошибка при удалении мероприятий');
+    toast.error('Ошибка при удалении мероприятий'); 
   }
 };
 
