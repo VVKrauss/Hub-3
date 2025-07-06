@@ -1,28 +1,22 @@
-import { ReactNode } from 'react';
-// import TopBar from './TopBar';  // ЗАКОММЕНТИРУЙТЕ
-// import Footer from './Footer';  // ЗАКОММЕНТИРУЙТЕ
+import SimpleDebugger from '../components/SimpleDebugger';
 
-type LayoutProps = {
-  children: ReactNode;
-};
-
-const Layout = ({ children }: LayoutProps) => {
+const HomePage = () => {
   return (
-    <div className="flex flex-col min-h-screen">
-      {/* ВРЕМЕННО УБИРАЕМ ВСЕ */}
-      {/* <TopBar /> */}
-      
-      <main className="flex-grow">
-        {children}
-      </main>
-      
-      {/* <Footer /> */}
-      
-      <div className="p-4 text-center bg-red-100">
-        <h1>ДИАГНОСТИКА: Если это видно без бесконечных рендеров - проблема в TopBar или Footer</h1>
+    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <div className="text-center">
+        <h1 className="text-4xl font-bold mb-4">ДИАГНОСТИКА</h1>
+        <p className="text-xl">Проверяем наличие циклов рендеринга</p>
+        <div className="mt-4 p-4 bg-white rounded shadow">
+          <p className="mb-2">✅ Если справа внизу показывает Renders &lt; 10 - все хорошо</p>
+          <p className="mb-2">❌ Если показывает TOO MANY RENDERS - есть проблема</p>
+          <p className="text-sm text-gray-600">Подождите 5 секунд и посмотрите на счетчики</p>
+        </div>
       </div>
+      
+      {/* Отладчик */}
+      <SimpleDebugger />
     </div>
   );
 };
 
-export default Layout;
+export default HomePage;
