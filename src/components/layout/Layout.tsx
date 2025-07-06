@@ -14,7 +14,7 @@ const Layout = ({ children }: LayoutProps) => {
   return (
     <div className="flex flex-col min-h-screen">
       {/* ШАГ 2: TopBar с API навигацией */}
-      <TopBarStep2 />
+      <TopBarStep2 /> 
       
       <main className="flex-grow">
         {children}
