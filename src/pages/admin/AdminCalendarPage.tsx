@@ -614,7 +614,6 @@ const AdminCalendarPage = () => {
 
 
 
-
 const renderMonthView = () => {
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -622,7 +621,6 @@ const renderMonthView = () => {
   const endDate = endOfWeek(monthEnd, WEEK_OPTIONS);
   const monthDays = eachDayOfInterval({ start: startDate, end: endDate });
 
-  // ИЗМЕНЕНИЕ 2: Функция для перехода к дню
   const handleDayClick = (day: Date) => {
     setCurrentDate(day);
     setViewMode('day');
@@ -667,13 +665,9 @@ const renderMonthView = () => {
                 {daySlots.slice(0, 3).map((slot, idx) => {
                   const isPastSlot = parseTimestamp(slot.end_at) < new Date();
                   
-                  // ИЗМЕНЕНИЕ 1: Упрощенный tooltip для месячного вида
-                  const tooltipContent = `
-                    ${slot.title || 'Слот'}
-                    Время: ${formatSlotTime(slot.start_at)}-${formatSlotTime(slot.end_at)}
-                    ${slot.slot_status === 'draft' ? 'Статус: Черновик' : ''}
-                    ${isPastSlot ? 'Статус: Прошедшее' : ''}
-                  `;
+                  // ИСПРАВЛЕНО: Используем упрощенный tooltip как в SlotComponent
+                  const tooltipContent = `${slot.title || 'Слот'}
+Время: ${formatSlotTime(slot.start_at)}-${formatSlotTime(slot.end_at)}${slot.slot_status === 'draft' ? '\nСтатус: Черновик' : ''}${isPastSlot ? '\nСтатус: Прошедшее' : ''}`;
 
                   return (
                     <div
@@ -682,7 +676,7 @@ const renderMonthView = () => {
                       data-tooltip-content={tooltipContent}
                       className={`text-xs p-1 rounded truncate cursor-pointer ${getSlotColorClasses(slot.slot_type, slot.slot_status, isPastSlot)}`}
                       onClick={(e) => {
-                        e.stopPropagation(); // Предотвращаем переход к дню при клике на слот
+                        e.stopPropagation();
                         if (slot.slot_type === 'rent' && !isPastSlot) {
                           handleEditSlot(slot);
                         }
@@ -710,8 +704,6 @@ const renderMonthView = () => {
     </div>
   );
 };
-
-
 
 
   
