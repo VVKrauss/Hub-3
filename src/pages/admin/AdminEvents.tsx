@@ -179,7 +179,7 @@ const handleDeleteSelected = async () => {
       .from('events')
       .delete()
       .in('id', selectedEvents);
-
+   
     if (error) throw error;
 
     toast.success(`Успешно удалено ${count} ${count === 1 ? 'мероприятие' : 'мероприятия'}`);
