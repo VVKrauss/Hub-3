@@ -20,7 +20,7 @@ const Layout = ({ children }: LayoutProps) => {
       <Footer />
       
 
-      {/* Добавляем отладчик только в development режиме */}
+      {/* Включаем отладчик */}
       {process.env.NODE_ENV === 'development' && <LoadingDebugger />}
     </div>
   );
