@@ -1,10 +1,13 @@
-// src/components/layout/TopBarFinal.tsx
-// ФИНАЛЬНАЯ ВЕРСИЯ - максимально быстрая и стабильная
+// src/components/layout/TopBarWithAuth.tsx
+// ОСТОРОЖНОЕ добавление авторизации к стабильному TopBar
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, Sun, Moon } from 'lucide-react';
+import { Menu, X, Sun, Moon, LogIn, User } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 import { getNavigationItems } from '../../api/settings';
+import LoginModal from '../auth/LoginModal';
+import UserProfileDropdown from '../ui/UserProfileDropdown';
 
 interface NavItem {
   id: string;
@@ -14,7 +17,15 @@ interface NavItem {
   order?: number;
 }
 
-// РАБОЧАЯ навигация с курсами - используется как основная
+interface User {
+  id: string;
+  email: string;
+  name?: string;
+  role?: string;
+  avatar?: string;
+}
+
+// Рабочая навигация - как основа
 const DEFAULT_NAV_ITEMS: NavItem[] = [
   { id: 'home', label: 'Главная', path: '/', visible: true, order: 0 },
   { id: 'events', label: 'События', path: '/events', visible: true, order: 1 },
@@ -25,19 +36,25 @@ const DEFAULT_NAV_ITEMS: NavItem[] = [
   { id: 'about', label: 'О нас', path: '/about', visible: true, order: 6 }
 ];
 
-const TopBarFinal = () => {
+const TopBarWithAuth = () => {
   const location = useLocation();
   
-  // Начинаем сразу с рабочей навигации - никаких задержек!
+  // Основные состояния (как в стабильной версии)
   const [navItems, setNavItems] = useState<NavItem[]>(DEFAULT_NAV_ITEMS);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
-  const [apiLoaded, setApiLoaded] = useState(false);
+  
+  // НОВЫЕ состояния для авторизации
+  const [user, setUser] = useState<User | null>(null);
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [authInitialized, setAuthInitialized] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   
   const menuRef = useRef<HTMLDivElement>(null);
   const isMountedRef = useRef(true);
+  const authSubscriptionRef = useRef<any>(null);
 
-  // Инициализация темы
+  // Инициализация темы (без изменений)
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
     if (savedTheme) {
@@ -46,13 +63,10 @@ const TopBarFinal = () => {
     }
   }, []);
 
-  // ФОНОВАЯ загрузка API - НЕ блокирует интерфейс
+  // Фоновая загрузка навигации (без изменений)
   useEffect(() => {
     const loadNavigationInBackground = async () => {
       try {
-        console.log('🔄 TopBar Final: Фоновая загрузка API...');
-        
-        // Короткий таймаут - если не загрузится быстро, забиваем
         const timeoutPromise = new Promise((_, reject) => 
           setTimeout(() => reject(new Error('Background timeout')), 1500)
         );
@@ -63,34 +77,147 @@ const TopBarFinal = () => {
         
         if (response?.data && Array.isArray(response.data) && response.data.length > 0) {
           const sortedItems = response.data.sort((a, b) => (a.order || 0) - (b.order || 0));
-          
-          // Проверяем, отличается ли от текущей навигации
-          const currentIds = navItems.map(item => item.id).sort();
-          const newIds = sortedItems.map(item => item.id).sort();
-          
-          if (JSON.stringify(currentIds) !== JSON.stringify(newIds)) {
-            setNavItems(sortedItems);
-            console.log('✅ TopBar Final: API обновил навигацию', sortedItems);
-          } else {
-            console.log('✅ TopBar Final: API подтвердил текущую навигацию');
-          }
-          
-          setApiLoaded(true);
+          setNavItems(sortedItems);
         }
-        
       } catch (error) {
-        // Тихо игнорируем ошибки фоновой загрузки
-        console.log('ℹ️ TopBar Final: Фоновая загрузка API не удалась, используем дефолт');
+        console.log('ℹ️ TopBar: Фоновая загрузка навигации не удалась');
       }
     };
 
-    // Запускаем фоновую загрузку с небольшой задержкой
     const timer = setTimeout(loadNavigationInBackground, 100);
-    
-    return () => {
-      isMountedRef.current = false;
-      clearTimeout(timer);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // НОВЫЙ: Безопасная инициализация авторизации
+  useEffect(() => {
+    const initializeAuth = async () => {
+      try {
+        if (!isMountedRef.current) return;
+        
+        console.log('🔐 TopBar: Инициализация авторизации...');
+        
+        // Быстрая проверка текущей сессии
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Auth timeout')), 2000)
+        );
+        
+        const sessionPromise = supabase.auth.getSession();
+        const { data: { session }, error } = await Promise.race([sessionPromise, timeoutPromise]);
+        
+        if (!isMountedRef.current) return;
+        
+        if (error) {
+          console.warn('⚠️ TopBar: Ошибка получения сессии:', error.message);
+          setAuthError(error.message);
+        } else if (session?.user) {
+          console.log('✅ TopBar: Найдена активная сессия');
+          await fetchUserProfile(session.user);
+        }
+        
+        setAuthInitialized(true);
+        
+      } catch (error) {
+        console.warn('⚠️ TopBar: Ошибка инициализации авторизации:', error.message);
+        if (isMountedRef.current) {
+          setAuthError(error.message);
+          setAuthInitialized(true); // Все равно помечаем как инициализированное
+        }
+      }
     };
+
+    const timer = setTimeout(initializeAuth, 200); // Небольшая задержка
+    return () => clearTimeout(timer);
+  }, []);
+
+  // НОВЫЙ: Подписка на изменения авторизации (ТОЛЬКО после инициализации)
+  useEffect(() => {
+    if (!authInitialized) return;
+    
+    try {
+      console.log('🔐 TopBar: Настройка подписки на auth изменения...');
+      
+      const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (!isMountedRef.current) return;
+        
+        console.log('🔄 TopBar: Auth событие:', event);
+        
+        try {
+          if (event === 'SIGNED_IN' && session?.user) {
+            await fetchUserProfile(session.user);
+            setLoginModalOpen(false);
+            setAuthError(null);
+          } else if (event === 'SIGNED_OUT') {
+            setUser(null);
+            setAuthError(null);
+          }
+        } catch (error) {
+          console.warn('⚠️ TopBar: Ошибка обработки auth события:', error.message);
+          setAuthError(error.message);
+        }
+      });
+      
+      authSubscriptionRef.current = data.subscription;
+      
+    } catch (error) {
+      console.error('❌ TopBar: Ошибка настройки подписки:', error.message);
+      setAuthError(error.message);
+    }
+
+    return () => {
+      if (authSubscriptionRef.current) {
+        console.log('🔐 TopBar: Очистка auth подписки');
+        authSubscriptionRef.current.unsubscribe();
+        authSubscriptionRef.current = null;
+      }
+    };
+  }, [authInitialized]);
+
+  // Безопасная загрузка профиля пользователя
+  const fetchUserProfile = useCallback(async (authUser: any) => {
+    try {
+      if (!isMountedRef.current) return;
+      
+      console.log('👤 TopBar: Загрузка профиля пользователя...');
+      
+      // Быстрый таймаут для профиля
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Profile timeout')), 1500)
+      );
+      
+      const profilePromise = supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', authUser.id)
+        .single();
+        
+      const { data: profile, error } = await Promise.race([profilePromise, timeoutPromise]);
+      
+      if (!isMountedRef.current) return;
+      
+      // Создаем объект пользователя даже если профиль не найден
+      const userData: User = {
+        id: authUser.id,
+        email: authUser.email || '',
+        name: profile?.name || authUser.user_metadata?.name || 'Пользователь',
+        role: profile?.role,
+        avatar: profile?.avatar
+      };
+      
+      setUser(userData);
+      console.log('✅ TopBar: Профиль пользователя загружен');
+      
+    } catch (error) {
+      console.warn('⚠️ TopBar: Ошибка загрузки профиля:', error.message);
+      
+      // Создаем базовый профиль даже при ошибке
+      if (isMountedRef.current && authUser) {
+        setUser({
+          id: authUser.id,
+          email: authUser.email || '',
+          name: authUser.user_metadata?.name || 'Пользователь'
+        });
+      }
+    }
   }, []);
 
   // Обработчик клика вне меню
@@ -106,11 +233,31 @@ const TopBarFinal = () => {
     }
   }, [mobileMenuOpen]);
 
+  // Cleanup при размонтировании
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      if (authSubscriptionRef.current) {
+        authSubscriptionRef.current.unsubscribe();
+      }
+    };
+  }, []);
+
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
     localStorage.setItem('theme', newTheme);
     document.documentElement.classList.toggle('dark', newTheme === 'dark');
+  };
+
+  const handleLogout = async () => {
+    try {
+      console.log('🚪 TopBar: Выход из системы...');
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error('❌ TopBar: Ошибка выхода:', error.message);
+      setAuthError(error.message);
+    }
   };
 
   const visibleNavItems = navItems.filter(item => item.visible);
@@ -130,7 +277,7 @@ const TopBarFinal = () => {
             </span>
           </Link>
           
-          {/* Desktop Navigation - ВСЕГДА готова к использованию */}
+          {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center justify-center flex-1 space-x-6">
             {visibleNavItems.map(item => (
               <Link 
@@ -157,9 +304,29 @@ const TopBarFinal = () => {
               {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>
             
-            <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-              Войти
-            </button>
+            {/* AUTH CONTROLS */}
+            {authInitialized ? (
+              user ? (
+                <UserProfileDropdown 
+                  user={user} 
+                  onLogout={handleLogout}
+                />
+              ) : (
+                <button
+                  onClick={() => setLoginModalOpen(true)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                >
+                  <LogIn className="h-4 w-4" />
+                  Войти
+                </button>
+              )
+            ) : (
+              // Показываем простую заглушку пока инициализируется
+              <div className="px-4 py-2 bg-gray-100 text-gray-500 rounded-lg flex items-center gap-2">
+                <User className="h-4 w-4" />
+                <span className="text-sm">...</span>
+              </div>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -167,7 +334,6 @@ const TopBarFinal = () => {
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-              aria-label="Меню"
             >
               {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
             </button>
@@ -201,26 +367,85 @@ const TopBarFinal = () => {
                 {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
               </button>
 
-              <button className="w-full mt-3 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                Войти
-              </button>
+              {/* Mobile Auth */}
+              {authInitialized ? (
+                user ? (
+                  <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                    <div className="flex items-center gap-3 py-3 px-4">
+                      {user.avatar ? (
+                        <img 
+                          src={user.avatar} 
+                          alt={user.name}
+                          className="w-8 h-8 rounded-full"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                          <span className="text-white text-sm font-medium">
+                            {user.name[0].toUpperCase()}
+                          </span>
+                        </div>
+                      )}
+                      <div>
+                        <p className="font-medium text-gray-900 dark:text-white">{user.name}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleLogout}
+                      className="w-full py-3 px-4 text-left text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                    >
+                      Выйти
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      setLoginModalOpen(true);
+                    }}
+                    className="w-full mt-3 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <LogIn className="h-4 w-4" />
+                    Войти
+                  </button>
+                )
+              ) : (
+                <div className="w-full mt-3 px-4 py-3 bg-gray-100 text-gray-500 rounded-lg text-center">
+                  Загрузка...
+                </div>
+              )}
             </nav>
           </div>
         )}
       </div>
       
-      {/* Минимальная debug info - только в development */}
+      {/* Auth Error */}
+      {authError && (
+        <div className="bg-red-50 border-l-4 border-red-500 p-2 text-xs">
+          <span className="text-red-700">⚠️ Auth: {authError}</span>
+        </div>
+      )}
+      
+      {/* Debug Info */}
       {process.env.NODE_ENV === 'development' && (
-        <div className="bg-green-100 border-l-4 border-green-500 p-1 text-xs">
-          <span className="text-green-700">
-            ✅ TopBar Final | Элементов: {visibleNavItems.length} | 
-            API: {apiLoaded ? '🔗 Синхронизирован' : '🔄 Фон'} |
+        <div className="bg-blue-100 border-l-4 border-blue-500 p-1 text-xs">
+          <span className="text-blue-700">
+            🔐 TopBar + Auth | Навигация: ✅ | 
+            Auth: {authInitialized ? (user ? `👤 ${user.name}` : '🔓 Гость') : '🔄 Загрузка'} |
             Курсы: ✅
           </span>
         </div>
+      )}
+
+      {/* Login Modal */}
+      {loginModalOpen && (
+        <LoginModal 
+          isOpen={loginModalOpen}
+          onClose={() => setLoginModalOpen(false)}
+        />
       )}
     </header>
   );
 };
 
-export default TopBarFinal;
+export default TopBarWithAuth;
