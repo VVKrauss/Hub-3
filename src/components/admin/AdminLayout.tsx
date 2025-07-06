@@ -1,6 +1,6 @@
 // src/components/admin/AdminLayout.tsx
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../../lib/supabase';
 import { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, 
@@ -27,10 +27,6 @@ import {
 import { toast } from 'react-hot-toast';
 import QRScanner from './QRScanner';
 
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
 
 const AdminLayout = () => {
   const navigate = useNavigate();
