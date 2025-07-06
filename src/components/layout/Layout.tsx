@@ -1,8 +1,9 @@
 // src/components/layout/Layout.tsx
-// ОБНОВЛЕННЫЙ Layout с минимальным TopBar
+// ТЕСТИРОВАНИЕ ШАГА 2: TopBar с API навигацией
 
 import { ReactNode } from 'react';
-import TopBarMinimal from './TopBarMinimal'; // ← Используем минимальную версию
+// import TopBarMinimal from './TopBarMinimal'; // ← Шаг 1
+import TopBarStep2 from './TopBarStep2'; // ← Шаг 2: API навигация
 import Footer from './Footer';
 
 type LayoutProps = {
@@ -12,8 +13,8 @@ type LayoutProps = {
 const Layout = ({ children }: LayoutProps) => {
   return (
     <div className="flex flex-col min-h-screen">
-      {/* МИНИМАЛЬНЫЙ TOPBAR вместо полного */}
-      <TopBarMinimal />
+      {/* ШАГ 2: TopBar с API навигацией */}
+      <TopBarStep2 />
       
       <main className="flex-grow">
         {children}
