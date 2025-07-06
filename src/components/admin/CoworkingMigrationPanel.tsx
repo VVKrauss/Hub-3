@@ -1,337 +1,474 @@
 // src/components/admin/CoworkingMigrationPanel.tsx
-// Панель для управления миграцией данных коворкинга
-
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, Database, CheckCircle, AlertTriangle, Download, Upload } from 'lucide-react';
-import { toast } from 'react-hot-toast';
 import { 
-  checkMigrationNeeded, 
-  migrateCoworkingData, 
-  backupOldData, 
+  AlertTriangle, 
+  CheckCircle, 
+  XCircle, 
+  RefreshCw, 
+  Download, 
+  Upload, 
+  Trash2,
+  Eye,
+  Clock
+} from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import {
+  migrateLegacyCoworkingData,
+  fullMigrationWithBackup,
+  restoreFromBackup,
+  cleanupLegacyData,
   validateMigration,
-  type MigrationResult 
+  backupLegacyCoworkingData
 } from '../../utils/coworkingMigration';
+import { checkLegacyCoworkingData } from '../../api/coworking';
+
+interface MigrationStatus {
+  isRunning: boolean;
+  step: string;
+  progress: number;
+  result?: 'success' | 'error' | null;
+  errors: string[];
+}
 
 const CoworkingMigrationPanel: React.FC = () => {
-  const [migrationNeeded, setMigrationNeeded] = useState<boolean | null>(null);
-  const [migrating, setMigrating] = useState(false);
-  const [backing, setBacking] = useState(false);
-  const [validating, setValidating] = useState(false);
-  const [migrationResult, setMigrationResult] = useState<MigrationResult | null>(null);
-  const [validationResult, setValidationResult] = useState<any>(null);
+  const [migrationStatus, setMigrationStatus] = useState<MigrationStatus>({
+    isRunning: false,
+    step: '',
+    progress: 0,
+    result: null,
+    errors: []
+  });
+
+  const [legacyData, setLegacyData] = useState({
+    hasLegacyHeader: false,
+    hasLegacyServices: false,
+    legacyServicesCount: 0
+  });
+
+  const [validationResult, setValidationResult] = useState<{
+    isValid: boolean;
+    issues: string[];
+  } | null>(null);
+
+  const [showDetails, setShowDetails] = useState(false);
 
   useEffect(() => {
-    checkMigrationStatus();
+    checkLegacyDataStatus();
   }, []);
 
-  const checkMigrationStatus = async () => {
+  const checkLegacyDataStatus = async () => {
     try {
-      const needed = await checkMigrationNeeded();
-      setMigrationNeeded(needed);
+      const status = await checkLegacyCoworkingData();
+      setLegacyData(status);
     } catch (error) {
-      console.error('Error checking migration status:', error);
-      toast.error('Ошибка проверки статуса миграции');
+      console.error('Error checking legacy data:', error);
     }
   };
 
-  const handleBackup = async () => {
-    setBacking(true);
+  const updateMigrationStatus = (step: string, progress: number, errors: string[] = []) => {
+    setMigrationStatus(prev => ({
+      ...prev,
+      step,
+      progress,
+      errors: [...prev.errors, ...errors]
+    }));
+  };
+
+  const runFullMigration = async () => {
+    setMigrationStatus({
+      isRunning: true,
+      step: 'Начинаем миграцию...',
+      progress: 0,
+      result: null,
+      errors: []
+    });
+
     try {
-      const result = await backupOldData();
-      if (result.success) {
-        toast.success(result.message);
+      updateMigrationStatus('Создание резервной копии...', 20);
+      const success = await fullMigrationWithBackup();
+
+      if (success) {
+        updateMigrationStatus('Проверка целостности данных...', 80);
+        const validation = await validateMigration();
+        setValidationResult(validation);
+
+        if (validation.isValid) {
+          updateMigrationStatus('Миграция завершена успешно!', 100);
+          setMigrationStatus(prev => ({ ...prev, result: 'success', isRunning: false }));
+          toast.success('Миграция завершена успешно!');
+          await checkLegacyDataStatus(); // Обновляем статус
+        } else {
+          updateMigrationStatus('Миграция завершена с предупреждениями', 100, validation.issues);
+          setMigrationStatus(prev => ({ ...prev, result: 'error', isRunning: false }));
+          toast.error('Миграция завершена с ошибками');
+        }
       } else {
-        toast.error(result.message);
+        updateMigrationStatus('Ошибка при миграции', 100, ['Не удалось выполнить миграцию']);
+        setMigrationStatus(prev => ({ ...prev, result: 'error', isRunning: false }));
+        toast.error('Ошибка при миграции');
       }
     } catch (error) {
-      console.error('Backup error:', error);
-      toast.error('Ошибка создания резервной копии');
-    } finally {
-      setBacking(false);
+      updateMigrationStatus('Критическая ошибка', 100, [String(error)]);
+      setMigrationStatus(prev => ({ ...prev, result: 'error', isRunning: false }));
+      toast.error('Критическая ошибка при миграции');
     }
   };
 
-  const handleMigration = async () => {
-    if (!confirm('Запустить миграцию данных коворкинга? Это действие нельзя отменить.')) {
+  const runSimpleMigration = async () => {
+    setMigrationStatus({
+      isRunning: true,
+      step: 'Выполняем простую миграцию...',
+      progress: 0,
+      result: null,
+      errors: []
+    });
+
+    try {
+      updateMigrationStatus('Перенос данных...', 50);
+      const success = await migrateLegacyCoworkingData();
+
+      if (success) {
+        updateMigrationStatus('Миграция завершена!', 100);
+        setMigrationStatus(prev => ({ ...prev, result: 'success', isRunning: false }));
+        toast.success('Простая миграция завершена!');
+        await checkLegacyDataStatus();
+      } else {
+        updateMigrationStatus('Ошибка при миграции', 100, ['Не удалось выполнить миграцию']);
+        setMigrationStatus(prev => ({ ...prev, result: 'error', isRunning: false }));
+        toast.error('Ошибка при миграции');
+      }
+    } catch (error) {
+      updateMigrationStatus('Ошибка', 100, [String(error)]);
+      setMigrationStatus(prev => ({ ...prev, result: 'error', isRunning: false }));
+      toast.error('Ошибка при миграции');
+    }
+  };
+
+  const runBackup = async () => {
+    try {
+      toast.loading('Создаем резервную копию...');
+      const success = await backupLegacyCoworkingData();
+      
+      if (success) {
+        toast.success('Резервная копия создана!');
+      } else {
+        toast.error('Ошибка при создании резервной копии');
+      }
+    } catch (error) {
+      toast.error('Ошибка при создании резервной копии');
+    }
+  };
+
+  const runRestore = async () => {
+    if (!confirm('Вы уверены, что хотите восстановить данные из резервной копии? Это перезапишет текущие данные.')) {
       return;
     }
 
-    setMigrating(true);
     try {
-      const result = await migrateCoworkingData();
-      setMigrationResult(result);
+      toast.loading('Восстанавливаем данные...');
+      const success = await restoreFromBackup();
       
-      if (result.success) {
-        toast.success(result.message);
-        await checkMigrationStatus(); // Обновляем статус
+      if (success) {
+        toast.success('Данные восстановлены из резервной копии!');
+        await checkLegacyDataStatus();
       } else {
-        toast.error(result.message);
+        toast.error('Ошибка при восстановлении данных');
       }
     } catch (error) {
-      console.error('Migration error:', error);
-      toast.error('Ошибка миграции данных');
-    } finally {
-      setMigrating(false);
+      toast.error('Ошибка при восстановлении данных');
     }
   };
 
-  const handleValidation = async () => {
-    setValidating(true);
+  const runCleanup = async () => {
+    if (!confirm('Вы уверены, что хотите очистить старые данные? Это действие необратимо.')) {
+      return;
+    }
+
     try {
+      toast.loading('Очищаем старые данные...');
+      const success = await cleanupLegacyData();
+      
+      if (success) {
+        toast.success('Старые данные очищены!');
+        await checkLegacyDataStatus();
+      } else {
+        toast.error('Ошибка при очистке данных');
+      }
+    } catch (error) {
+      toast.error('Ошибка при очистке данных');
+    }
+  };
+
+  const runValidation = async () => {
+    try {
+      toast.loading('Проверяем целостность данных...');
       const result = await validateMigration();
       setValidationResult(result);
       
-      if (result.success) {
-        toast.success(result.message);
+      if (result.isValid) {
+        toast.success('Данные корректны!');
       } else {
-        toast.warning(result.message);
+        toast.error(`Найдено ${result.issues.length} проблем`);
       }
     } catch (error) {
-      console.error('Validation error:', error);
-      toast.error('Ошибка валидации данных');
-    } finally {
-      setValidating(false);
+      toast.error('Ошибка при валидации');
     }
   };
 
-  if (migrationNeeded === null) {
-    return (
-      <div className="bg-white dark:bg-dark-800 rounded-xl shadow-sm p-6">
-        <div className="flex items-center gap-3">
-          <RefreshCw className="h-5 w-5 animate-spin text-gray-500" />
-          <span className="text-gray-600 dark:text-gray-300">Проверка статуса миграции...</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (!migrationNeeded && !migrationResult) {
-    return (
-      <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-xl p-6">
-        <div className="flex items-center gap-3">
-          <CheckCircle className="h-5 w-5 text-green-600" />
-          <div>
-            <h3 className="text-green-800 dark:text-green-300 font-medium">
-              Миграция не требуется
-            </h3>
-            <p className="text-green-700 dark:text-green-400 text-sm mt-1">
-              Данные коворкинга уже используют новую схему БД
-            </p>
-          </div>
-        </div>
-        
-        <div className="mt-4">
-          <button
-            onClick={handleValidation}
-            disabled={validating}
-            className="btn-secondary flex items-center gap-2"
-          >
-            {validating ? (
-              <RefreshCw className="h-4 w-4 animate-spin" />
-            ) : (
-              <CheckCircle className="h-4 w-4" />
-            )}
-            Проверить данные
-          </button>
-        </div>
-
-        {validationResult && (
-          <div className={`mt-4 p-4 rounded-lg ${
-            validationResult.success 
-              ? 'bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-800' 
-              : 'bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800'
-          }`}>
-            <h4 className={`font-medium ${
-              validationResult.success ? 'text-green-800 dark:text-green-300' : 'text-yellow-800 dark:text-yellow-300'
-            }`}>
-              Результат валидации
-            </h4>
-            <p className={`text-sm mt-1 ${
-              validationResult.success ? 'text-green-700 dark:text-green-400' : 'text-yellow-700 dark:text-yellow-400'
-            }`}>
-              {validationResult.message}
-            </p>
-            
-            {validationResult.issues && validationResult.issues.length > 0 && (
-              <ul className="mt-2 text-sm text-yellow-700 dark:text-yellow-400 list-disc list-inside">
-                {validationResult.issues.map((issue: string, index: number) => (
-                  <li key={index}>{issue}</li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
+  const hasLegacyData = legacyData.hasLegacyHeader || legacyData.hasLegacyServices;
 
   return (
-    <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-xl p-6">
-      <div className="flex items-start gap-3 mb-6">
-        <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
-        <div>
-          <h3 className="text-yellow-800 dark:text-yellow-300 font-medium">
-            Требуется миграция данных коворкинга
-          </h3>
-          <p className="text-yellow-700 dark:text-yellow-400 text-sm mt-1">
-            Обнаружены данные в старой схеме БД. Рекомендуется выполнить миграцию для использования новой системы.
-          </p>
+    <div className="bg-white dark:bg-dark-800 rounded-2xl shadow-lg p-8 border border-gray-100 dark:border-gray-700">
+      <div className="flex items-center gap-3 mb-6">
+        <AlertTriangle className="w-6 h-6 text-amber-600" />
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+          Панель миграции коворкинга
+        </h2>
+      </div>
+
+      {/* Статус старых данных */}
+      <div className="mb-8 p-4 bg-gray-50 dark:bg-dark-700 rounded-lg">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+          Статус старых данных
+        </h3>
+        <div className="grid md:grid-cols-2 gap-4">
+          <div className="flex items-center gap-3">
+            {legacyData.hasLegacyHeader ? (
+              <CheckCircle className="w-5 h-5 text-green-500" />
+            ) : (
+              <XCircle className="w-5 h-5 text-red-500" />
+            )}
+            <span className="text-gray-700 dark:text-gray-300">
+              Заголовок в старой схеме: {legacyData.hasLegacyHeader ? 'Найден' : 'Не найден'}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            {legacyData.hasLegacyServices ? (
+              <CheckCircle className="w-5 h-5 text-green-500" />
+            ) : (
+              <XCircle className="w-5 h-5 text-red-500" />
+            )}
+            <span className="text-gray-700 dark:text-gray-300">
+              Услуги в старой схеме: {legacyData.legacyServicesCount} шт.
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Шаги миграции */}
-      <div className="space-y-4">
-        <div className="bg-white dark:bg-dark-700 rounded-lg p-4">
-          <h4 className="font-medium text-gray-900 dark:text-white mb-3">
-            Шаги миграции:
-          </h4>
-          
-          <div className="space-y-3">
-            {/* Шаг 1: Резервная копия */}
-            <div className="flex items-center gap-3">
-              <div className="w-6 h-6 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
-                <span className="text-xs font-bold text-blue-600 dark:text-blue-400">1</span>
-              </div>
-              <div className="flex-1">
-                <span className="text-gray-900 dark:text-white">Создать резервную копию</span>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Сохранить текущие данные перед миграцией</p>
-              </div>
-              <button
-                onClick={handleBackup}
-                disabled={backing}
-                className="btn-secondary flex items-center gap-2 text-sm"
-              >
-                {backing ? (
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Download className="h-4 w-4" />
-                )}
-                {backing ? 'Создание...' : 'Создать копию'}
-              </button>
-            </div>
+      {/* Прогресс миграции */}
+      {migrationStatus.isRunning && (
+        <div className="mb-8 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+          <div className="flex items-center gap-3 mb-3">
+            <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />
+            <span className="text-blue-800 dark:text-blue-200 font-medium">
+              {migrationStatus.step}
+            </span>
+          </div>
+          <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2">
+            <div 
+              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${migrationStatus.progress}%` }}
+            />
+          </div>
+        </div>
+      )}
 
-            {/* Шаг 2: Миграция */}
-            <div className="flex items-center gap-3">
-              <div className="w-6 h-6 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
-                <span className="text-xs font-bold text-green-600 dark:text-green-400">2</span>
-              </div>
-              <div className="flex-1">
-                <span className="text-gray-900 dark:text-white">Выполнить миграцию</span>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Перенести данные в новую схему БД</p>
-              </div>
+      {/* Результат миграции */}
+      {migrationStatus.result && (
+        <div className={`mb-8 p-4 rounded-lg border ${
+          migrationStatus.result === 'success' 
+            ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+            : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+        }`}>
+          <div className="flex items-center gap-3 mb-2">
+            {migrationStatus.result === 'success' ? (
+              <CheckCircle className="w-5 h-5 text-green-600" />
+            ) : (
+              <XCircle className="w-5 h-5 text-red-600" />
+            )}
+            <span className={`font-medium ${
+              migrationStatus.result === 'success' 
+                ? 'text-green-800 dark:text-green-200' 
+                : 'text-red-800 dark:text-red-200'
+            }`}>
+              {migrationStatus.result === 'success' ? 'Миграция завершена успешно!' : 'Миграция завершена с ошибками'}
+            </span>
+          </div>
+          {migrationStatus.errors.length > 0 && (
+            <div className="mt-3">
               <button
-                onClick={handleMigration}
-                disabled={migrating}
-                className="btn-primary flex items-center gap-2 text-sm"
+                onClick={() => setShowDetails(!showDetails)}
+                className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 flex items-center gap-1"
               >
-                {migrating ? (
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Upload className="h-4 w-4" />
-                )}
-                {migrating ? 'Миграция...' : 'Мигрировать'}
+                <Eye className="w-4 h-4" />
+                {showDetails ? 'Скрыть' : 'Показать'} подробности
               </button>
+              {showDetails && (
+                <ul className="mt-2 text-sm text-red-700 dark:text-red-300 space-y-1">
+                  {migrationStatus.errors.map((error, index) => (
+                    <li key={index}>• {error}</li>
+                  ))}
+                </ul>
+              )}
             </div>
+          )}
+        </div>
+      )}
 
-            {/* Шаг 3: Валидация */}
-            <div className="flex items-center gap-3">
-              <div className="w-6 h-6 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center">
-                <span className="text-xs font-bold text-purple-600 dark:text-purple-400">3</span>
-              </div>
-              <div className="flex-1">
-                <span className="text-gray-900 dark:text-white">Проверить результат</span>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Валидировать мигрированные данные</p>
-              </div>
+      {/* Результат валидации */}
+      {validationResult && (
+        <div className={`mb-8 p-4 rounded-lg border ${
+          validationResult.isValid 
+            ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+            : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
+        }`}>
+          <div className="flex items-center gap-3 mb-2">
+            {validationResult.isValid ? (
+              <CheckCircle className="w-5 h-5 text-green-600" />
+            ) : (
+              <AlertTriangle className="w-5 h-5 text-yellow-600" />
+            )}
+            <span className={`font-medium ${
+              validationResult.isValid 
+                ? 'text-green-800 dark:text-green-200' 
+                : 'text-yellow-800 dark:text-yellow-200'
+            }`}>
+              {validationResult.isValid ? 'Данные корректны' : `Найдено ${validationResult.issues.length} проблем`}
+            </span>
+          </div>
+          {!validationResult.isValid && validationResult.issues.length > 0 && (
+            <ul className="mt-2 text-sm text-yellow-700 dark:text-yellow-300 space-y-1">
+              {validationResult.issues.map((issue, index) => (
+                <li key={index}>• {issue}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {/* Действия миграции */}
+      <div className="space-y-6">
+        {hasLegacyData && (
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Миграция данных
+            </h3>
+            <div className="grid md:grid-cols-2 gap-4">
               <button
-                onClick={handleValidation}
-                disabled={validating || !migrationResult}
-                className="btn-secondary flex items-center gap-2 text-sm"
+                onClick={runFullMigration}
+                disabled={migrationStatus.isRunning}
+                className="flex items-center gap-3 p-4 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors"
               >
-                {validating ? (
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                ) : (
-                  <CheckCircle className="h-4 w-4" />
-                )}
-                {validating ? 'Проверка...' : 'Проверить'}
+                <Download className="w-5 h-5" />
+                <div className="text-left">
+                  <div className="font-medium">Полная миграция</div>
+                  <div className="text-sm text-primary-100">С резервной копией и валидацией</div>
+                </div>
+              </button>
+
+              <button
+                onClick={runSimpleMigration}
+                disabled={migrationStatus.isRunning}
+                className="flex items-center gap-3 p-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                <RefreshCw className="w-5 h-5" />
+                <div className="text-left">
+                  <div className="font-medium">Простая миграция</div>
+                  <div className="text-sm text-blue-100">Только перенос данных</div>
+                </div>
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Дополнительные действия */}
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            Дополнительные действия
+          </h3>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <button
+              onClick={runBackup}
+              disabled={migrationStatus.isRunning}
+              className="flex items-center gap-3 p-4 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors"
+            >
+              <Download className="w-5 h-5" />
+              <div className="text-left">
+                <div className="font-medium">Создать бэкап</div>
+                <div className="text-xs text-gray-100">Резервная копия</div>
+              </div>
+            </button>
+
+            <button
+              onClick={runRestore}
+              disabled={migrationStatus.isRunning}
+              className="flex items-center gap-3 p-4 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 transition-colors"
+            >
+              <Upload className="w-5 h-5" />
+              <div className="text-left">
+                <div className="font-medium">Восстановить</div>
+                <div className="text-xs text-orange-100">Из бэкапа</div>
+              </div>
+            </button>
+
+            <button
+              onClick={runValidation}
+              disabled={migrationStatus.isRunning}
+              className="flex items-center gap-3 p-4 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+            >
+              <CheckCircle className="w-5 h-5" />
+              <div className="text-left">
+                <div className="font-medium">Проверить</div>
+                <div className="text-xs text-green-100">Валидация</div>
+              </div>
+            </button>
+
+            <button
+              onClick={runCleanup}
+              disabled={migrationStatus.isRunning}
+              className="flex items-center gap-3 p-4 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+            >
+              <Trash2 className="w-5 h-5" />
+              <div className="text-left">
+                <div className="font-medium">Очистить</div>
+                <div className="text-xs text-red-100">Старые данные</div>
+              </div>
+            </button>
           </div>
         </div>
 
-        {/* Результат миграции */}
-        {migrationResult && (
-          <div className={`p-4 rounded-lg ${
-            migrationResult.success 
-              ? 'bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-800' 
-              : 'bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-800'
-          }`}>
-            <h4 className={`font-medium ${
-              migrationResult.success ? 'text-green-800 dark:text-green-300' : 'text-red-800 dark:text-red-300'
-            }`}>
-              Результат миграции
+        {/* Информация о процессе */}
+        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+          <div className="flex items-center gap-3 mb-3">
+            <Clock className="w-5 h-5 text-blue-600" />
+            <h4 className="font-medium text-blue-800 dark:text-blue-200">
+              Информация о миграции
             </h4>
-            <p className={`text-sm mt-1 ${
-              migrationResult.success ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'
-            }`}>
-              {migrationResult.message}
-            </p>
-            
-            {migrationResult.success && (
-              <p className="text-sm text-green-600 dark:text-green-500 mt-2">
-                ✅ Перенесено услуг: {migrationResult.migratedServices}
-              </p>
-            )}
-            
-            {migrationResult.errors.length > 0 && (
-              <div className="mt-2">
-                <p className="text-sm font-medium text-red-700 dark:text-red-400">Ошибки:</p>
-                <ul className="text-sm text-red-600 dark:text-red-500 list-disc list-inside">
-                  {migrationResult.errors.map((error, index) => (
-                    <li key={index}>{error}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
           </div>
-        )}
-
-        {/* Результат валидации */}
-        {validationResult && (
-          <div className={`p-4 rounded-lg ${
-            validationResult.success 
-              ? 'bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-800' 
-              : 'bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800'
-          }`}>
-            <h4 className={`font-medium ${
-              validationResult.success ? 'text-green-800 dark:text-green-300' : 'text-yellow-800 dark:text-yellow-300'
-            }`}>
-              Результат валидации
-            </h4>
-            <p className={`text-sm mt-1 ${
-              validationResult.success ? 'text-green-700 dark:text-green-400' : 'text-yellow-700 dark:text-yellow-400'
-            }`}>
-              {validationResult.message}
-            </p>
-            
-            {validationResult.issues && validationResult.issues.length > 0 && (
-              <div className="mt-2">
-                <p className="text-sm font-medium text-yellow-700 dark:text-yellow-400">Обнаруженные проблемы:</p>
-                <ul className="text-sm text-yellow-600 dark:text-yellow-500 list-disc list-inside">
-                  {validationResult.issues.map((issue: string, index: number) => (
-                    <li key={index}>{issue}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
+          <div className="text-sm text-blue-700 dark:text-blue-300 space-y-2">
+            <p><strong>Полная миграция:</strong> Создает резервную копию, переносит данные и проверяет их целостность.</p>
+            <p><strong>Простая миграция:</strong> Быстро переносит данные без дополнительных проверок.</p>
+            <p><strong>Создать бэкап:</strong> Сохраняет текущие данные в резервную копию.</p>
+            <p><strong>Восстановить:</strong> Восстанавливает данные из последней резервной копии.</p>
+            <p><strong>Проверить:</strong> Проверяет корректность перенесенных данных.</p>
+            <p><strong>Очистить:</strong> Удаляет старые данные после успешной миграции.</p>
           </div>
-        )}
+        </div>
 
         {/* Предупреждение */}
-        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4">
-          <p className="text-red-700 dark:text-red-400 text-sm">
-            <strong>Важно:</strong> После успешной миграции старые таблицы (<code>coworking_header</code>, <code>coworking_info_table</code>) 
-            останутся без изменений для обеспечения безопасности данных. Их можно будет удалить позже после проверки работы новой системы.
-          </p>
+        <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-amber-700 dark:text-amber-300">
+              <p className="font-medium mb-1">Важно:</p>
+              <ul className="space-y-1 text-xs">
+                <li>• Рекомендуется использовать "Полную миграцию" для максимальной безопасности</li>
+                <li>• Перед миграцией убедитесь, что нет активных пользователей</li>
+                <li>• После успешной миграции можно очистить старые данные</li>
+                <li>• Резервная копия позволяет восстановить данные в случае проблем</li>
+              </ul>
+            </div>
+          </div>
         </div>
       </div>
     </div>
