@@ -614,74 +614,111 @@ const AdminCalendarPage = () => {
       </div>
     );
   };
-  const renderMonthView = () => {
-    const monthStart = startOfMonth(currentDate);
-    const monthEnd = endOfMonth(currentDate);
-    const startDate = startOfWeek(monthStart, WEEK_OPTIONS);
-    const endDate = endOfWeek(monthEnd, WEEK_OPTIONS);
-    const monthDays = eachDayOfInterval({ start: startDate, end: endDate });
 
-    return (
-      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-dark-600 overflow-hidden">
-        <div className="grid grid-cols-7 border-b border-gray-200 dark:border-dark-600">
-          {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(day => (
-            <div key={day} className="p-4 text-center text-sm font-medium text-gray-500 dark:text-gray-400 border-r border-gray-200 dark:border-dark-600 last:border-r-0">
-              {day}
-            </div>
-          ))}
-        </div>
-        
-        <div className="grid grid-cols-7">
-          {monthDays.map(day => {
-            const dayKey = format(day, 'yyyy-MM-dd');
-            const daySlots = timeSlots.filter(slot => 
-              format(parseTimestamp(slot.start_at), 'yyyy-MM-dd') === dayKey
-            );
-            const isCurrentMonth = isSameMonth(day, currentDate);
-            const isDayToday = isToday(day);
 
-            return (
-              <div
-                key={day.toString()}
-                className={`min-h-32 p-2 border-r border-b border-gray-200 dark:border-dark-600 last:border-r-0 ${
-                  !isCurrentMonth ? 'bg-gray-50 dark:bg-dark-700 opacity-50' : 
-                  isDayToday ? 'bg-primary/5 border-primary' : 'bg-white dark:bg-dark-800 border-gray-200 dark:border-dark-600'
-                }`}
-              >
-                <div className={`text-sm font-medium mb-1 ${
-                  isDayToday ? 'text-primary font-bold' : 'text-gray-900 dark:text-white'
-                }`}>
-                  {format(day, 'd')}
-                </div>
-                
-                <div className="space-y-1">
-                  {daySlots.slice(0, 3).map((slot, idx) => (
+
+
+
+const renderMonthView = () => {
+  const monthStart = startOfMonth(currentDate);
+  const monthEnd = endOfMonth(currentDate);
+  const startDate = startOfWeek(monthStart, WEEK_OPTIONS);
+  const endDate = endOfWeek(monthEnd, WEEK_OPTIONS);
+  const monthDays = eachDayOfInterval({ start: startDate, end: endDate });
+
+  // ИЗМЕНЕНИЕ 2: Функция для перехода к дню
+  const handleDayClick = (day: Date) => {
+    setCurrentDate(day);
+    setViewMode('day');
+  };
+
+  return (
+    <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-dark-600 overflow-hidden">
+      <div className="grid grid-cols-7 border-b border-gray-200 dark:border-dark-600">
+        {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(day => (
+          <div key={day} className="p-4 text-center text-sm font-medium text-gray-500 dark:text-gray-400 border-r border-gray-200 dark:border-dark-600 last:border-r-0">
+            {day}
+          </div>
+        ))}
+      </div>
+      
+      <div className="grid grid-cols-7">
+        {monthDays.map(day => {
+          const dayKey = format(day, 'yyyy-MM-dd');
+          const daySlots = timeSlots.filter(slot => 
+            format(parseTimestamp(slot.start_at), 'yyyy-MM-dd') === dayKey
+          );
+          const isCurrentMonth = isSameMonth(day, currentDate);
+          const isDayToday = isToday(day);
+
+          return (
+            <div
+              key={day.toString()}
+              className={`min-h-32 p-2 border-r border-b border-gray-200 dark:border-dark-600 last:border-r-0 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
+                !isCurrentMonth ? 'bg-gray-50 dark:bg-dark-700 opacity-50' : 
+                isDayToday ? 'bg-primary/5 border-primary' : 'bg-white dark:bg-dark-800 border-gray-200 dark:border-dark-600'
+              }`}
+              onClick={() => handleDayClick(day)}
+              title={`Перейти к ${format(day, 'd MMMM', { locale: ru })}`}
+            >
+              <div className={`text-sm font-medium mb-1 ${
+                isDayToday ? 'text-primary font-bold' : 'text-gray-900 dark:text-white'
+              }`}>
+                {format(day, 'd')}
+              </div>
+              
+              <div className="space-y-1">
+                {daySlots.slice(0, 3).map((slot, idx) => {
+                  const isPastSlot = parseTimestamp(slot.end_at) < new Date();
+                  
+                  // ИЗМЕНЕНИЕ 1: Упрощенный tooltip для месячного вида
+                  const tooltipContent = `
+                    ${slot.title || 'Слот'}
+                    Время: ${formatSlotTime(slot.start_at)}-${formatSlotTime(slot.end_at)}
+                    ${slot.slot_status === 'draft' ? 'Статус: Черновик' : ''}
+                    ${isPastSlot ? 'Статус: Прошедшее' : ''}
+                  `;
+
+                  return (
                     <div
                       key={idx}
-                      className={`text-xs p-1 rounded truncate cursor-pointer ${getSlotColorClasses(slot.slot_type, slot.slot_status, parseTimestamp(slot.end_at) < new Date())}`}
-                      onClick={() => {
-                        if (slot.slot_type === 'rent' && !parseTimestamp(slot.end_at) < new Date()) {
+                      data-tooltip-id={`month-tooltip-${slot.id}`}
+                      data-tooltip-content={tooltipContent}
+                      className={`text-xs p-1 rounded truncate cursor-pointer ${getSlotColorClasses(slot.slot_type, slot.slot_status, isPastSlot)}`}
+                      onClick={(e) => {
+                        e.stopPropagation(); // Предотвращаем переход к дню при клике на слот
+                        if (slot.slot_type === 'rent' && !isPastSlot) {
                           handleEditSlot(slot);
                         }
                       }}
                     >
                       {slot.title}
+                      <Tooltip 
+                        id={`month-tooltip-${slot.id}`} 
+                        className="z-50 whitespace-pre-line" 
+                        style={{ zIndex: 9999 }}
+                      />
                     </div>
-                  ))}
-                  {daySlots.length > 3 && (
-                    <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
-                      +{daySlots.length - 3} еще
-                    </div>
-                  )}
-                </div>
+                  );
+                })}
+                {daySlots.length > 3 && (
+                  <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                    +{daySlots.length - 3} еще
+                  </div>
+                )}
               </div>
-            );
-          })}
-        </div>
+            </div>
+          );
+        })}
       </div>
-    );
-  };
+    </div>
+  );
+};
 
+
+
+
+  
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-900">
       <div className="container py-8">
