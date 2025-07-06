@@ -1,4 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+// src/components/home/HeroSection.tsx
+// ИСПРАВЛЕННАЯ ВЕРСИЯ - убираем бесконечные циклы
+
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
@@ -57,64 +60,81 @@ const HeroSection = ({ height = 400 }: HeroSectionProps) => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const sliderRef = useRef<HTMLDivElement>(null);
   const intervalRef = useRef<NodeJS.Timeout>();
+  const isMountedRef = useRef(true);
 
   const sectionHeight = typeof height === 'number' ? `${height}px` : height;
   const logoHeight = headerData.centered.logoSize ? `${headerData.centered.logoSize}px` : '150px';
 
-  // Автопрокрутка слайдов
+  // Мемоизированные функции навигации
+  const goToSlide = useCallback((index: number) => {
+    if (isMountedRef.current) {
+      setCurrentSlide(index);
+    }
+  }, []);
+
+  const goToNext = useCallback(() => {
+    if (isMountedRef.current && headerData.slideshow.slides.length > 0) {
+      setCurrentSlide(prev => (prev + 1) % headerData.slideshow.slides.length);
+    }
+  }, [headerData.slideshow.slides.length]);
+
+  const goToPrev = useCallback(() => {
+    if (isMountedRef.current && headerData.slideshow.slides.length > 0) {
+      setCurrentSlide(prev => 
+        prev === 0 ? headerData.slideshow.slides.length - 1 : prev - 1
+      );
+    }
+  }, [headerData.slideshow.slides.length]);
+
+  // Автопрокрутка слайдов - ИСПРАВЛЕННАЯ ВЕРСИЯ
   useEffect(() => {
-    if (headerData.style !== 'slideshow' || headerData.slideshow.slides.length <= 1) {
-      return;
+    // Очищаем предыдущий интервал
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
     }
 
-    const startAutoplay = () => {
+    // Запускаем автопрокрутку только если есть слайды и это slideshow режим
+    if (headerData.style === 'slideshow' && headerData.slideshow.slides.length > 1) {
       intervalRef.current = setInterval(() => {
-        goToNext();
+        if (isMountedRef.current) {
+          setCurrentSlide(prev => (prev + 1) % headerData.slideshow.slides.length);
+        }
       }, headerData.slideshow.settings.autoplaySpeed);
-    };
+    }
 
-    const stopAutoplay = () => {
+    return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
     };
+  }, [headerData.style, headerData.slideshow.slides.length, headerData.slideshow.settings.autoplaySpeed]);
 
-    startAutoplay();
-    return () => stopAutoplay();
-  }, [headerData, currentSlide]);
-
-  const goToSlide = (index: number) => {
-    setCurrentSlide(index);
-  };
-
-  const goToNext = () => {
-    setCurrentSlide(prev => (prev + 1) % headerData.slideshow.slides.length);
-  };
-
-  const goToPrev = () => {
-    setCurrentSlide(prev => 
-      prev === 0 ? headerData.slideshow.slides.length - 1 : prev - 1
-    );
-  };
-
+  // Загрузка данных - ИСПРАВЛЕННАЯ ВЕРСИЯ
   useEffect(() => {
-    let isMounted = true;
+    isMountedRef.current = true;
     
     const fetchHeaderData = async () => {
       try {
+        if (!isMountedRef.current) return;
+        
         setIsLoading(true);
+        
+        console.log('🚀 Fetching header settings...');
         const { data, error } = await supabase
           .from('site_settings')
           .select('header_settings')
           .single();
 
-        if (!isMounted) return;
+        if (!isMountedRef.current) return;
 
-        if (error) throw error;
+        if (error) {
+          console.log('No header settings found, using defaults');
+          return;
+        }
 
         if (data?.header_settings) {
+          console.log('✅ Header settings loaded');
           setHeaderData({
             ...defaultHeaderData,
             ...data.header_settings,
@@ -133,19 +153,26 @@ const HeroSection = ({ height = 400 }: HeroSectionProps) => {
           });
         }
       } catch (error) {
-        console.error('Error fetching header settings:', error);
-        if (isMounted) setError('Не удалось загрузить данные заголовка');
+        console.error('❌ Error fetching header settings:', error);
+        if (isMountedRef.current) {
+          setError('Не удалось загрузить данные заголовка');
+        }
       } finally {
-        if (isMounted) setIsLoading(false);
+        if (isMountedRef.current) {
+          setIsLoading(false);
+        }
       }
     };
 
     fetchHeaderData();
 
     return () => {
-      isMounted = false;
+      isMountedRef.current = false;
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
     };
-  }, []);
+  }, []); // Пустой массив зависимостей - загружаем только один раз
 
   if (isLoading) {
     return (
