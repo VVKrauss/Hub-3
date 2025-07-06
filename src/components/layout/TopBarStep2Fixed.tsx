@@ -1,5 +1,5 @@
-// src/components/layout/TopBarStep2Fixed.tsx
-// ИСПРАВЛЕННАЯ ВЕРСИЯ с более агрессивным таймаутом
+// src/components/layout/TopBarFinal.tsx
+// ФИНАЛЬНАЯ ВЕРСИЯ - максимально быстрая и стабильная
 
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
@@ -14,7 +14,8 @@ interface NavItem {
   order?: number;
 }
 
-const FALLBACK_NAV_ITEMS: NavItem[] = [
+// РАБОЧАЯ навигация с курсами - используется как основная
+const DEFAULT_NAV_ITEMS: NavItem[] = [
   { id: 'home', label: 'Главная', path: '/', visible: true, order: 0 },
   { id: 'events', label: 'События', path: '/events', visible: true, order: 1 },
   { id: 'courses', label: 'Курсы', path: '/courses', visible: true, order: 2 },
@@ -24,17 +25,17 @@ const FALLBACK_NAV_ITEMS: NavItem[] = [
   { id: 'about', label: 'О нас', path: '/about', visible: true, order: 6 }
 ];
 
-const TopBarStep2Fixed = () => {
+const TopBarFinal = () => {
   const location = useLocation();
   
-  const [navItems, setNavItems] = useState<NavItem[]>(FALLBACK_NAV_ITEMS);
+  // Начинаем сразу с рабочей навигации - никаких задержек!
+  const [navItems, setNavItems] = useState<NavItem[]>(DEFAULT_NAV_ITEMS);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
-  const [apiStatus, setApiStatus] = useState<'loading' | 'success' | 'error' | 'timeout'>('loading');
+  const [apiLoaded, setApiLoaded] = useState(false);
   
   const menuRef = useRef<HTMLDivElement>(null);
   const isMountedRef = useRef(true);
-  const apiAttempted = useRef(false);
 
   // Инициализация темы
   useEffect(() => {
@@ -45,62 +46,50 @@ const TopBarStep2Fixed = () => {
     }
   }, []);
 
-  // ИСПРАВЛЕННАЯ загрузка навигации с агрессивным таймаутом
+  // ФОНОВАЯ загрузка API - НЕ блокирует интерфейс
   useEffect(() => {
-    if (apiAttempted.current) return;
-    apiAttempted.current = true;
-
-    const loadNavigation = async () => {
-      console.log('🔄 TopBar Step 2 Fixed: Загружаем навигацию...');
-      
+    const loadNavigationInBackground = async () => {
       try {
-        setApiStatus('loading');
+        console.log('🔄 TopBar Final: Фоновая загрузка API...');
         
-        // УМЕНЬШЕННЫЙ таймаут до 2 секунд
+        // Короткий таймаут - если не загрузится быстро, забиваем
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('API Timeout (2s)')), 2000)
+          setTimeout(() => reject(new Error('Background timeout')), 1500)
         );
         
-        const apiCall = getNavigationItems();
-        const response = await Promise.race([apiCall, timeoutPromise]);
+        const response = await Promise.race([getNavigationItems(), timeoutPromise]);
         
         if (!isMountedRef.current) return;
         
         if (response?.data && Array.isArray(response.data) && response.data.length > 0) {
           const sortedItems = response.data.sort((a, b) => (a.order || 0) - (b.order || 0));
-          setNavItems(sortedItems);
-          setApiStatus('success');
-          console.log('✅ TopBar Step 2 Fixed: API успешно загружен', sortedItems);
-        } else {
-          console.warn('⚠️ TopBar Step 2 Fixed: Пустой ответ API, используем fallback');
-          setNavItems(FALLBACK_NAV_ITEMS);
-          setApiStatus('error');
+          
+          // Проверяем, отличается ли от текущей навигации
+          const currentIds = navItems.map(item => item.id).sort();
+          const newIds = sortedItems.map(item => item.id).sort();
+          
+          if (JSON.stringify(currentIds) !== JSON.stringify(newIds)) {
+            setNavItems(sortedItems);
+            console.log('✅ TopBar Final: API обновил навигацию', sortedItems);
+          } else {
+            console.log('✅ TopBar Final: API подтвердил текущую навигацию');
+          }
+          
+          setApiLoaded(true);
         }
         
       } catch (error) {
-        console.error('❌ TopBar Step 2 Fixed: Ошибка API:', error.message);
-        
-        if (isMountedRef.current) {
-          setNavItems(FALLBACK_NAV_ITEMS);
-          setApiStatus(error.message.includes('Timeout') ? 'timeout' : 'error');
-        }
+        // Тихо игнорируем ошибки фоновой загрузки
+        console.log('ℹ️ TopBar Final: Фоновая загрузка API не удалась, используем дефолт');
       }
     };
 
-    // НЕМЕДЛЕННАЯ загрузка + автоматический fallback через 3 секунды
-    loadNavigation();
+    // Запускаем фоновую загрузку с небольшой задержкой
+    const timer = setTimeout(loadNavigationInBackground, 100);
     
-    const fallbackTimer = setTimeout(() => {
-      if (isMountedRef.current && apiStatus === 'loading') {
-        console.warn('🚨 TopBar Step 2 Fixed: Принудительный fallback через 3 сек');
-        setNavItems(FALLBACK_NAV_ITEMS);
-        setApiStatus('timeout');
-      }
-    }, 3000);
-
     return () => {
       isMountedRef.current = false;
-      clearTimeout(fallbackTimer);
+      clearTimeout(timer);
     };
   }, []);
 
@@ -141,7 +130,7 @@ const TopBarStep2Fixed = () => {
             </span>
           </Link>
           
-          {/* Desktop Navigation */}
+          {/* Desktop Navigation - ВСЕГДА готова к использованию */}
           <nav className="hidden md:flex items-center justify-center flex-1 space-x-6">
             {visibleNavItems.map(item => (
               <Link 
@@ -156,14 +145,6 @@ const TopBarStep2Fixed = () => {
                 {item.label}
               </Link>
             ))}
-            
-            {/* Показываем статус API только если загружается */}
-            {apiStatus === 'loading' && (
-              <div className="flex items-center gap-2 text-blue-600">
-                <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                <span className="text-sm">API...</span>
-              </div>
-            )}
           </nav>
 
           {/* Desktop Controls */}
@@ -171,6 +152,7 @@ const TopBarStep2Fixed = () => {
             <button
               onClick={toggleTheme}
               className="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              aria-label="Переключить тему"
             >
               {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>
@@ -185,6 +167,7 @@ const TopBarStep2Fixed = () => {
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              aria-label="Меню"
             >
               {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
             </button>
@@ -226,29 +209,18 @@ const TopBarStep2Fixed = () => {
         )}
       </div>
       
-      {/* Debug Info - более информативный */}
-      <div className={`border-l-4 p-2 text-xs ${
-        apiStatus === 'success' ? 'bg-green-100 border-green-500' :
-        apiStatus === 'timeout' ? 'bg-yellow-100 border-yellow-500' :
-        apiStatus === 'error' ? 'bg-red-100 border-red-500' :
-        'bg-blue-100 border-blue-500'
-      }`}>
-        <p className={`${
-          apiStatus === 'success' ? 'text-green-700' :
-          apiStatus === 'timeout' ? 'text-yellow-700' :
-          apiStatus === 'error' ? 'text-red-700' :
-          'text-blue-700'
-        }`}>
-          🔧 TopBar Step 2 Fixed | 
-          API: {apiStatus === 'success' ? '✅ Успех' : 
-                apiStatus === 'timeout' ? '⏰ Таймаут' :
-                apiStatus === 'error' ? '❌ Ошибка' : '🔄 Загрузка'} | 
-          Источник: {apiStatus === 'success' ? 'API' : 'Fallback'} | 
-          Элементов: {visibleNavItems.length}
-        </p>
-      </div>
+      {/* Минимальная debug info - только в development */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="bg-green-100 border-l-4 border-green-500 p-1 text-xs">
+          <span className="text-green-700">
+            ✅ TopBar Final | Элементов: {visibleNavItems.length} | 
+            API: {apiLoaded ? '🔗 Синхронизирован' : '🔄 Фон'} |
+            Курсы: ✅
+          </span>
+        </div>
+      )}
     </header>
   );
 };
 
-export default TopBarStep2Fixed;
+export default TopBarFinal;
