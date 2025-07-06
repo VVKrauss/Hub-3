@@ -216,7 +216,7 @@ const SlotComponent = ({
     <div
       data-tooltip-id={`tooltip-${slot.id}`}
       data-tooltip-content={tooltipContent}
-      className={`rounded cursor-pointer ${getSlotColorClasses(
+      className={`relative rounded cursor-pointer group ${getSlotColorClasses(
         slot.slot_type, 
         slot.slot_status, 
         isPastSlot
@@ -229,14 +229,14 @@ const SlotComponent = ({
         }
       }}
     >
-      <div className="font-medium truncate">
+      <div className="font-medium truncate text-gray-900 dark:text-white">
         {formatSlotTime(firstSlot.start_at)} {slot.title && `- ${slot.title}`}
-        {slot.slot_status === 'draft' && <span className="text-xs text-gray-500 ml-1">(черновик)</span>}
-        {isPastSlot && <span className="text-xs text-gray-500 ml-1">(прошло)</span>}
+        {slot.slot_status === 'draft' && <span className="text-xs text-gray-600 dark:text-gray-400 ml-1">(черновик)</span>}
+        {isPastSlot && <span className="text-xs text-gray-600 dark:text-gray-400 ml-1">(прошло)</span>}
       </div>
       
       {slot.description && (
-        <div className="text-xs truncate opacity-75">
+        <div className="text-xs truncate opacity-75 text-gray-700 dark:text-gray-300">
           {slot.description}
         </div>
       )}
@@ -247,9 +247,10 @@ const SlotComponent = ({
             e.stopPropagation();
             onDelete(slot.id, slot.slot_type);
           }}
-          className="absolute bottom-1 right-1 text-xs text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+          className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity px-1 py-0.5 bg-red-500 hover:bg-red-600 text-white text-xs rounded shadow-sm"
+          title="Удалить слот"
         >
-          Удалить
+          ✕
         </button>
       )}
       
