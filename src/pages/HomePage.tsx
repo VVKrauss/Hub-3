@@ -1,21 +1,48 @@
-import LoadingDebugger from '../debug/LoadingDebugger';
+// src/pages/HomePage.tsx
+// Обычная версия HomePage
+
+import Layout from '../components/layout/Layout';
+import HeroSection from '../components/home/HeroSection';
+import InfoSection from '../components/home/InfoSection';
+import EventsSection from '../components/home/EventsSection';
+import SpeakersSection from '../components/home/SpeakersSection';
+import RentSection from '../components/home/RentSection';
+import CoworkingSection from '../components/home/CoworkingSection';
 
 const HomePage = () => {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">ДИАГНОСТИКА</h1>
-        <p className="text-xl">Проверяем наличие циклов рендеринга</p>
-        <div className="mt-4 p-4 bg-white rounded shadow">
-          <p className="mb-2">✅ Если справа внизу показывает Renders &lt; 10 - все хорошо</p>
-          <p className="mb-2">❌ Если показывает TOO MANY RENDERS - есть проблема</p>
-          <p className="text-sm text-gray-600">Подождите 5 секунд и посмотрите на счетчики</p>
-        </div>
-      </div>
-      
-      {/* Отладчик */}
-      <LoadingDebugger /> 
-    </div>
+    <Layout>
+      <HeroSection />
+      <InfoSection />
+      <EventsSection />
+      <SpeakersSection />
+      <RentSection />
+      <CoworkingSection />
+    </Layout>
+  );
+};
+
+export default HomePage;// src/pages/HomePage.tsx
+// Обычная версия HomePage
+
+import Layout from '../components/layout/Layout';
+import HeroSection from '../components/home/HeroSection';
+import InfoSection from '../components/home/InfoSection';
+import EventsSection from '../components/home/EventsSection';
+import SpeakersSection from '../components/home/SpeakersSection';
+import RentSection from '../components/home/RentSection';
+import CoworkingSection from '../components/home/CoworkingSection';
+
+const HomePage = () => {
+  return (
+    <Layout>
+      <HeroSection />
+      <InfoSection />
+      <EventsSection />
+      <SpeakersSection />
+      <RentSection />
+      <CoworkingSection />
+    </Layout>
   );
 };
 
