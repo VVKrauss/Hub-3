@@ -1,4 +1,4 @@
-import SimpleDebugger from '../components/SimpleDebugger';
+import LoadingDebugger from '../debug/LoadingDebugger';
 
 const HomePage = () => {
   return (
