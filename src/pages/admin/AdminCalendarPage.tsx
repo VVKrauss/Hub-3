@@ -1,4 +1,5 @@
-// src/pages/admin/AdminCalendarPage.tsx - ОБНОВЛЕННАЯ ВЕРСИЯ ДЛЯ sh_time_slots
+// src/pages/admin/AdminCalendarPage.tsx - ПОЛНАЯ ИСПРАВЛЕННАЯ ВЕРСИЯ
+// Часть 1: Импорты, типы, константы, хуки и утилиты
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
@@ -168,7 +169,7 @@ const getSlotColorClasses = (type?: string, status?: string, isPast: boolean = f
     case 'maintenance': return 'bg-orange-50 dark:bg-orange-900/30 border-l-4 border-orange-500 text-gray-900 dark:text-gray-100';
     default: return 'bg-gray-50 dark:bg-gray-700 border-l-4 border-gray-300 text-gray-900 dark:text-gray-100';
   }
-}; 
+};
 
 const generateTimeSlots = (date: Date) => {
   const slots = [];
@@ -182,7 +183,6 @@ const generateTimeSlots = (date: Date) => {
 };
 
 // === КОМПОНЕНТЫ ===
-
 const SlotComponent = ({ 
   slot, 
   groupedSlot, 
@@ -225,15 +225,15 @@ const SlotComponent = ({
       style={style}
       onClick={(e) => {
         e.stopPropagation();
-        if (slot.slot_type === 'rent') {
+        if (slot.slot_type === 'rent' && !isPastSlot) {
           onEdit(slot);
         }
       }}
     >
       <div className="font-medium truncate">
         {formatSlotTime(firstSlot.start_at)} {slot.title && `- ${slot.title}`}
-        {slot.slot_status === 'draft' && <span className="text-xs text-gray-500 ml-1">(черновик)</span>}
-        {isPastSlot && <span className="text-xs text-gray-500 ml-1">(прошло)</span>}
+        {slot.slot_status === 'draft' && <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">(черновик)</span>}
+        {isPastSlot && <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">(прошло)</span>}
       </div>
       
       {slot.description && (
@@ -261,10 +261,7 @@ const SlotComponent = ({
       />
     </div>
   );
-};   
-    
-
-
+};
 
 const TimeGrid = ({ children }: { children: React.ReactNode }) => (
   <div className="flex">
@@ -298,29 +295,25 @@ const AdminCalendarPage = () => {
   const groupedSlots = useSlotGrouping(filteredSlots);
   const getSlotPosition = useSlotPositioning();
 
+  // ОБНОВЛЕННАЯ ФУНКЦИЯ ЗАГРУЗКИ ИЗ НОВОЙ ТАБЛИЦЫ
+  const fetchTimeSlots = useCallback(async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('sh_time_slots')
+        .select('*')
+        .order('start_at', { ascending: true });
 
-const fetchTimeSlots = useCallback(async () => {
-  try {
-    setLoading(true);
-    
-    // ИЗМЕНЕНО: Используем sh_time_slots вместо time_slots_table
-    const { data, error } = await supabase
-      .from('sh_time_slots')
-      .select('*')
-      .order('start_at', { ascending: true });
+      if (error) throw error;
+      setTimeSlots(data || []);
+    } catch (err) {
+      console.error('Error fetching time slots:', err);
+      toast.error('Ошибка загрузки слотов');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-    if (error) throw error;
-    setTimeSlots(data || []);
-  } catch (err) {
-    console.error('Error fetching time slots:', err);
-    toast.error('Ошибка загрузки слотов');
-  } finally {
-    setLoading(false);
-  }
-}, []);
-
-
-  
   useEffect(() => {
     fetchTimeSlots();
   }, [fetchTimeSlots]);
@@ -330,30 +323,35 @@ const fetchTimeSlots = useCallback(async () => {
     setCurrentDate(navigators[viewMode](currentDate, direction === 'prev' ? -1 : 1));
   }, [currentDate, viewMode]);
 
-
-const handleTimeSlotClick = useCallback((date: Date, hour: number) => {
-  const startAt = new Date(date);
-  startAt.setHours(hour, 0, 0, 0);
-  const endAt = new Date(startAt);
-  endAt.setHours(hour + 1, 0, 0, 0);
-  
-  setModalState({
-    isOpen: true,
-    mode: 'create',
-    data: {
-      // ИСПРАВЛЕНО: Убираем id для новых слотов или используем null
-      start_at: startAt.toISOString(),
-      end_at: endAt.toISOString(),
-      slot_type: 'rent',
-      slot_status: 'active',
-      title: '',
-      is_public: true,
-      is_booked: false
+  // ИСПРАВЛЕННАЯ ФУНКЦИЯ - запрещает создание в прошлом
+  const handleTimeSlotClick = useCallback((date: Date, hour: number) => {
+    const startAt = new Date(date);
+    startAt.setHours(hour, 0, 0, 0);
+    
+    // Запрещаем создание слотов в прошлом
+    if (startAt < new Date()) {
+      toast.error('Нельзя создавать слоты на прошедшее время');
+      return;
     }
-  });
-}, []);
+    
+    const endAt = new Date(startAt);
+    endAt.setHours(hour + 1, 0, 0, 0);
+    
+    setModalState({
+      isOpen: true,
+      mode: 'create',
+      data: {
+        start_at: startAt.toISOString(),
+        end_at: endAt.toISOString(),
+        slot_type: 'rent',
+        slot_status: 'active',
+        title: '',
+        is_public: true,
+        is_booked: false
+      }
+    });
+  }, []);
 
-  
   const handleEditSlot = useCallback((slot: TimeSlot) => {
     setModalState({
       isOpen: true,
@@ -362,110 +360,107 @@ const handleTimeSlotClick = useCallback((date: Date, hour: number) => {
     });
   }, []);
 
-const createOrUpdateTimeSlot = useCallback(async () => {
-  if (!modalState.data) return;
+  // ОБНОВЛЕННАЯ ФУНКЦИЯ СОЗДАНИЯ/ОБНОВЛЕНИЯ
+  const createOrUpdateTimeSlot = useCallback(async () => {
+    if (!modalState.data) return;
 
-  try {
-    const { start_at, end_at, title, description, slot_type = 'rent' } = modalState.data;
-    
-    if (!start_at || !end_at || !title) {
-      toast.error('Заполните все обязательные поля');
-      return;
-    }
+    try {
+      const { start_at, end_at, title, description, slot_type = 'rent' } = modalState.data;
+      
+      if (!start_at || !end_at || !title) {
+        toast.error('Заполните все обязательные поля');
+        return;
+      }
 
-    if (new Date(end_at) <= new Date(start_at)) {
-      toast.error('Время окончания должно быть позже времени начала');
-      return;
-    }
+      if (new Date(end_at) <= new Date(start_at)) {
+        toast.error('Время окончания должно быть позже времени начала');
+        return;
+      }
 
-    // ИСПРАВЛЕНО: Правильная проверка пересечений для создания и редактирования
-    let overlapQuery = supabase
-      .from('sh_time_slots')
-      .select('*')
-      .or(`and(start_at.lte.${end_at},end_at.gte.${start_at})`);
-
-    // Для редактирования исключаем текущий слот
-    if (modalState.mode === 'edit' && modalState.data.id) {
-      overlapQuery = overlapQuery.neq('id', modalState.data.id);
-    }
-
-    const { data: overlappingSlots, error: overlapError } = await overlapQuery;
-
-    if (overlapError) throw overlapError;
-
-    if (overlappingSlots && overlappingSlots.length > 0) {
-      const overlappingDetails = overlappingSlots.map(slot => {
-        const type = slot.slot_type === 'event' ? 'Мероприятие' : 'Аренда';
-        const title = slot.title || 'Без названия';
-        const time = `${formatSlotTime(slot.start_at)}-${formatSlotTime(slot.end_at)}`;
-        return `• ${type}: ${title} (${time})`;
-      }).join('\n');
-
-      toast.error(`Время пересекается с:\n${overlappingDetails}`, { duration: 8000 });
-      return;
-    }
-
-    const slotData = {
-      start_at,
-      end_at,
-      slot_type,
-      slot_status: 'active',
-      title,
-      description,
-      venue_name: 'Science Hub',
-      contact_name: title,
-      is_public: true,
-      is_booked: slot_type === 'rent'
-    };
-
-    if (modalState.mode === 'edit' && modalState.data.id) {
-      // Обновление существующего слота
-      const { error } = await supabase
+      // Проверка пересечений в sh_time_slots
+      let overlapQuery = supabase
         .from('sh_time_slots')
-        .update(slotData)
-        .eq('id', modalState.data.id);
+        .select('*')
+        .or(`and(start_at.lte.${end_at},end_at.gte.${start_at})`);
 
-      if (error) throw error;
-      toast.success('Слот обновлен');
-    } else {
-      // Создание нового слота (без указания id - он будет сгенерирован автоматически)
-      const { error } = await supabase
-        .from('sh_time_slots')
-        .insert([slotData]);
+      // Для редактирования исключаем текущий слот
+      if (modalState.mode === 'edit' && modalState.data.id) {
+        overlapQuery = overlapQuery.neq('id', modalState.data.id);
+      }
 
-      if (error) throw error;
-      toast.success('Слот создан');
+      const { data: overlappingSlots, error: overlapError } = await overlapQuery;
+
+      if (overlapError) throw overlapError;
+
+      if (overlappingSlots && overlappingSlots.length > 0) {
+        const overlappingDetails = overlappingSlots.map(slot => {
+          const type = slot.slot_type === 'event' ? 'Мероприятие' : 'Аренда';
+          const title = slot.title || 'Без названия';
+          const time = `${formatSlotTime(slot.start_at)}-${formatSlotTime(slot.end_at)}`;
+          return `• ${type}: ${title} (${time})`;
+        }).join('\n');
+
+        toast.error(`Время пересекается с:\n${overlappingDetails}`, { duration: 8000 });
+        return;
+      }
+
+      const slotData = {
+        start_at,
+        end_at,
+        slot_type,
+        slot_status: 'active',
+        title,
+        description,
+        venue_name: 'Science Hub',
+        contact_name: title,
+        is_public: true,
+        is_booked: slot_type === 'rent'
+      };
+
+      if (modalState.mode === 'edit' && modalState.data.id) {
+        const { error } = await supabase
+          .from('sh_time_slots')
+          .update(slotData)
+          .eq('id', modalState.data.id);
+
+        if (error) throw error;
+        toast.success('Слот обновлен');
+      } else {
+        const { error } = await supabase
+          .from('sh_time_slots')
+          .insert([slotData]);
+
+        if (error) throw error;
+        toast.success('Слот создан');
+      }
+      
+      setModalState({ isOpen: false, mode: 'create', data: null });
+      fetchTimeSlots();
+    } catch (err) {
+      console.error('Error saving time slot:', err);
+      toast.error('Ошибка сохранения слота');
     }
-    
-    setModalState({ isOpen: false, mode: 'create', data: null });
-    fetchTimeSlots();
-  } catch (err) {
-    console.error('Error saving time slot:', err);
-    toast.error('Ошибка сохранения слота');
-  }
-}, [modalState, formatSlotTime, fetchTimeSlots]);
+  }, [modalState, formatSlotTime, fetchTimeSlots]);
 
+  // ОБНОВЛЕННАЯ ФУНКЦИЯ УДАЛЕНИЯ
+  const deleteTimeSlot = useCallback(async (id: string, type?: string) => {
+    if (type === 'event') {
+      toast.error('Мероприятия удаляются через страницу управления мероприятиями');
+      return;
+    }
 
-  
-const deleteTimeSlot = useCallback(async (id: string, type?: string) => {
-  if (type === 'event') {
-    toast.error('Мероприятия удаляются через страницу управления мероприятиями');
-    return;
-  }
+    if (!window.confirm('Удалить слот?')) return;
 
-  if (!window.confirm('Удалить слот?')) return;
-
-  try {
-    // ИЗМЕНЕНО: Удаление из sh_time_slots
-    const { error } = await supabase.from('sh_time_slots').delete().eq('id', id);
-    if (error) throw error;
-    toast.success('Слот удален');
-    fetchTimeSlots();
-  } catch (err) {
-    console.error('Error deleting time slot:', err);
-    toast.error('Ошибка удаления слота');
-  }
-}, [fetchTimeSlots]);
+    try {
+      const { error } = await supabase.from('sh_time_slots').delete().eq('id', id);
+      if (error) throw error;
+      toast.success('Слот удален');
+      fetchTimeSlots();
+    } catch (err) {
+      console.error('Error deleting time slot:', err);
+      toast.error('Ошибка удаления слота');
+    }
+  }, [fetchTimeSlots]);
 
   // === МЕТОДЫ РЕНДЕРИНГА ===
   const renderDayView = () => {
@@ -476,27 +471,39 @@ const deleteTimeSlot = useCallback(async (id: string, type?: string) => {
 
     return (
       <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-dark-600 overflow-hidden">
-        <h2 className="text-xl font-semibold p-6 pb-4">
+        <h2 className="text-xl font-semibold p-6 pb-4 text-gray-900 dark:text-white">
           {format(currentDate, 'EEEE, d MMMM yyyy', { locale: ru })}
         </h2>
         
         <TimeGrid>
-          {generateTimeSlots(currentDate).map((slot, i) => (
-            <div 
-              key={i} 
-              className="h-12 border-b border-gray-100 dark:border-dark-700 relative hover:bg-gray-50 dark:hover:bg-dark-700 cursor-pointer"
-              onClick={() => handleTimeSlotClick(currentDate, WORKING_HOURS.start + i)}
-            >
-              {isToday(currentDate) && new Date().getHours() === slot.time.getHours() && (
-                <div 
-                  className="absolute left-0 right-0 h-0.5 bg-red-500 z-20"
-                  style={{ top: `${(new Date().getMinutes() / 60) * 100}%` }}
-                >
-                  <div className="absolute -top-1.5 -left-1 w-3 h-3 rounded-full bg-red-500" />
-                </div>
-              )}
-            </div>
-          ))}
+          {generateTimeSlots(currentDate).map((slot, i) => {
+            const slotHour = WORKING_HOURS.start + i;
+            const slotTime = new Date(currentDate);
+            slotTime.setHours(slotHour, 0, 0, 0);
+            const isPastHour = slotTime < new Date();
+            
+            return (
+              <div 
+                key={i} 
+                className={`h-12 border-b border-gray-100 dark:border-dark-700 relative transition-colors ${
+                  isPastHour 
+                    ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-50' 
+                    : 'hover:bg-gray-50 dark:hover:bg-dark-700 cursor-pointer'
+                }`}
+                onClick={() => !isPastHour && handleTimeSlotClick(currentDate, slotHour)}
+                title={isPastHour ? 'Прошедшее время' : 'Создать слот'}
+              >
+                {isToday(currentDate) && new Date().getHours() === slotHour && (
+                  <div 
+                    className="absolute left-0 right-0 h-0.5 bg-red-500 z-20"
+                    style={{ top: `${(new Date().getMinutes() / 60) * 100}%` }}
+                  >
+                    <div className="absolute -top-1.5 -left-1 w-3 h-3 rounded-full bg-red-500" />
+                  </div>
+                )}
+              </div>
+            );
+          })}
 
           {dayGroupedSlots.map((group, idx) => {
             const firstSlot = group.slots[0];
@@ -535,7 +542,7 @@ const deleteTimeSlot = useCallback(async (id: string, type?: string) => {
               <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
                 {format(day, 'EEEEEE', { locale: ru })}
               </div>
-              <div className={`text-lg font-semibold ${isToday(day) ? 'text-primary' : ''}`}>
+              <div className={`text-lg font-semibold ${isToday(day) ? 'text-primary' : 'text-gray-900 dark:text-white'}`}>
                 {format(day, 'd')}
               </div>
             </div>
@@ -555,13 +562,25 @@ const deleteTimeSlot = useCallback(async (id: string, type?: string) => {
 
             return (
               <div key={day.toString()} className="border-l border-gray-200 dark:border-dark-600 relative">
-                {generateTimeSlots(day).map((slot, i) => (
-                  <div 
-                    key={i} 
-                    className="h-12 border-b border-gray-100 dark:border-dark-700 relative hover:bg-gray-50 dark:hover:bg-dark-700 cursor-pointer"
-                    onClick={() => handleTimeSlotClick(day, WORKING_HOURS.start + i)}
-                  />
-                ))}
+                {generateTimeSlots(day).map((slot, i) => {
+                  const slotHour = WORKING_HOURS.start + i;
+                  const slotTime = new Date(day);
+                  slotTime.setHours(slotHour, 0, 0, 0);
+                  const isPastHour = slotTime < new Date();
+                  
+                  return (
+                    <div 
+                      key={i} 
+                      className={`h-12 border-b border-gray-100 dark:border-dark-700 relative transition-colors ${
+                        isPastHour 
+                          ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-50' 
+                          : 'hover:bg-gray-50 dark:hover:bg-dark-700 cursor-pointer'
+                      }`}
+                      onClick={() => !isPastHour && handleTimeSlotClick(day, slotHour)}
+                      title={isPastHour ? 'Прошедшее время' : 'Создать слот'}
+                    />
+                  );
+                })}
 
                 {dayGroupedSlots.map((group, idx) => {
                   const firstSlot = group.slots[0];
@@ -587,361 +606,3 @@ const deleteTimeSlot = useCallback(async (id: string, type?: string) => {
       </div>
     );
   };
-
-  const renderMonthView = () => {
-    const monthStart = startOfMonth(currentDate);
-    const monthEnd = endOfMonth(currentDate);
-    const startDate = startOfWeek(monthStart, WEEK_OPTIONS);
-    const endDate = endOfWeek(monthEnd, WEEK_OPTIONS);
-    const days = eachDayOfInterval({ start: startDate, end: endDate });
-
-    return (
-      <div className="grid grid-cols-7 gap-1">
-        {/* Заголовки дней недели */}
-        {eachDayOfInterval({ start: startDate, end: addDays(startDate, 6) }).map(day => (
-          <div key={day.toString()} className="text-center py-2 text-sm font-medium text-gray-500 dark:text-gray-400">
-            {format(day, 'EEEEEE', { locale: ru })}
-          </div>
-        ))}
-        
-        {/* Дни месяца */}
-        {days.map(day => {
-          const daySlots = filteredSlots.filter(slot => 
-            isSameDay(parseTimestamp(slot.start_at), day)
-          );
-          const isCurrentMonth = isSameMonth(day, currentDate);
-          const isDayToday = isToday(day);
-
-          return (
-            <div 
-              key={day.toString()}
-              onClick={() => { setCurrentDate(day); setViewMode('day'); }}
-              className={`min-h-24 p-1.5 border rounded-md cursor-pointer ${
-                !isCurrentMonth ? 'bg-gray-50 dark:bg-dark-700 opacity-50' : 
-                isDayToday ? 'bg-primary/5 border-primary' : 'bg-white dark:bg-dark-800 border-gray-200 dark:border-dark-600'
-              }`}
-            >
-              <div className={`text-sm font-medium mb-1 ${
-                isDayToday ? 'text-primary font-bold' : ''
-              }`}>
-                {format(day, 'd')}
-              </div>
-              
-              <div className="space-y-1">
-                {daySlots.slice(0, 3).map((slot, idx) => (
-                  <div
-                    key={idx}
-                    className={`text-xs p-1 rounded truncate ${getSlotColorClasses(slot.slot_type, slot.slot_status)}`}
-                  >
-                    {slot.title}
-                  </div>
-                ))}
-                {daySlots.length > 3 && (
-                  <div className="text-xs text-gray-500 text-center">
-                    +{daySlots.length - 3} еще
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-50 dark:bg-dark-900">
-      <div className="container py-8">
-        {/* Заголовок и навигация */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-            <Calendar className="w-8 h-8 text-primary" />
-            Календарь мероприятий
-          </h1>
-          
-          <div className="flex items-center gap-4">
-            <div className="flex rounded-lg border border-gray-200 dark:border-dark-600 bg-white dark:bg-dark-800">
-              {(['day', 'week', 'month'] as const).map(mode => (
-                <button
-                  key={mode}
-                  onClick={() => setViewMode(mode)}
-                  className={`px-4 py-2 text-sm font-medium transition-colors ${
-                    viewMode === mode
-                      ? 'bg-primary text-white'
-                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-700'
-                  } ${mode === 'day' ? 'rounded-l-lg' : mode === 'month' ? 'rounded-r-lg' : ''}`}
-                >
-                  {mode === 'day' ? 'День' : mode === 'week' ? 'Неделя' : 'Месяц'}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Навигация по датам */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate('prev')}
-              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700 transition-colors"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white min-w-48">
-              {viewMode === 'month' 
-                ? format(currentDate, 'LLLL yyyy', { locale: ru })
-                : viewMode === 'week'
-                ? `${format(startOfWeek(currentDate, WEEK_OPTIONS), 'd MMM', { locale: ru })} - ${format(endOfWeek(currentDate, WEEK_OPTIONS), 'd MMM yyyy', { locale: ru })}`
-                : format(currentDate, 'd MMMM yyyy', { locale: ru })
-              }
-            </h2>
-            
-            <button
-              onClick={() => navigate('next')}
-              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700 transition-colors"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
-
-            <button
-              onClick={() => setCurrentDate(new Date())}
-              className="px-3 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
-            >
-              Сегодня
-            </button>
-          </div>
-
-          <div className="flex items-center gap-3 text-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-green-500 rounded-sm"></div>
-              <span>События</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-blue-500 rounded-sm"></div>
-              <span>Аренда</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Основное содержимое календаря */}
-        {loading ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="text-gray-500 dark:text-gray-400">Загрузка...</div>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {viewMode === 'day' && renderDayView()}
-            {viewMode === 'week' && renderWeekView()}
-            {viewMode === 'month' && renderMonthView()}
-          </div>
-        )}
-
-        {/* Модальное окно для создания/редактирования слотов */}
-        
-{modalState.isOpen && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md border dark:border-gray-600">
-      <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-        {modalState.mode === 'edit' ? 'Редактировать слот' : 'Создать слот'}
-      </h3>
-      
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Название</label>
-          <input
-            type="text"
-            value={modalState.data?.title || ''}
-            onChange={(e) => setModalState(prev => ({
-              ...prev,
-              data: { ...prev.data, title: e.target.value }
-            }))}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            placeholder="Название слота"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Описание</label>
-          <textarea
-            value={modalState.data?.description || ''}
-            onChange={(e) => setModalState(prev => ({
-              ...prev,
-              data: { ...prev.data, description: e.target.value }
-            }))}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            rows={3}
-            placeholder="Описание слота"
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Начало</label>
-            <input
-              type="datetime-local"
-              value={modalState.data?.start_at ? formatForInput(modalState.data.start_at) : ''}
-              onChange={(e) => setModalState(prev => ({
-                ...prev,
-                data: { ...prev.data, start_at: new Date(e.target.value).toISOString() }
-              }))}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Окончание</label>
-            <input
-              type="datetime-local"
-              value={modalState.data?.end_at ? formatForInput(modalState.data.end_at) : ''}
-              onChange={(e) => setModalState(prev => ({
-                ...prev,
-                data: { ...prev.data, end_at: new Date(e.target.value).toISOString() }
-              }))}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="flex justify-between items-center mt-6">
-        <div>
-          {modalState.mode === 'edit' && modalState.data?.id && modalState.data?.slot_type !== 'event' && (
-            <button
-              onClick={() => {
-                if (window.confirm('Удалить этот слот?')) {
-                  deleteTimeSlot(modalState.data.id!, modalState.data.slot_type);
-                  setModalState({ isOpen: false, mode: 'create', data: null });
-                }
-              }}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-            >
-              Удалить
-            </button>
-          )}
-        </div>
-        
-        <div className="flex gap-3">
-          <button
-            onClick={() => setModalState({ isOpen: false, mode: 'create', data: null })}
-            className="px-4 py-2 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-          >
-            Отмена
-          </button>
-          <button
-            onClick={createOrUpdateTimeSlot}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            {modalState.mode === 'edit' ? 'Обновить' : 'Создать'}
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
-{modalState.isOpen && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md border dark:border-gray-600">
-      <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-        {modalState.mode === 'edit' ? 'Редактировать слот' : 'Создать слот'}
-      </h3>
-      
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Название</label>
-          <input
-            type="text"
-            value={modalState.data?.title || ''}
-            onChange={(e) => setModalState(prev => ({
-              ...prev,
-              data: { ...prev.data, title: e.target.value }
-            }))}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            placeholder="Название слота"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Описание</label>
-          <textarea
-            value={modalState.data?.description || ''}
-            onChange={(e) => setModalState(prev => ({
-              ...prev,
-              data: { ...prev.data, description: e.target.value }
-            }))}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            rows={3}
-            placeholder="Описание слота"
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Начало</label>
-            <input
-              type="datetime-local"
-              value={modalState.data?.start_at ? formatForInput(modalState.data.start_at) : ''}
-              onChange={(e) => setModalState(prev => ({
-                ...prev,
-                data: { ...prev.data, start_at: new Date(e.target.value).toISOString() }
-              }))}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Окончание</label>
-            <input
-              type="datetime-local"
-              value={modalState.data?.end_at ? formatForInput(modalState.data.end_at) : ''}
-              onChange={(e) => setModalState(prev => ({
-                ...prev,
-                data: { ...prev.data, end_at: new Date(e.target.value).toISOString() }
-              }))}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="flex justify-between items-center mt-6">
-        <div>
-          {modalState.mode === 'edit' && modalState.data?.id && modalState.data?.slot_type !== 'event' && (
-            <button
-              onClick={() => {
-                if (window.confirm('Удалить этот слот?')) {
-                  deleteTimeSlot(modalState.data.id!, modalState.data.slot_type);
-                  setModalState({ isOpen: false, mode: 'create', data: null });
-                }
-              }}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-            >
-              Удалить
-            </button>
-          )}
-        </div>
-        
-        <div className="flex gap-3">
-          <button
-            onClick={() => setModalState({ isOpen: false, mode: 'create', data: null })}
-            className="px-4 py-2 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-          >
-            Отмена
-          </button>
-          <button
-            onClick={createOrUpdateTimeSlot}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            {modalState.mode === 'edit' ? 'Обновить' : 'Создать'}
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-)}j
-      </div>
-    </div>
-  );
-};
-
-export default AdminCalendarPage;
