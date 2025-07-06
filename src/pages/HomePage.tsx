@@ -14,7 +14,7 @@ const HomePage = () => {
       </div>
       
       {/* Отладчик */}
-      <SimpleDebugger />
+      <LoadingDebugger />
     </div>
   );
 };
