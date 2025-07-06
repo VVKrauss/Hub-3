@@ -1,7 +1,7 @@
 // src/pages/admin/AdminCalendarPage.tsx - ОБНОВЛЕННАЯ ВЕРСИЯ ДЛЯ sh_time_slots
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { 
   format, 
