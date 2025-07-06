@@ -1,11 +1,8 @@
-// src/pages/CoworkingPage.tsx - НОВАЯ ВЕРСИЯ
+// src/pages/CoworkingPage.tsx - Упрощенная версия без миграции
 import React, { useState, useEffect } from 'react';
-import { Helmet } from 'react-helmet-async';
 import { MapPin, Phone, Clock, Wifi, Coffee, Monitor, Car, Shield } from 'lucide-react';
 import Layout from '../components/layout/Layout';
-import { getCoworkingPageSettings, checkLegacyCoworkingData, type CoworkingPageSettings } from '../api/coworking';
-import { migrateLegacyCoworkingData } from '../utils/coworkingMigration';
-import { toast } from 'react-hot-toast';
+import { getCoworkingPageSettings, type CoworkingPageSettings } from '../api/coworking';
 
 interface Feature {
   icon: React.ComponentType<any>;
@@ -16,8 +13,6 @@ interface Feature {
 const CoworkingPage: React.FC = () => {
   const [pageSettings, setPageSettings] = useState<CoworkingPageSettings | null>(null);
   const [loading, setLoading] = useState(true);
-  const [migrating, setMigrating] = useState(false);
-  const [showMigrationPrompt, setShowMigrationPrompt] = useState(false);
 
   const features: Feature[] = [
     {
@@ -47,6 +42,53 @@ const CoworkingPage: React.FC = () => {
     }
   ];
 
+  // Дефолтные данные
+  const defaultSettings: CoworkingPageSettings = {
+    header: {
+      title: 'Коворкинг пространство',
+      description: 'Комфортные рабочие места для исследователей и стартапов',
+      address: 'Сараевская, 48',
+      phone: '+381',
+      working_hours: '10:00-18:00'
+    },
+    services: [
+      {
+        id: '1',
+        name: 'Почасовая аренда',
+        description: 'Гибкий график работы по часам',
+        price: 5,
+        currency: 'euro',
+        period: 'час',
+        active: true,
+        order: 1,
+        main_service: true
+      },
+      {
+        id: '2',
+        name: 'Дневной абонемент',
+        description: 'Полный рабочий день в коворкинге',
+        price: 25,
+        currency: 'euro',
+        period: 'день',
+        active: true,
+        order: 2,
+        main_service: false
+      },
+      {
+        id: '3',
+        name: 'Месячный абонемент',
+        description: 'Неограниченный доступ на месяц',
+        price: 200,
+        currency: 'euro',
+        period: 'месяц',
+        active: true,
+        order: 3,
+        main_service: false
+      }
+    ],
+    lastUpdated: new Date().toISOString()
+  };
+
   useEffect(() => {
     loadCoworkingData();
   }, []);
@@ -54,59 +96,20 @@ const CoworkingPage: React.FC = () => {
   const loadCoworkingData = async () => {
     try {
       setLoading(true);
-
-      // Сначала пытаемся загрузить данные из новой схемы
       const newSettings = await getCoworkingPageSettings();
-
+      
       if (newSettings) {
         setPageSettings(newSettings);
       } else {
-        // Если данных нет в новой схеме, проверяем старую
-        const legacyCheck = await checkLegacyCoworkingData();
-        
-        if (legacyCheck.hasLegacyHeader || legacyCheck.hasLegacyServices) {
-          setShowMigrationPrompt(true);
-        } else {
-          // Устанавливаем дефолтные данные
-          setPageSettings({
-            header: {
-              title: 'Коворкинг пространство',
-              description: 'Комфортные рабочие места для исследователей и стартапов',
-              address: 'Сараевская, 48',
-              phone: '+381',
-              working_hours: '10:00-18:00'
-            },
-            services: [],
-            lastUpdated: new Date().toISOString()
-          });
-        }
+        // Используем дефолтные данные если ничего не найдено
+        setPageSettings(defaultSettings);
       }
     } catch (error) {
       console.error('Error loading coworking data:', error);
-      toast.error('Ошибка при загрузке данных коворкинга');
+      // В случае ошибки тоже используем дефолтные данные
+      setPageSettings(defaultSettings);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleMigration = async () => {
-    try {
-      setMigrating(true);
-      const success = await migrateLegacyCoworkingData();
-      
-      if (success) {
-        toast.success('Данные успешно перенесены!');
-        setShowMigrationPrompt(false);
-        // Перезагружаем данные
-        await loadCoworkingData();
-      } else {
-        toast.error('Ошибка при переносе данных');
-      }
-    } catch (error) {
-      console.error('Migration error:', error);
-      toast.error('Ошибка при переносе данных');
-    } finally {
-      setMigrating(false);
     }
   };
 
@@ -128,38 +131,6 @@ const CoworkingPage: React.FC = () => {
       <Layout>
         <div className="min-h-screen flex items-center justify-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-        </div>
-      </Layout>
-    );
-  }
-
-  if (showMigrationPrompt) {
-    return (
-      <Layout>
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dark-900">
-          <div className="max-w-md mx-auto bg-white dark:bg-dark-800 rounded-lg shadow-lg p-8 text-center">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-              Обновление системы
-            </h2>
-            <p className="text-gray-600 dark:text-gray-300 mb-6">
-              Обнаружены данные в старом формате. Необходимо выполнить миграцию для корректного отображения страницы коворкинга.
-            </p>
-            <div className="flex gap-4 justify-center">
-              <button
-                onClick={handleMigration}
-                disabled={migrating}
-                className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
-              >
-                {migrating ? 'Переношу...' : 'Перенести данные'}
-              </button>
-              <button
-                onClick={() => setShowMigrationPrompt(false)}
-                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-              >
-                Пропустить
-              </button>
-            </div>
-          </div>
         </div>
       </Layout>
     );
@@ -187,11 +158,6 @@ const CoworkingPage: React.FC = () => {
 
   return (
     <Layout>
-      <Helmet>
-        <title>{header.title} | Research Center</title>
-        <meta name="description" content={header.description} />
-      </Helmet>
-
       {/* Hero Section */}
       <section className="relative bg-gradient-to-br from-primary-50 to-secondary-50 dark:from-dark-800 dark:to-dark-900 py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
