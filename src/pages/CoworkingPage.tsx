@@ -1,194 +1,163 @@
-// src/pages/CoworkingPage.tsx
-// Обновленная версия для работы с новой схемой sh_site_settings
-
-import { useState, useEffect, useRef } from 'react';
-import Layout from '../components/layout/Layout';
-import PageHeader from '../components/ui/PageHeader';
-import Modal from '../components/ui/Modal';
-import { Phone, Mail, Clock, MapPin, MessageCircle } from 'lucide-react';
+// src/pages/CoworkingPage.tsx - НОВАЯ ВЕРСИЯ
+import React, { useState, useEffect } from 'react';
+import { Helmet } from 'react-helmet-async';
+import { MapPin, Phone, Clock, Wifi, Coffee, Monitor, Car, Shield } from 'lucide-react';
+import Layout from '../components/Layout';
+import { getCoworkingPageSettings, checkLegacyCoworkingData, type CoworkingPageSettings } from '../api/coworking';
+import { migrateLegacyCoworkingData } from '../utils/coworkingMigration';
 import { toast } from 'react-hot-toast';
-import { 
-  getCoworkingPageSettings, 
-  getActiveCoworkingServices, 
-  type CoworkingService, 
-  type CoworkingPageSettings 
-} from '../api/coworking';
 
-const TELEGRAM_BOT_TOKEN = import.meta.env.VITE_TELEGRAM_BOT_TOKEN;
-const TELEGRAM_CHAT_ID = import.meta.env.VITE_TELEGRAM_CHAT_ID;
+interface Feature {
+  icon: React.ComponentType<any>;
+  title: string;
+  description: string;
+}
 
-const CoworkingPage = () => {
-  const [mainServices, setMainServices] = useState<CoworkingService[]>([]);
-  const [additionalServices, setAdditionalServices] = useState<CoworkingService[]>([]);
+const CoworkingPage: React.FC = () => {
   const [pageSettings, setPageSettings] = useState<CoworkingPageSettings | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedService, setSelectedService] = useState<CoworkingService | null>(null);
-  const [formData, setFormData] = useState({
-    name: '',
-    contact: '',
-    phone: '',
-    comment: ''
-  });
-  const [formErrors, setFormErrors] = useState({
-    name: false,
-    phone: false
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const isMountedRef = useRef(true);
+  const [migrating, setMigrating] = useState(false);
+  const [showMigrationPrompt, setShowMigrationPrompt] = useState(false);
+
+  const features: Feature[] = [
+    {
+      icon: Wifi,
+      title: 'Высокоскоростной интернет',
+      description: 'Стабильное подключение для продуктивной работы'
+    },
+    {
+      icon: Coffee,
+      title: 'Кофе и напитки',
+      description: 'Бесплатный кофе и чай в течение дня'
+    },
+    {
+      icon: Monitor,
+      title: 'Современное оборудование',
+      description: 'Мониторы, принтеры и другая техника'
+    },
+    {
+      icon: Car,
+      title: 'Парковка',
+      description: 'Удобная парковка рядом с центром'
+    },
+    {
+      icon: Shield,
+      title: 'Безопасность',
+      description: '24/7 видеонаблюдение и контроль доступа'
+    }
+  ];
 
   useEffect(() => {
-    isMountedRef.current = true;
-    
-    const fetchData = async () => {
-      try {
-        if (!isMountedRef.current) return;
-        
-        setLoading(true);
-        setError(null);
-        
-        console.log('🏢 Fetching coworking page data...');
-
-        // Загружаем настройки страницы и услуги параллельно
-        const [settingsResponse, servicesResponse] = await Promise.all([
-          getCoworkingPageSettings(),
-          getActiveCoworkingServices()
-        ]);
-
-        if (!isMountedRef.current) return;
-
-        if (settingsResponse.error) {
-          throw new Error(settingsResponse.error);
-        }
-
-        if (servicesResponse.error) {
-          console.warn('Error loading services:', servicesResponse.error);
-        }
-
-        setPageSettings(settingsResponse.data);
-        
-        if (servicesResponse.data) {
-          setMainServices(servicesResponse.data.mainServices || []);
-          setAdditionalServices(servicesResponse.data.additionalServices || []);
-        }
-
-        console.log('✅ Coworking page data loaded successfully');
-        
-      } catch (err) {
-        console.error('❌ Error fetching coworking data:', err);
-        if (isMountedRef.current) {
-          setError('Не удалось загрузить данные. Пожалуйста, попробуйте позже.');
-        }
-      } finally {
-        if (isMountedRef.current) {
-          setLoading(false);
-        }
-      }
-    };
-
-    fetchData();
-
-    return () => {
-      isMountedRef.current = false;
-    };
+    loadCoworkingData();
   }, []);
 
-  const handleBookClick = (service: CoworkingService) => {
-    setSelectedService(service);
-    setIsModalOpen(true);
-    setFormData({ name: '', contact: '', phone: '', comment: '' });
-    setFormErrors({ name: false, phone: false });
-    setSubmitStatus('idle');
-  };
-
-  const validateForm = () => {
-    const errors = {
-      name: !formData.name.trim(),
-      phone: !formData.phone.trim()
-    };
-    
-    setFormErrors(errors);
-    return !Object.values(errors).some(error => error);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!validateForm()) {
-      toast.error('Пожалуйста, заполните обязательные поля');
-      return;
-    }
-
-    setIsSubmitting(true);
-    
+  const loadCoworkingData = async () => {
     try {
-      const message = `🏢 Новая заявка на коворкинг!\n\n` +
-        `📝 Услуга: ${selectedService?.name}\n` +
-        `👤 Имя: ${formData.name}\n` +
-        `📞 Телефон: ${formData.phone}\n` +
-        `📧 Контакт: ${formData.contact}\n` +
-        `💬 Комментарий: ${formData.comment}\n\n` +
-        `💰 Цена: ${selectedService?.price} ${getCurrencySymbol(selectedService?.currency)} / ${selectedService?.period}`;
+      setLoading(true);
 
-      const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          chat_id: TELEGRAM_CHAT_ID,
-          text: message,
-          parse_mode: 'HTML'
-        }),
-      });
+      // Сначала пытаемся загрузить данные из новой схемы
+      const newSettings = await getCoworkingPageSettings();
 
-      if (!response.ok) {
-        throw new Error('Failed to send message');
+      if (newSettings) {
+        setPageSettings(newSettings);
+      } else {
+        // Если данных нет в новой схеме, проверяем старую
+        const legacyCheck = await checkLegacyCoworkingData();
+        
+        if (legacyCheck.hasLegacyHeader || legacyCheck.hasLegacyServices) {
+          setShowMigrationPrompt(true);
+        } else {
+          // Устанавливаем дефолтные данные
+          setPageSettings({
+            header: {
+              title: 'Коворкинг пространство',
+              description: 'Комфортные рабочие места для исследователей и стартапов',
+              address: 'Сараевская, 48',
+              phone: '+381',
+              working_hours: '10:00-18:00'
+            },
+            services: [],
+            lastUpdated: new Date().toISOString()
+          });
+        }
       }
-
-      setSubmitStatus('success');
-      toast.success('Заявка отправлена! Мы свяжемся с вами в ближайшее время.');
-      
-      setTimeout(() => {
-        setIsModalOpen(false);
-        setFormData({ name: '', contact: '', phone: '', comment: '' });
-        setSubmitStatus('idle');
-      }, 2000);
-      
     } catch (error) {
-      console.error('Error sending booking request:', error);
-      setSubmitStatus('error');
-      toast.error('Произошла ошибка при отправке заявки. Пожалуйста, попробуйте позже.');
+      console.error('Error loading coworking data:', error);
+      toast.error('Ошибка при загрузке данных коворкинга');
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   };
 
-  const getCurrencySymbol = (currency?: string) => {
+  const handleMigration = async () => {
+    try {
+      setMigrating(true);
+      const success = await migrateLegacyCoworkingData();
+      
+      if (success) {
+        toast.success('Данные успешно перенесены!');
+        setShowMigrationPrompt(false);
+        // Перезагружаем данные
+        await loadCoworkingData();
+      } else {
+        toast.error('Ошибка при переносе данных');
+      }
+    } catch (error) {
+      console.error('Migration error:', error);
+      toast.error('Ошибка при переносе данных');
+    } finally {
+      setMigrating(false);
+    }
+  };
+
+  const formatPrice = (price: number, currency: string) => {
     switch (currency) {
-      case 'euro': return '€';
-      case 'кофе': return '☕';
-      case 'RSD': return 'RSD';
-      default: return currency || '€';
+      case 'euro':
+        return `€${price}`;
+      case 'RSD':
+        return `${price} RSD`;
+      case 'кофе':
+        return `${price} кофе`;
+      default:
+        return `${price} ${currency}`;
     }
   };
 
   if (loading) {
     return (
       <Layout>
-        <PageHeader title="Загрузка..." description="Загружаем данные о коворкинге" />
-        <div className="section bg-gray-50 dark:bg-dark-800">
-          <div className="container">
-            <div className="animate-pulse space-y-4 py-12">
-              <div className="h-8 w-64 bg-gray-200 dark:bg-dark-700 rounded"></div>
-              <div className="h-12 bg-gray-200 dark:bg-dark-700 rounded"></div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="h-64 bg-gray-200 dark:bg-dark-700 rounded-lg"></div>
-                ))}
-              </div>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (showMigrationPrompt) {
+    return (
+      <Layout>
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dark-900">
+          <div className="max-w-md mx-auto bg-white dark:bg-dark-800 rounded-lg shadow-lg p-8 text-center">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+              Обновление системы
+            </h2>
+            <p className="text-gray-600 dark:text-gray-300 mb-6">
+              Обнаружены данные в старом формате. Необходимо выполнить миграцию для корректного отображения страницы коворкинга.
+            </p>
+            <div className="flex gap-4 justify-center">
+              <button
+                onClick={handleMigration}
+                disabled={migrating}
+                className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+              >
+                {migrating ? 'Переношу...' : 'Перенести данные'}
+              </button>
+              <button
+                onClick={() => setShowMigrationPrompt(false)}
+                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              >
+                Пропустить
+              </button>
             </div>
           </div>
         </div>
@@ -196,359 +165,215 @@ const CoworkingPage = () => {
     );
   }
 
-  if (error) {
+  if (!pageSettings) {
     return (
       <Layout>
-        <PageHeader title="Ошибка" description="Не удалось загрузить данные" />
-        <div className="section bg-gray-50 dark:bg-dark-800">
-          <div className="container text-center py-12">
-            <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
-            <button 
-              onClick={() => window.location.reload()} 
-              className="btn-primary"
-            >
-              Попробовать снова
-            </button>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+              Данные не найдены
+            </h2>
+            <p className="text-gray-600 dark:text-gray-300">
+              Настройки коворкинга не найдены. Обратитесь к администратору.
+            </p>
           </div>
         </div>
       </Layout>
     );
   }
+
+  const { header, services } = pageSettings;
+  const activeServices = services.filter(service => service.active);
 
   return (
     <Layout>
-      {pageSettings && (
-        <PageHeader 
-          title={pageSettings.title} 
-          description={pageSettings.description}
-          backgroundImage={pageSettings.heroImage}
-        />
-      )}
-      
-      <main className="section bg-gray-50 dark:bg-dark-800">
-        <div className="container">
-          
-          {/* Контактная информация */}
-          {pageSettings && (pageSettings.address || pageSettings.phone || pageSettings.working_hours) && (
-            <div className="mb-12 bg-white dark:bg-dark-700 rounded-xl shadow-lg p-6">
-              <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6 text-center">
-                Как нас найти
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {pageSettings.address && (
-                  <div className="flex items-start space-x-3">
-                    <MapPin className="h-5 w-5 text-primary-600 mt-1 flex-shrink-0" />
-                    <div>
-                      <h3 className="font-medium text-gray-900 dark:text-white">Адрес</h3>
-                      <p className="text-gray-600 dark:text-gray-300">{pageSettings.address}</p>
-                    </div>
+      <Helmet>
+        <title>{header.title} | Research Center</title>
+        <meta name="description" content={header.description} />
+      </Helmet>
+
+      {/* Hero Section */}
+      <section className="relative bg-gradient-to-br from-primary-50 to-secondary-50 dark:from-dark-800 dark:to-dark-900 py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-primary-600 via-primary-500 to-secondary-500 bg-clip-text text-transparent mb-6 font-heading">
+              {header.title}
+            </h1>
+            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto leading-relaxed">
+              {header.description}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Contact Info */}
+      {(header.address || header.phone || header.working_hours) && (
+        <section className="py-16 bg-white dark:bg-dark-800">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="grid md:grid-cols-3 gap-8">
+              {header.address && (
+                <div className="flex items-center justify-center md:justify-start gap-4">
+                  <div className="w-12 h-12 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center">
+                    <MapPin className="w-6 h-6 text-primary-600 dark:text-primary-400" />
                   </div>
-                )}
-                
-                {pageSettings.phone && (
-                  <div className="flex items-start space-x-3">
-                    <Phone className="h-5 w-5 text-primary-600 mt-1 flex-shrink-0" />
-                    <div>
-                      <h3 className="font-medium text-gray-900 dark:text-white">Телефон</h3>
-                      <p className="text-gray-600 dark:text-gray-300">{pageSettings.phone}</p>
-                    </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900 dark:text-white">Адрес</h3>
+                    <p className="text-gray-600 dark:text-gray-300">{header.address}</p>
                   </div>
-                )}
-                
-                {pageSettings.working_hours && (
-                  <div className="flex items-start space-x-3">
-                    <Clock className="h-5 w-5 text-primary-600 mt-1 flex-shrink-0" />
-                    <div>
-                      <h3 className="font-medium text-gray-900 dark:text-white">Время работы</h3>
-                      <p className="text-gray-600 dark:text-gray-300">{pageSettings.working_hours}</p>
-                    </div>
+                </div>
+              )}
+
+              {header.phone && (
+                <div className="flex items-center justify-center md:justify-start gap-4">
+                  <div className="w-12 h-12 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center">
+                    <Phone className="w-6 h-6 text-primary-600 dark:text-primary-400" />
                   </div>
-                )}
-              </div>
-              
-              {/* Дополнительные контакты */}
-              {(pageSettings.email || pageSettings.telegram) && (
-                <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-600">
-                  <div className="flex flex-wrap gap-4 justify-center">
-                    {pageSettings.email && (
-                      <a 
-                        href={`mailto:${pageSettings.email}`}
-                        className="flex items-center space-x-2 text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-                      >
-                        <Mail className="h-4 w-4" />
-                        <span>{pageSettings.email}</span>
-                      </a>
-                    )}
-                    
-                    {pageSettings.telegram && (
-                      <a 
-                        href={`https://t.me/${pageSettings.telegram.replace('@', '')}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center space-x-2 text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-                      >
-                        <MessageCircle className="h-4 w-4" />
-                        <span>{pageSettings.telegram}</span>
-                      </a>
-                    )}
+                  <div>
+                    <h3 className="font-semibold text-gray-900 dark:text-white">Телефон</h3>
+                    <p className="text-gray-600 dark:text-gray-300">{header.phone}</p>
+                  </div>
+                </div>
+              )}
+
+              {header.working_hours && (
+                <div className="flex items-center justify-center md:justify-start gap-4">
+                  <div className="w-12 h-12 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center">
+                    <Clock className="w-6 h-6 text-primary-600 dark:text-primary-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900 dark:text-white">Часы работы</h3>
+                    <p className="text-gray-600 dark:text-gray-300">{header.working_hours}</p>
                   </div>
                 </div>
               )}
             </div>
-          )}
+          </div>
+        </section>
+      )}
 
-          {/* Основные услуги */}
-          <div className="mb-16">
-            <h2 className="text-3xl font-semibold text-gray-900 dark:text-white mb-8 text-center">
-              Наши услуги
+      {/* Features */}
+      <section className="py-20 bg-gray-50 dark:bg-dark-900">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4 font-heading">
+              Что мы предлагаем
             </h2>
-            
-            {mainServices.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-gray-500 dark:text-gray-400">
-                  В данный момент нет доступных услуг. Пожалуйста, проверьте позже.
+            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+              Все необходимое для продуктивной работы в комфортной обстановке
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {features.map((feature, index) => (
+              <div key={index} className="bg-white dark:bg-dark-800 rounded-xl p-8 shadow-lg hover:shadow-xl transition-shadow border border-gray-100 dark:border-gray-700">
+                <div className="w-16 h-16 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-xl flex items-center justify-center mb-6">
+                  <feature.icon className="w-8 h-8 text-white" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                  {feature.title}
+                </h3>
+                <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
+                  {feature.description}
                 </p>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {mainServices.map((service) => (
-                  <ServiceCard 
-                    key={service.id} 
-                    service={service} 
-                    onBookClick={() => handleBookClick(service)}
-                  />
-                ))}
-              </div>
-            )}
+            ))}
           </div>
-
-          {/* Дополнительные услуги */}
-          {additionalServices.length > 0 && (
-            <div className="mb-16">
-              <h2 className="text-3xl font-semibold text-gray-900 dark:text-white mb-8 text-center">
-                Дополнительные услуги
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {additionalServices.map((service) => (
-                  <ServiceCard 
-                    key={service.id} 
-                    service={service} 
-                    onBookClick={() => handleBookClick(service)}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
         </div>
-      </main>
+      </section>
 
-      {/* Модальное окно бронирования */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="p-6">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-            Бронирование: {selectedService?.name}
-          </h2>
-          
-          {submitStatus === 'success' ? (
-            <div className="text-center py-8">
-              <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Заявка отправлена!</h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                Мы свяжемся с вами в ближайшее время для подтверждения бронирования.
+      {/* Services & Pricing */}
+      {activeServices.length > 0 && (
+        <section className="py-20 bg-white dark:bg-dark-800">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4 font-heading">
+                Тарифы и услуги
+              </h2>
+              <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+                Выберите подходящий план для вашей работы
               </p>
             </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Имя <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white ${
-                    formErrors.name ? 'border-red-500' : 'border-gray-300 dark:border-dark-600'
-                  }`}
-                  placeholder="Введите ваше имя"
-                />
-                {formErrors.name && (
-                  <p className="text-red-500 text-sm mt-1">Имя обязательно</p>
-                )}
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Телефон <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white ${
-                    formErrors.phone ? 'border-red-500' : 'border-gray-300 dark:border-dark-600'
-                  }`}
-                  placeholder="+381 XX XXX XXXX"
-                />
-                {formErrors.phone && (
-                  <p className="text-red-500 text-sm mt-1">Телефон обязателен</p>
-                )}
-              </div>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {activeServices
+                .sort((a, b) => a.order - b.order)
+                .map((service) => (
+                  <div 
+                    key={service.id} 
+                    className={`relative bg-gradient-to-br ${
+                      service.main_service 
+                        ? 'from-primary-50 to-secondary-50 dark:from-primary-900/20 dark:to-secondary-900/20 border-2 border-primary-200 dark:border-primary-700' 
+                        : 'from-gray-50 to-white dark:from-dark-800 dark:to-dark-700 border border-gray-200 dark:border-gray-600'
+                    } rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all duration-300`}
+                  >
+                    {service.main_service && (
+                      <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                        <span className="bg-gradient-to-r from-primary-600 to-secondary-600 text-white px-6 py-2 rounded-full text-sm font-semibold">
+                          Популярный
+                        </span>
+                      </div>
+                    )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Email или Telegram (необязательно)
-                </label>
-                <input
-                  type="text"
-                  value={formData.contact}
-                  onChange={(e) => setFormData({ ...formData, contact: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white"
-                  placeholder="email@example.com или @telegram"
-                />
-              </div>
+                    {service.image_url && (
+                      <div className="mb-6 rounded-lg overflow-hidden">
+                        <img 
+                          src={service.image_url} 
+                          alt={service.name}
+                          className="w-full h-48 object-cover"
+                        />
+                      </div>
+                    )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Комментарий
-                </label>
-                <textarea
-                  value={formData.comment}
-                  onChange={(e) => setFormData({ ...formData, comment: e.target.value })}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white"
-                  placeholder="Дополнительные пожелания или вопросы"
-                />
-              </div>
-
-              {selectedService && (
-                <div className="bg-gray-50 dark:bg-dark-700 p-4 rounded-lg">
-                  <h4 className="font-medium text-gray-900 dark:text-white mb-2">Выбранная услуга:</h4>
-                  <p className="text-gray-700 dark:text-gray-300">{selectedService.name}</p>
-                  <p className="text-primary-600 dark:text-primary-400 font-semibold">
-                    {selectedService.price} {getCurrencySymbol(selectedService.currency)} / {selectedService.period}
-                  </p>
-                </div>
-              )}
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-600 transition-colors"
-                >
-                  Отмена
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {isSubmitting ? 'Отправка...' : 'Отправить заявку'}
-                </button>
-              </div>
-              
-              {submitStatus === 'error' && (
-                <div className="mt-4 p-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-sm">
-                  Произошла ошибка при отправке. Пожалуйста, попробуйте позже.
-                </div>
-              )}
-            </form>
-          )}
-        </div>
-      </Modal>
-    </Layout>
-  );
-};
-
-// Компонент карточки услуги
-const ServiceCard = ({ 
-  service, 
-  onBookClick 
-}: { 
-  service: CoworkingService;
-  onBookClick: () => void;
-}) => {
-  const getCurrencySymbol = () => {
-    switch (service.currency) {
-      case 'euro': return '€';
-      case 'кофе': return '☕';
-      case 'RSD': return 'RSD';
-      default: return service.currency;
-    }
-  };
-
-  const getPeriodText = () => {
-    switch (service.period) {
-      case 'час': return 'час';
-      case 'день': return 'день';
-      case 'месяц': return 'месяц';
-      default: return service.period;
-    }
-  };
-
-  const getImageUrl = () => {
-    if (!service.image_url) {
-      return `https://via.placeholder.com/400x200?text=${encodeURIComponent(service.name)}`;
-    }
-    
-    // Если это полный URL, возвращаем как есть
-    if (service.image_url.startsWith('http')) {
-      return service.image_url;
-    }
-    
-    // Если это путь в Supabase Storage
-    return `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/images/${service.image_url}`;
-  };
-
-  return (
-    <div className="bg-white dark:bg-dark-700 rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300 h-full flex flex-col">
-      <div className="h-48 overflow-hidden">
-        <img 
-          src={getImageUrl()}
-          alt={service.name}
-          className="w-full h-full object-cover"
-          loading="lazy"
-          onError={(e) => {
-            // Fallback при ошибке загрузки изображения
-            e.currentTarget.src = `https://via.placeholder.com/400x200?text=${encodeURIComponent(service.name)}`;
-          }}
-        />
-      </div>
-      
-      <div className="p-6 flex flex-col flex-grow">
-        <div className="flex-grow">
-          <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-            {service.name}
-          </h3>
-          <div 
-            className="text-gray-600 dark:text-gray-300 mb-4 prose dark:prose-invert max-w-none"
-            dangerouslySetInnerHTML={{ __html: service.description }}
-          />
-        </div>
-        
-        <div className="flex justify-between items-center mt-auto">
-          <div>
-            <span className="text-2xl font-bold text-primary-600 dark:text-primary-400">
-              {service.price} {getCurrencySymbol()}
-            </span>
-            <span className="text-gray-500 dark:text-gray-400 ml-1">
-              / {getPeriodText()}
-            </span>
+                    <div className="text-center">
+                      <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+                        {service.name}
+                      </h3>
+                      <div className="mb-6">
+                        <span className="text-4xl font-bold text-primary-600 dark:text-primary-400">
+                          {formatPrice(service.price, service.currency)}
+                        </span>
+                        <span className="text-gray-600 dark:text-gray-300 ml-2">
+                          / {service.period}
+                        </span>
+                      </div>
+                      <p className="text-gray-600 dark:text-gray-300 leading-relaxed mb-8">
+                        {service.description}
+                      </p>
+                      <button className={`w-full py-3 px-6 rounded-lg font-semibold transition-colors ${
+                        service.main_service
+                          ? 'bg-gradient-to-r from-primary-600 to-secondary-600 text-white hover:from-primary-700 hover:to-secondary-700'
+                          : 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-200'
+                      }`}>
+                        Забронировать
+                      </button>
+                    </div>
+                  </div>
+                ))}
+            </div>
           </div>
-          <button 
-            onClick={onBookClick}
-            className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
-          >
-            Забронировать
-          </button>
+        </section>
+      )}
+
+      {/* CTA Section */}
+      <section className="py-20 bg-gradient-to-br from-primary-600 via-primary-500 to-secondary-500">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-6 font-heading">
+            Готовы начать работу?
+          </h2>
+          <p className="text-xl text-primary-100 mb-8 max-w-2xl mx-auto">
+            Свяжитесь с нами для бронирования рабочего места или получения дополнительной информации
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <button className="px-8 py-4 bg-white text-primary-600 rounded-lg font-semibold hover:bg-primary-50 transition-colors">
+              Забронировать место
+            </button>
+            <button className="px-8 py-4 border-2 border-white text-white rounded-lg font-semibold hover:bg-white hover:text-primary-600 transition-colors">
+              Связаться с нами
+            </button>
+          </div>
         </div>
-      </div>
-    </div>
+      </section>
+    </Layout>
   );
 };
 
