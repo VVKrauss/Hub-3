@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
@@ -100,15 +101,3 @@ const CoworkingSection = () => {
     </section>
   );
 };
-          <img 
-            src={getSupabaseImageUrl(data.image)} 
-            alt={data.title} 
-            className="w-full h-auto rounded-lg shadow-md"
-          />
-        </div>
-      </div>
-    </section>
-  );
-};
-
-export default CoworkingSection;
