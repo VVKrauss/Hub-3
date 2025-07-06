@@ -472,150 +472,215 @@ const AdminCalendarPage = () => {
   
   // === МЕТОДЫ РЕНДЕРИНГА ===
   const renderDayView = () => {
-    const dayKey = format(currentDate, 'yyyy-MM-dd');
-    const dayGroupedSlots = Object.values(groupedSlots).filter(
-      group => format(parseTimestamp(group.start_at), 'yyyy-MM-dd') === dayKey
-    );
+  const dayKey = format(currentDate, 'yyyy-MM-dd');
+  const dayGroupedSlots = Object.values(groupedSlots).filter(
+    group => format(parseTimestamp(group.start_at), 'yyyy-MM-dd') === dayKey
+  );
 
-    return (
-      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-dark-600 overflow-hidden">
-        <h2 className="text-xl font-semibold p-6 pb-4 text-gray-900 dark:text-white">
-          {format(currentDate, 'EEEE, d MMMM yyyy', { locale: ru })}
-        </h2>
-        
-        <TimeGrid>
-          {generateTimeSlots(currentDate).map((slot, i) => {
-            const slotHour = WORKING_HOURS.start + i;
-            const slotTime = new Date(currentDate);
-            slotTime.setHours(slotHour, 0, 0, 0);
-            const isPastHour = slotTime < new Date();
-            
-            return (
-              <div 
-                key={i} 
-                className={`h-12 border-b border-gray-100 dark:border-dark-700 relative transition-colors ${
-                  isPastHour 
-                    ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-50' 
-                    : 'hover:bg-gray-50 dark:hover:bg-dark-700 cursor-pointer'
-                }`}
-                onClick={() => !isPastHour && handleTimeSlotClick(currentDate, slotHour)}
-                title={isPastHour ? 'Прошедшее время' : 'Создать слот'}
-              >
-                {isToday(currentDate) && new Date().getHours() === slotHour && (
-                  <div 
-                    className="absolute left-0 right-0 h-0.5 bg-red-500 z-20"
-                    style={{ top: `${(new Date().getMinutes() / 60) * 100}%` }}
-                  >
-                    <div className="absolute -top-1.5 -left-1 w-3 h-3 rounded-full bg-red-500" />
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
-          {dayGroupedSlots.map((group, idx) => {
-            const firstSlot = group.slots[0];
-            const lastSlot = group.slots[group.slots.length - 1];
-            const { top, height } = getSlotPosition(firstSlot.start_at, lastSlot.end_at);
-
-            return (
-              <SlotComponent
-                key={idx}
-                slot={group}
-                groupedSlot={group}
-                onEdit={handleEditSlot}
-                onDelete={deleteTimeSlot}
-                className="absolute left-1 right-1 p-1 text-xs overflow-hidden"
-                style={{ top: `${top}%`, height: `${height}%`, zIndex: 10 + idx }}
-              />
-            );
-          })}
-        </TimeGrid>
-      </div>
-    );
-  };
-
-  const renderWeekView = () => {
-    const weekStart = startOfWeek(currentDate, WEEK_OPTIONS);
-    const weekDays = eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) });
-
-    return (
-      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-dark-600 overflow-hidden">
-        <div className="grid grid-cols-8 border-b border-gray-200 dark:border-dark-600">
-          <div className="p-4 text-sm font-medium text-gray-500 dark:text-gray-400"></div>
-          {weekDays.map(day => (
-            <div key={day.toString()} className={`p-4 text-center border-l border-gray-200 dark:border-dark-600 ${
-              isToday(day) ? 'bg-primary/5' : ''
-            }`}>
-              <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                {format(day, 'EEEEEE', { locale: ru })}
-              </div>
-              <div className={`text-lg font-semibold ${isToday(day) ? 'text-primary' : 'text-gray-900 dark:text-white'}`}>
-                {format(day, 'd')}
-              </div>
-            </div>
-          ))}
-        </div>
-        
-        <div className="grid grid-cols-8">
-          <TimeGrid>
-            <div></div>
-          </TimeGrid>
+  return (
+    <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-dark-600 overflow-hidden">
+      <h2 className="text-xl font-semibold p-6 pb-4 text-gray-900 dark:text-white">
+        {format(currentDate, 'EEEE, d MMMM yyyy', { locale: ru })}
+      </h2>
+      
+      <TimeGrid>
+        {generateTimeSlots(currentDate).map((slot, i) => {
+          const slotHour = WORKING_HOURS.start + i;
+          const slotTime = new Date(currentDate);
+          slotTime.setHours(slotHour, 0, 0, 0);
+          const isPastHour = slotTime < new Date();
           
-          {weekDays.map(day => {
-            const dayKey = format(day, 'yyyy-MM-dd');
-            const dayGroupedSlots = Object.values(groupedSlots).filter(
-              group => format(parseTimestamp(group.start_at), 'yyyy-MM-dd') === dayKey
-            );
+          return (
+            <div 
+              key={i} 
+              className={`h-12 border-b border-gray-100 dark:border-dark-700 relative transition-colors ${
+                isPastHour 
+                  ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-50' 
+                  : 'hover:bg-gray-50 dark:hover:bg-dark-700 cursor-pointer'
+              }`}
+              onClick={() => !isPastHour && handleTimeSlotClick(currentDate, slotHour)}
+              title={isPastHour ? 'Прошедшее время' : 'Создать слот'}
+            >
+              {isToday(currentDate) && new Date().getHours() === slotHour && (
+                <div 
+                  className="absolute left-0 right-0 h-0.5 bg-red-500 z-20"
+                  style={{ top: `${(new Date().getMinutes() / 60) * 100}%` }}
+                >
+                  <div className="absolute -top-1.5 -left-1 w-3 h-3 rounded-full bg-red-500" />
+                </div>
+              )}
+            </div>
+          );
+        })}
 
-            return (
-              <div key={day.toString()} className="border-l border-gray-200 dark:border-dark-600 relative">
-                {generateTimeSlots(day).map((slot, i) => {
-                  const slotHour = WORKING_HOURS.start + i;
-                  const slotTime = new Date(day);
-                  slotTime.setHours(slotHour, 0, 0, 0);
-                  const isPastHour = slotTime < new Date();
-                  
-                  return (
-                    <div 
-                      key={i} 
-                      className={`h-12 border-b border-gray-100 dark:border-dark-700 relative transition-colors ${
-                        isPastHour 
-                          ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-50' 
-                          : 'hover:bg-gray-50 dark:hover:bg-dark-700 cursor-pointer'
-                      }`}
-                      onClick={() => !isPastHour && handleTimeSlotClick(day, slotHour)}
-                      title={isPastHour ? 'Прошедшее время' : 'Создать слот'}
-                    />
-                  );
-                })}
+        {dayGroupedSlots.map((group, idx) => {
+          const firstSlot = group.slots[0];
+          const lastSlot = group.slots[group.slots.length - 1];
+          const { top, height } = getSlotPosition(firstSlot.start_at, lastSlot.end_at);
 
-                {dayGroupedSlots.map((group, idx) => {
-                  const firstSlot = group.slots[0];
-                  const lastSlot = group.slots[group.slots.length - 1];
-                  const { top, height } = getSlotPosition(firstSlot.start_at, lastSlot.end_at);
-
-                  return (
-                    <SlotComponent
-                      key={idx}
-                      slot={group}
-                      groupedSlot={group}
-                      onEdit={handleEditSlot}
-                      onDelete={deleteTimeSlot}
-                      className="absolute left-1 right-1 p-1 text-xs overflow-hidden"
-                      style={{ top: `${top}%`, height: `${height}%`, zIndex: 10 + idx }}
-                    />
-                  );
-                })}
+          return (
+            <div
+              key={idx}
+              data-tooltip-id={`day-tooltip-${group.id}`}
+              data-tooltip-content={`${group.title || 'Слот'}
+Время: ${formatSlotTime(firstSlot.start_at)}-${formatSlotTime(lastSlot.end_at)}${group.slot_status === 'draft' ? '\nСтатус: Черновик' : ''}${parseTimestamp(group.end_at) < new Date() ? '\nСтатус: Прошедшее' : ''}`}
+              className={`absolute left-2 right-2 p-2 text-sm shadow-sm rounded cursor-pointer ${getSlotColorClasses(
+                group.slot_type, 
+                group.slot_status, 
+                parseTimestamp(group.end_at) < new Date()
+              )}`}
+              style={{ top: `${top}%`, height: `${height}%`, zIndex: 10 + idx }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (group.slot_type === 'rent' && !(parseTimestamp(group.end_at) < new Date())) {
+                  handleEditSlot(group);
+                }
+              }}
+            >
+              <div className="font-medium truncate">
+                {formatSlotTime(firstSlot.start_at)} {group.title && `- ${group.title}`}
+                {group.slot_status === 'draft' && <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">(черновик)</span>}
+                {parseTimestamp(group.end_at) < new Date() && <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">(прошло)</span>}
               </div>
-            );
-          })}
-        </div>
+              
+              {group.description && (
+                <div className="text-xs truncate opacity-75">
+                  {group.description}
+                </div>
+              )}
+              
+              {group.slot_type !== 'event' && !(parseTimestamp(group.end_at) < new Date()) && (
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteTimeSlot(group.id, group.slot_type);
+                  }}
+                  className="absolute bottom-1 right-1 text-xs text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                >
+                  Удалить
+                </button>
+              )}
+              
+              <Tooltip 
+                id={`day-tooltip-${group.id}`} 
+                className="z-50 whitespace-pre-line" 
+                style={{ zIndex: 9999 }}
+              />
+            </div>
+          );
+        })}
+      </TimeGrid>
+    </div>
+  );
+};
+
+// ИСПРАВЛЕННЫЙ renderWeekView:
+const renderWeekView = () => {
+  const weekStart = startOfWeek(currentDate, WEEK_OPTIONS);
+  const weekDays = eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) });
+
+  return (
+    <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-dark-600 overflow-hidden">
+      <div className="grid grid-cols-8 border-b border-gray-200 dark:border-dark-600">
+        <div className="p-4 text-sm font-medium text-gray-500 dark:text-gray-400"></div>
+        {weekDays.map(day => (
+          <div key={day.toString()} className={`p-4 text-center border-l border-gray-200 dark:border-dark-600 ${
+            isToday(day) ? 'bg-primary/5' : ''
+          }`}>
+            <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              {format(day, 'EEEEEE', { locale: ru })}
+            </div>
+            <div className={`text-lg font-semibold ${isToday(day) ? 'text-primary' : 'text-gray-900 dark:text-white'}`}>
+              {format(day, 'd')}
+            </div>
+          </div>
+        ))}
       </div>
-    );
-  };
+      
+      <div className="grid grid-cols-8">
+        <TimeGrid>
+          <div></div>
+        </TimeGrid>
+        
+        {weekDays.map(day => {
+          const dayKey = format(day, 'yyyy-MM-dd');
+          const dayGroupedSlots = Object.values(groupedSlots).filter(
+            group => format(parseTimestamp(group.start_at), 'yyyy-MM-dd') === dayKey
+          );
 
+          return (
+            <div key={day.toString()} className="border-l border-gray-200 dark:border-dark-600 relative">
+              {generateTimeSlots(day).map((slot, i) => {
+                const slotHour = WORKING_HOURS.start + i;
+                const slotTime = new Date(day);
+                slotTime.setHours(slotHour, 0, 0, 0);
+                const isPastHour = slotTime < new Date();
+                
+                return (
+                  <div 
+                    key={i} 
+                    className={`h-12 border-b border-gray-100 dark:border-dark-700 relative transition-colors ${
+                      isPastHour 
+                        ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-50' 
+                        : 'hover:bg-gray-50 dark:hover:bg-dark-700 cursor-pointer'
+                    }`}
+                    onClick={() => !isPastHour && handleTimeSlotClick(day, slotHour)}
+                    title={isPastHour ? 'Прошедшее время' : 'Создать слот'}
+                  />
+                );
+              })}
 
+              {dayGroupedSlots.map((group, idx) => {
+                const firstSlot = group.slots[0];
+                const lastSlot = group.slots[group.slots.length - 1];
+                const { top, height } = getSlotPosition(firstSlot.start_at, lastSlot.end_at);
+
+                return (
+                  <div
+                    key={idx}
+                    data-tooltip-id={`week-tooltip-${group.id}`}
+                    data-tooltip-content={`${group.title || 'Слот'}
+Время: ${formatSlotTime(firstSlot.start_at)}-${formatSlotTime(lastSlot.end_at)}${group.slot_status === 'draft' ? '\nСтатус: Черновик' : ''}${parseTimestamp(group.end_at) < new Date() ? '\nСтатус: Прошедшее' : ''}`}
+                    className={`absolute left-1 right-1 p-1 text-xs overflow-hidden rounded cursor-pointer ${getSlotColorClasses(
+                      group.slot_type, 
+                      group.slot_status, 
+                      parseTimestamp(group.end_at) < new Date()
+                    )}`}
+                    style={{ top: `${top}%`, height: `${height}%`, zIndex: 10 + idx }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (group.slot_type === 'rent' && !(parseTimestamp(group.end_at) < new Date())) {
+                        handleEditSlot(group);
+                      }
+                    }}
+                  >
+                    <div className="font-medium truncate">
+                      {formatSlotTime(firstSlot.start_at)} {group.title && `- ${group.title}`}
+                      {group.slot_status === 'draft' && <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">(черновик)</span>}
+                      {parseTimestamp(group.end_at) < new Date() && <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">(прошло)</span>}
+                    </div>
+                    
+                    {group.description && (
+                      <div className="text-xs truncate opacity-75">
+                        {group.description}
+                      </div>
+                    )}
+                    
+                    <Tooltip 
+                      id={`week-tooltip-${group.id}`} 
+                      className="z-50 whitespace-pre-line" 
+                      style={{ zIndex: 9999 }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 
 const renderMonthView = () => {
   const monthStart = startOfMonth(currentDate);
