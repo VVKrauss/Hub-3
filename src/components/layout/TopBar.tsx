@@ -1,31 +1,14 @@
 // src/components/layout/TopBar.tsx  
-// ПОЛНАЯ ВЕРСИЯ с авторизацией в едином файле
+// УПРОЩЕННАЯ ВЕРСИЯ с использованием контекста
 
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu, X, Sun, Moon, LogIn, User, LogOut, Settings, ChevronDown } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { getNavigationItems, getTopbarSettings } from '../../api/settings';
 import Logo from '../ui/Logo';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useTopBar } from '../../contexts/TopBarContext';
 import { toast } from 'react-hot-toast';
-
-interface NavItem {
-  id: string;
-  label: string;
-  path: string;
-  visible: boolean;
-  order: number;
-  badge?: number;
-}
-
-interface UserProfile {
-  id: string;
-  email: string;
-  name?: string;
-  role?: string;
-  avatar?: string;
-}
 
 interface LoginFormData {
   email: string;
@@ -41,14 +24,10 @@ interface RegisterFormData {
 const TopBar = () => {
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
+  const { navItems, topbarHeight, user, mounted, loading } = useTopBar();
   
-  // Navigation state
-  const [navItems, setNavItems] = useState<NavItem[]>([]);
+  // Local state только для UI
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [topbarHeight, setTopbarHeight] = useState<'compact' | 'standard' | 'large'>('standard');
-  
-  // Auth state
-  const [user, setUser] = useState<UserProfile | null>(null);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [loginForm, setLoginForm] = useState<LoginFormData>({ email: '', password: '' });
@@ -56,89 +35,11 @@ const TopBar = () => {
   const [authLoading, setAuthLoading] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   
-  // Component state
-  const [mounted, setMounted] = useState(false);
-  const [loading, setLoading] = useState(true);
-  
   // Refs
   const menuRef = useRef<HTMLDivElement>(null);
   const userDropdownRef = useRef<HTMLDivElement>(null);
-  const isMountedRef = useRef(true);
 
-  // ИНИЦИАЛИЗАЦИЯ - только один раз
-  useEffect(() => {
-    isMountedRef.current = true;
-    console.log('🎨 TopBar: Инициализация темы...');
-    
-    const initialize = async () => {
-      try {
-        if (!isMountedRef.current) return;
-        
-        console.log('🔄 TopBar: Фоновая загрузка...');
-        
-        // 1. Проверяем текущую сессию
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session && isMountedRef.current) {
-          await fetchUserProfile(session.user.id);
-        }
-
-        // 2. Загружаем навигацию
-        if (isMountedRef.current) {
-          await fetchNavItems();
-        }
-
-        // 3. Загружаем настройки топбара
-        if (isMountedRef.current) {
-          await fetchTopbarSettings();
-        }
-
-        if (isMountedRef.current) {
-          setMounted(true);
-          setLoading(false);
-          console.log('✅ TopBar: Инициализация завершена');
-        }
-      } catch (error) {
-        console.error('❌ TopBar: Ошибка инициализации:', error);
-        if (isMountedRef.current) {
-          setFallbackNavigation();
-          setMounted(true);
-          setLoading(false);
-        }
-      }
-    };
-
-    initialize();
-
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []); // КРИТИЧНО: пустой массив зависимостей
-
-  // ПОДПИСКА НА АВТОРИЗАЦИЮ
-  useEffect(() => {
-    if (!mounted) return;
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!isMountedRef.current) return;
-      
-      console.log('🔐 TopBar: Auth событие:', event);
-      
-      if (event === 'SIGNED_IN' && session) {
-        await fetchUserProfile(session.user.id);
-        setLoginModalOpen(false);
-        setUserDropdownOpen(false);
-        toast.success('Добро пожаловать!');
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setUserDropdownOpen(false);
-        toast.success('Вы вышли из системы');
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [mounted]);
+  console.log('🎨 TopBar: Рендер компонента (данные из контекста)');
 
   // КЛИК ВНЕ МЕНЮ
   useEffect(() => {
@@ -154,80 +55,6 @@ const TopBar = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  // ФУНКЦИИ ЗАГРУЗКИ ДАННЫХ
-  const fetchUserProfile = async (userId: string) => {
-    try {
-      if (!isMountedRef.current) return;
-      
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (isMountedRef.current) {
-        setUser({
-          id: userId,
-          email: session?.user.email || '',
-          name: profile?.name || session?.user.user_metadata?.name,
-          role: profile?.role,
-          avatar: profile?.avatar
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching user profile:', error);
-    }
-  };
-
-  const fetchNavItems = async () => {
-    try {
-      if (!isMountedRef.current) return;
-      
-      console.log('🔄 TopBar: Фоновая загрузка навигации из API...');
-      const response = await getNavigationItems();
-      
-      if (response.data && response.data.length > 0 && isMountedRef.current) {
-        const sortedItems = response.data.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
-        setNavItems(sortedItems);
-      } else if (isMountedRef.current) {
-        setFallbackNavigation();
-      }
-    } catch (error) {
-      console.error('Error fetching navigation:', error);
-      if (isMountedRef.current) {
-        setFallbackNavigation();
-      }
-    }
-  };
-
-  const setFallbackNavigation = () => {
-    const fallbackItems = [
-      { id: 'home', label: 'Главная', path: '/', visible: true, order: 0 },
-      { id: 'events', label: 'Мероприятия', path: '/events', visible: true, order: 1 },
-      { id: 'courses', label: 'Курсы', path: '/courses', visible: true, order: 2 },
-      { id: 'speakers', label: 'Спикеры', path: '/speakers', visible: true, order: 3 },
-      { id: 'coworking', label: 'Коворкинг', path: '/coworking', visible: true, order: 4 },
-      { id: 'rent', label: 'Аренда', path: '/rent', visible: true, order: 5 },
-      { id: 'about', label: 'О нас', path: '/about', visible: true, order: 6 }
-    ];
-    setNavItems(fallbackItems);
-  };
-
-  const fetchTopbarSettings = async () => {
-    try {
-      if (!isMountedRef.current) return;
-      
-      const response = await getTopbarSettings();
-      if (response.data?.height && isMountedRef.current) {
-        setTopbarHeight(response.data.height);
-      }
-    } catch (error) {
-      console.error('Error fetching topbar settings:', error);
-    }
-  };
 
   // ФУНКЦИИ АВТОРИЗАЦИИ
   const handleLogin = async (e: React.FormEvent) => {
@@ -247,6 +74,7 @@ const TopBar = () => {
       if (error) throw error;
       
       setLoginForm({ email: '', password: '' });
+      setLoginModalOpen(false);
     } catch (error: any) {
       console.error('Login error:', error);
       toast.error(error.message || 'Ошибка входа');
@@ -292,6 +120,7 @@ const TopBar = () => {
         toast.success('Регистрация успешна! Проверьте email для подтверждения.');
         setRegisterForm({ email: '', password: '', name: '' });
         setAuthMode('login');
+        setLoginModalOpen(false);
       }
     } catch (error: any) {
       console.error('Register error:', error);
@@ -304,6 +133,7 @@ const TopBar = () => {
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
+      setUserDropdownOpen(false);
     } catch (error) {
       console.error('Error signing out:', error);
       toast.error('Ошибка выхода');
@@ -428,10 +258,7 @@ const TopBar = () => {
                     <hr className="my-2 border-gray-200 dark:border-dark-700" />
                     
                     <button
-                      onClick={() => {
-                        handleLogout();
-                        setUserDropdownOpen(false);
-                      }}
+                      onClick={handleLogout}
                       className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
                     >
                       <LogOut className="h-4 w-4 mr-3" />
