@@ -1,5 +1,7 @@
-// src/components/home/EventsSection.tsx - ПОЛНАЯ ИСПРАВЛЕННАЯ ВЕРСИЯ
-import { useState, useEffect } from 'react';
+// src/components/home/EventsSection.tsx
+// ИСПРАВЛЕННАЯ ВЕРСИЯ - устранение бесконечных циклов
+
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Calendar, Globe, Users, ArrowRight, Clock, MapPin, DollarSign } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -23,29 +25,13 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   'webinar': 'Вебинар',
   'training': 'Тренинг',
   'other': 'Другое',
-  // Legacy значения
-  'Lecture': 'Лекция',
-  'Workshop': 'Мастер-класс',
-  'Conference': 'Конференция',
-  'Seminar': 'Семинар',
-  'Discussion': 'Дискуссия',
-  'Festival': 'Фестиваль',
-  'Concert': 'Концерт',
-  'Standup': 'Стенд-ап',
-  'Excursion': 'Экскурсия',
-  'Quiz': 'Квиз',
-  'Swap': 'Своп',
-  'Other': 'Другое'
+  
 };
 
 const LANGUAGE_LABELS: Record<string, string> = {
   'sr': 'Српски',
   'en': 'English', 
   'ru': 'Русский',
-  // Legacy значения
-  'Русский': 'Русский',
-  'Английский': 'English',
-  'Сербский': 'Српски'
 };
 
 type Event = {
@@ -87,6 +73,7 @@ const EventsSection = () => {
   const [settings, setSettings] = useState<HomepageSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isMountedRef = useRef(true);
 
   // ФУНКЦИЯ ПОЛУЧЕНИЯ ЦЕНЫ - ВСЕГДА ПОКАЗЫВАЕМ ЦЕНУ
   const getEventPrice = (event: Event): string => {
@@ -153,10 +140,17 @@ const EventsSection = () => {
     return 'https://via.placeholder.com/400x200?text=No+Image';
   };
 
+  // ИСПРАВЛЕННАЯ ЗАГРУЗКА ДАННЫХ - ТОЛЬКО ОДИН РАЗ
   useEffect(() => {
+    isMountedRef.current = true;
+    
     const fetchData = async () => {
       try {
+        if (!isMountedRef.current) return;
+        
         setLoading(true);
+        
+        console.log('🚀 Fetching events section data...');
         
         // Получаем настройки сначала из новой системы
         let settingsData;
@@ -171,33 +165,41 @@ const EventsSection = () => {
 
           if (newSettings?.homepage_events_section) {
             settingsData = newSettings.homepage_events_section;
+            console.log('✅ Found new settings');
           }
         } catch (newError) {
           console.log('New settings not found, trying old system...');
           
           // Fallback к старой системе
-          const { data: oldSettings } = await supabase
-            .from('site_settings')
-            .select('homepage_settings')
-            .single();
+          try {
+            const { data: oldSettings } = await supabase
+              .from('site_settings')
+              .select('homepage_settings')
+              .single();
 
-          if (oldSettings?.homepage_settings?.events_section) {
-            settingsData = oldSettings.homepage_settings.events_section;
+            if (oldSettings?.homepage_settings?.events_section) {
+              settingsData = oldSettings.homepage_settings.events_section;
+              console.log('✅ Found old settings');
+            }
+          } catch (oldError) {
+            console.log('Old settings not found, using defaults');
           }
         }
+
+        if (!isMountedRef.current) return;
 
         if (settingsData) {
           eventsCount = settingsData.events_count || 3;
           setSettings({
             events_count: eventsCount,
-            show_title: settingsData.show_title !== false,
-            show_date: settingsData.show_date !== false,
-            show_time: settingsData.show_time !== false,
-            show_language: settingsData.show_language !== false,
-            show_type: settingsData.show_type !== false,
-            show_age: settingsData.show_age !== false,
-            show_image: settingsData.show_image !== false,
-            show_price: settingsData.show_price !== false
+            show_title: settingsData.show_title ?? true,
+            show_date: settingsData.show_date ?? true,
+            show_time: settingsData.show_time ?? true,
+            show_language: settingsData.show_language ?? true,
+            show_type: settingsData.show_type ?? true,
+            show_age: settingsData.show_age ?? true,
+            show_image: settingsData.show_image ?? true,
+            show_price: settingsData.show_price ?? true
           });
         } else {
           // Дефолтные настройки
@@ -214,65 +216,102 @@ const EventsSection = () => {
           });
         }
 
-        // Получаем события сначала из новой системы
-        let eventsData;
+        // Получаем события из новых таблиц
+        let eventsData = [];
         
         try {
           const { data: newEvents, error: newError } = await supabase
             .from('sh_events')
             .select(`
-              id, slug, title, short_description, description,
-              start_at, end_at, language_code, event_type, age_category,
-              cover_image_url, base_price, currency, payment_type, venue_name,
-              status, is_public
+              id, title, short_description, description, start_at, end_at,
+              language_code, event_type, age_category, cover_image_url,
+              base_price, currency, payment_type, venue_name
             `)
             .eq('status', 'active')
-            .eq('is_public', true)
-            .gte('end_at', new Date().toISOString())
+            .gte('start_at', new Date().toISOString())
             .order('start_at', { ascending: true })
             .limit(eventsCount);
 
-          if (!newError && newEvents && newEvents.length > 0) {
+          if (newError) throw newError;
+          
+          if (newEvents && newEvents.length > 0) {
             eventsData = newEvents;
+            console.log(`✅ Found ${newEvents.length} events from new system`);
           }
         } catch (newError) {
-          console.log('New events table not found, trying legacy...');
-        }
+          console.log('New events not found, trying old system...');
+          
+          // Fallback к старым событиям
+          try {
+            const { data: oldEvents, error: oldError } = await supabase
+              .from('events')
+              .select(`
+                id, title, description, start_at, end_at,
+                languages, type, age, bg_image, price
+              `)
+              .eq('active', true)
+              .gte('start_at', new Date().toISOString())
+              .order('start_at', { ascending: true })
+              .limit(eventsCount);
 
-        // Fallback к legacy системе
-        if (!eventsData) {
-          const { data: legacyEvents, error: legacyError } = await supabase
-            .from('events')
-            .select('*')
-            .eq('status', 'active')
-            .order('start_at', { ascending: true })
-            .limit(eventsCount);
-
-          if (!legacyError) {
-            eventsData = legacyEvents;
+            if (oldError) throw oldError;
+            
+            if (oldEvents) {
+              // Конвертируем старые события в новый формат
+              eventsData = oldEvents.map(event => ({
+                id: event.id,
+                title: event.title,
+                description: event.description,
+                start_at: event.start_at,
+                end_at: event.end_at,
+                languages: event.languages,
+                event_type: event.type || 'other',
+                age_category: event.age || 'all',
+                bg_image: event.bg_image,
+                price: event.price,
+                currency: 'RSD',
+                payment_type: event.price > 0 ? 'paid' : 'free'
+              }));
+              console.log(`✅ Found ${oldEvents.length} events from old system`);
+            }
+          } catch (oldError) {
+            console.error('Error fetching old events:', oldError);
           }
         }
 
-        setEvents(eventsData || []);
+        if (!isMountedRef.current) return;
+
+        setEvents(eventsData);
+        console.log('✅ Events section data loaded successfully');
         
-      } catch (err) {
-        console.error('Error fetching events data:', err);
-        setError('Не удалось загрузить события');
+      } catch (err: any) {
+        console.error('❌ Error fetching events section data:', err);
+        if (isMountedRef.current) {
+          setError(err.message || 'Ошибка при загрузке данных');
+        }
       } finally {
-        setLoading(false);
+        if (isMountedRef.current) {
+          setLoading(false);
+        }
       }
     };
 
     fetchData();
-  }, []);
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []); // КРИТИЧНО: пустой массив зависимостей - загружаем только один раз
 
   if (loading) {
     return (
       <section className="py-16 bg-white dark:bg-dark-900">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="container mx-auto px-4">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
-            <p className="text-gray-500 dark:text-gray-400">Загрузка мероприятий...</p>
+            <div className="animate-pulse space-y-4">
+              <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-64 mx-auto"></div>
+              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-96 mx-auto"></div>
+            </div>
           </div>
         </div>
       </section>
@@ -282,9 +321,11 @@ const EventsSection = () => {
   if (error) {
     return (
       <section className="py-16 bg-white dark:bg-dark-900">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="container mx-auto px-4">
           <div className="text-center">
-            <p className="text-red-500">{error}</p>
+            <div className="text-red-500 dark:text-red-400">
+              <p>Ошибка загрузки: {error}</p>
+            </div>
           </div>
         </div>
       </section>
@@ -293,13 +334,13 @@ const EventsSection = () => {
 
   return (
     <section className="py-16 bg-white dark:bg-dark-900">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="container mx-auto px-4">
         <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-            Предстоящие мероприятия
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">
+            Ближайшие мероприятия
           </h2>
-          <p className="text-lg text-gray-600 dark:text-gray-400">
-            Не пропустите интересные события в нашем центре
+          <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+            Присоединяйтесь к нашим событиям и будьте частью научного сообщества
           </p>
         </div>
 
