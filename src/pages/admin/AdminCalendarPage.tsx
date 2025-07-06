@@ -154,19 +154,24 @@ const useFilteredSlots = (slots: TimeSlot[], currentDate: Date, viewMode: ViewMo
 // === УТИЛИТЫ ===
 const getSlotColorClasses = (type?: string, status?: string, isPast: boolean = false) => {
   if (isPast) {
-    return 'bg-gray-100 dark:bg-gray-800 border-l-4 border-gray-400 opacity-60';
+    return 'bg-gray-100 dark:bg-gray-700 border-l-4 border-gray-400 opacity-60 text-gray-600 dark:text-gray-400';
   }
   
   if (status === 'draft') {
-    return 'bg-gray-50 dark:bg-gray-700/50 border-l-4 border-gray-300 opacity-80';
+    return 'bg-gray-50 dark:bg-gray-600/50 border-l-4 border-gray-300 dark:border-gray-500 opacity-80 text-gray-700 dark:text-gray-300';
   }
 
   switch (type) {
-    case 'event': return 'bg-green-50 dark:bg-green-900/30 border-l-4 border-green-500';
-    case 'rent': return 'bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-500';
-    case 'meeting': return 'bg-purple-50 dark:bg-purple-900/30 border-l-4 border-purple-500';
-    case 'maintenance': return 'bg-orange-50 dark:bg-orange-900/30 border-l-4 border-orange-500';
-    default: return 'bg-gray-50 dark:bg-gray-700 border-l-4 border-gray-300';
+    case 'event': 
+      return 'bg-green-50 dark:bg-green-900/30 border-l-4 border-green-500 text-green-800 dark:text-green-200';
+    case 'rent': 
+      return 'bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-500 text-blue-800 dark:text-blue-200';
+    case 'meeting': 
+      return 'bg-purple-50 dark:bg-purple-900/30 border-l-4 border-purple-500 text-purple-800 dark:text-purple-200';
+    case 'maintenance': 
+      return 'bg-orange-50 dark:bg-orange-900/30 border-l-4 border-orange-500 text-orange-800 dark:text-orange-200';
+    default: 
+      return 'bg-gray-50 dark:bg-gray-600 border-l-4 border-gray-300 dark:border-gray-500 text-gray-700 dark:text-gray-300';
   }
 };
 
