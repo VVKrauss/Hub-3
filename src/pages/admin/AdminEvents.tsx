@@ -64,106 +64,201 @@ const AdminEvents = () => {
     fetchEvents();
   }, [sortBy, statusFilter]);
 
-  const fetchEvents = async () => {
-    try {
-      setLoading(true);
+const fetchEvents = async () => {
+  try {
+    setLoading(true);
 
-      // Получаем события с их временными слотами
-      let query = supabase
-        .from('events')
-        .select(`
-          *,
-          time_slot:time_slots_table!fk_time_slots_event(
-            id,
-            start_at,
-            end_at
-          )
-        `);
+    // Получаем события с их временными слотами из НОВОЙ таблицы
+    let query = supabase
+      .from('events')
+      .select(`
+        *,
+        time_slot:sh_time_slots!event_id(
+          id,
+          start_at,
+          end_at
+        )
+      `);
 
-      // Фильтрация по статусу
-      if (statusFilter === 'past') {
-        // Получаем все события со статусом past ИЛИ активные которые уже прошли
-        query = query.or('status.eq.past,status.eq.active');
-      } else if (statusFilter !== 'all') {
-        query = query.eq('status', statusFilter);
-      }
+    // Фильтрация по статусу
+    if (statusFilter === 'past') {
+      // Получаем все события со статусом past ИЛИ активные которые уже прошли
+      query = query.or('status.eq.past,status.eq.active');
+    } else if (statusFilter !== 'all') {
+      query = query.eq('status', statusFilter);
+    }
 
-      const { data, error } = await query;
-      if (error) throw error;
+    const { data, error } = await query;
+    if (error) throw error;
 
-      // Обогащаем события временными данными
-      const enrichedEvents = (data || []).map(event => ({
-        ...event,
-        start_at: event.time_slot?.[0]?.start_at || event.start_at,
-        end_at: event.time_slot?.[0]?.end_at || event.end_at
-      }));
+    // Обогащаем события временными данными
+    const enrichedEvents = (data || []).map(event => ({
+      ...event,
+      start_at: event.time_slot?.[0]?.start_at || event.start_at,
+      end_at: event.time_slot?.[0]?.end_at || event.end_at
+    }));
 
-      // Дополнительная фильтрация для прошедших мероприятий
-      let filteredData = enrichedEvents;
-      if (statusFilter === 'past') {
-        filteredData = enrichedEvents.filter(event => 
-          event.status === 'past' || 
-          (event.end_at && isPastEvent(event.end_at))
-        );
-      } else if (statusFilter === 'active') {
-        // Для активных показываем только те что еще не прошли
-        filteredData = enrichedEvents.filter(event => 
-          event.status === 'active' && 
-          (!event.end_at || !isPastEvent(event.end_at))
-        );
-      }
+    // Дополнительная фильтрация для прошедших мероприятий
+    let filteredData = enrichedEvents;
+    if (statusFilter === 'past') {
+      filteredData = enrichedEvents.filter(event => 
+        event.status === 'past' || 
+        (event.end_at && isPastEvent(event.end_at))
+      );
+    } else if (statusFilter === 'active') {
+      // Для активных показываем только те что еще не прошли
+      filteredData = enrichedEvents.filter(event => 
+        event.status === 'active' && 
+        (!event.end_at || !isPastEvent(event.end_at))
+      );
+    }
 
-      // Сортировка
-      switch (sortBy) {
-        case 'chronological':
-          if (statusFilter === 'active') {
-            // Активные сортируем по дате начала (ближайшие первыми)
-            filteredData.sort((a, b) => {
-              const dateA = new Date(a.start_at || 0);
-              const dateB = new Date(b.start_at || 0);
-              return dateA.getTime() - dateB.getTime();
-            });
-          } else {
-            // Прошедшие и черновики сортируем по дате создания
-            filteredData.sort((a, b) => {
-              const dateA = new Date(a.created_at || 0);
-              const dateB = new Date(b.created_at || 0);
-              return dateB.getTime() - dateA.getTime();
-            });
-          }
-          break;
-        case 'date-asc':
+    // Сортировка остается без изменений
+    switch (sortBy) {
+      case 'chronological':
+        if (statusFilter === 'active') {
           filteredData.sort((a, b) => {
             const dateA = new Date(a.start_at || 0);
             const dateB = new Date(b.start_at || 0);
             return dateA.getTime() - dateB.getTime();
           });
-          break;
-        case 'date-desc':
+        } else {
+          filteredData.sort((a, b) => {
+            const dateA = new Date(a.created_at || 0);
+            const dateB = new Date(b.created_at || 0);
+            return dateB.getTime() - dateA.getTime();
+          });
+        }
+        break;
+      case 'date-asc':
+        filteredData.sort((a, b) => {
+          const dateA = new Date(a.start_at || 0);
+          const dateB = new Date(b.start_at || 0);
+          return dateA.getTime() - dateB.getTime();
+        });
+        break;
+      case 'date-desc':
+        filteredData.sort((a, b) => {
+          const dateA = new Date(a.start_at || 0);
+          const dateB = new Date(b.start_at || 0);
+          return dateB.getTime() - dateA.getTime();
+        });
+        break;
+      case 'title-asc':
+        filteredData.sort((a, b) => a.title.localeCompare(b.title));
+        break;
+      case 'title-desc':
+        filteredData.sort((a, b) => b.title.localeCompare(a.title));
+        break;
+    }
+
+    setEvents(filteredData);
+    setSelectedEvents([]);
+  } catch (error) {
+    console.error('Error fetching events:', error);
+    toast.error('Ошибка при загрузке мероприятий');
+  } finally {
+    setLoading(false);
+  }
+};const fetchEvents = async () => {
+  try {
+    setLoading(true);
+
+    // Получаем события с их временными слотами из НОВОЙ таблицы
+    let query = supabase
+      .from('events')
+      .select(`
+        *,
+        time_slot:sh_time_slots!event_id(
+          id,
+          start_at,
+          end_at
+        )
+      `);
+
+    // Фильтрация по статусу
+    if (statusFilter === 'past') {
+      // Получаем все события со статусом past ИЛИ активные которые уже прошли
+      query = query.or('status.eq.past,status.eq.active');
+    } else if (statusFilter !== 'all') {
+      query = query.eq('status', statusFilter);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    // Обогащаем события временными данными
+    const enrichedEvents = (data || []).map(event => ({
+      ...event,
+      start_at: event.time_slot?.[0]?.start_at || event.start_at,
+      end_at: event.time_slot?.[0]?.end_at || event.end_at
+    }));
+
+    // Дополнительная фильтрация для прошедших мероприятий
+    let filteredData = enrichedEvents;
+    if (statusFilter === 'past') {
+      filteredData = enrichedEvents.filter(event => 
+        event.status === 'past' || 
+        (event.end_at && isPastEvent(event.end_at))
+      );
+    } else if (statusFilter === 'active') {
+      // Для активных показываем только те что еще не прошли
+      filteredData = enrichedEvents.filter(event => 
+        event.status === 'active' && 
+        (!event.end_at || !isPastEvent(event.end_at))
+      );
+    }
+
+    // Сортировка остается без изменений
+    switch (sortBy) {
+      case 'chronological':
+        if (statusFilter === 'active') {
           filteredData.sort((a, b) => {
             const dateA = new Date(a.start_at || 0);
             const dateB = new Date(b.start_at || 0);
+            return dateA.getTime() - dateB.getTime();
+          });
+        } else {
+          filteredData.sort((a, b) => {
+            const dateA = new Date(a.created_at || 0);
+            const dateB = new Date(b.created_at || 0);
             return dateB.getTime() - dateA.getTime();
           });
-          break;
-        case 'title-asc':
-          filteredData.sort((a, b) => a.title.localeCompare(b.title));
-          break;
-        case 'title-desc':
-          filteredData.sort((a, b) => b.title.localeCompare(a.title));
-          break;
-      }
-
-      setEvents(filteredData);
-      setSelectedEvents([]);
-    } catch (error) {
-      console.error('Error fetching events:', error);
-      toast.error('Ошибка при загрузке мероприятий');
-    } finally {
-      setLoading(false);
+        }
+        break;
+      case 'date-asc':
+        filteredData.sort((a, b) => {
+          const dateA = new Date(a.start_at || 0);
+          const dateB = new Date(b.start_at || 0);
+          return dateA.getTime() - dateB.getTime();
+        });
+        break;
+      case 'date-desc':
+        filteredData.sort((a, b) => {
+          const dateA = new Date(a.start_at || 0);
+          const dateB = new Date(b.start_at || 0);
+          return dateB.getTime() - dateA.getTime();
+        });
+        break;
+      case 'title-asc':
+        filteredData.sort((a, b) => a.title.localeCompare(b.title));
+        break;
+      case 'title-desc':
+        filteredData.sort((a, b) => b.title.localeCompare(a.title));
+        break;
     }
-  };
 
+    setEvents(filteredData);
+    setSelectedEvents([]);
+  } catch (error) {
+    console.error('Error fetching events:', error);
+    toast.error('Ошибка при загрузке мероприятий');
+  } finally {
+    setLoading(false);
+  }
+};
+
+  
   const handleDeleteSelected = async () => {
     if (selectedEvents.length === 0) return;
     
