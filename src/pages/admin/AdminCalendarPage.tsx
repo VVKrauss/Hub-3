@@ -168,23 +168,7 @@ const getSlotColorClasses = (type?: string, status?: string, isPast: boolean = f
     case 'maintenance': return 'bg-orange-50 dark:bg-orange-900/30 border-l-4 border-orange-500 text-gray-900 dark:text-gray-100';
     default: return 'bg-gray-50 dark:bg-gray-700 border-l-4 border-gray-300 text-gray-900 dark:text-gray-100';
   }
-};const getSlotColorClasses = (type?: string, status?: string, isPast: boolean = false) => {
-  if (isPast) {
-    return 'bg-gray-100 dark:bg-gray-800 border-l-4 border-gray-400 opacity-60 text-gray-600 dark:text-gray-400';
-  }
-  
-  if (status === 'draft') {
-    return 'bg-gray-50 dark:bg-gray-700/50 border-l-4 border-gray-300 opacity-80 text-gray-700 dark:text-gray-300';
-  }
-
-  switch (type) {
-    case 'event': return 'bg-green-50 dark:bg-green-900/30 border-l-4 border-green-500 text-gray-900 dark:text-gray-100';
-    case 'rent': return 'bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-500 text-gray-900 dark:text-gray-100';
-    case 'meeting': return 'bg-purple-50 dark:bg-purple-900/30 border-l-4 border-purple-500 text-gray-900 dark:text-gray-100';
-    case 'maintenance': return 'bg-orange-50 dark:bg-orange-900/30 border-l-4 border-orange-500 text-gray-900 dark:text-gray-100';
-    default: return 'bg-gray-50 dark:bg-gray-700 border-l-4 border-gray-300 text-gray-900 dark:text-gray-100';
-  }
-};
+}; 
 
 const generateTimeSlots = (date: Date) => {
   const slots = [];
