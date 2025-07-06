@@ -183,6 +183,12 @@ const generateTimeSlots = (date: Date) => {
 };
 
 // === КОМПОНЕНТЫ ===
+
+
+
+// УЛУЧШЕНИЯ КАЛЕНДАРЯ
+// 1. УПРОЩЕННАЯ ВЕРСИЯ TOOLTIP - замените tooltipContent в SlotComponent:
+
 const SlotComponent = ({ 
   slot, 
   groupedSlot, 
@@ -204,13 +210,12 @@ const SlotComponent = ({
   const firstSlot = groupedSlot?.slots[0] || slot;
   const lastSlot = groupedSlot?.slots[groupedSlot?.slots.length - 1] || slot;
   
+  // ИЗМЕНЕНИЕ 1: Упрощенный tooltip
   const tooltipContent = `
     ${slot.title || 'Слот'}
     Время: ${formatSlotTime(firstSlot.start_at)}-${formatSlotTime(lastSlot.end_at)}
-    ${slot.description || ''}
-    ${slot.contact_name ? `Контакт: ${slot.contact_name}` : ''}
     ${slot.slot_status === 'draft' ? 'Статус: Черновик' : ''}
-    ${isPastSlot ? 'Прошедшее мероприятие' : ''}
+    ${isPastSlot ? 'Статус: Прошедшее' : ''}
   `;
 
   return (
@@ -262,6 +267,9 @@ const SlotComponent = ({
     </div>
   );
 };
+
+
+
 
 const TimeGrid = ({ children }: { children: React.ReactNode }) => (
   <div className="flex">
