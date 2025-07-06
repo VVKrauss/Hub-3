@@ -356,7 +356,6 @@ const fetchTimeSlots = useCallback(async () => {
     });
   }, []);
 
-
 const createOrUpdateTimeSlot = useCallback(async () => {
   if (!modalState.data) return;
 
@@ -373,12 +372,18 @@ const createOrUpdateTimeSlot = useCallback(async () => {
       return;
     }
 
-    // ИЗМЕНЕНО: Проверка пересечений в sh_time_slots
-    const { data: overlappingSlots, error: overlapError } = await supabase
+    // ИСПРАВЛЕНО: Правильная проверка пересечений для создания и редактирования
+    let overlapQuery = supabase
       .from('sh_time_slots')
       .select('*')
-      .or(`and(start_at.lte.${end_at},end_at.gte.${start_at})`)
-      .neq('id', modalState.mode === 'edit' ? modalState.data.id : '');
+      .or(`and(start_at.lte.${end_at},end_at.gte.${start_at})`);
+
+    // Для редактирования исключаем текущий слот
+    if (modalState.mode === 'edit' && modalState.data.id) {
+      overlapQuery = overlapQuery.neq('id', modalState.data.id);
+    }
+
+    const { data: overlappingSlots, error: overlapError } = await overlapQuery;
 
     if (overlapError) throw overlapError;
 
@@ -407,8 +412,8 @@ const createOrUpdateTimeSlot = useCallback(async () => {
       is_booked: slot_type === 'rent'
     };
 
-    if (modalState.mode === 'edit') {
-      // ИЗМЕНЕНО: Обновление в sh_time_slots
+    if (modalState.mode === 'edit' && modalState.data.id) {
+      // Обновление существующего слота
       const { error } = await supabase
         .from('sh_time_slots')
         .update(slotData)
@@ -417,7 +422,7 @@ const createOrUpdateTimeSlot = useCallback(async () => {
       if (error) throw error;
       toast.success('Слот обновлен');
     } else {
-      // ИЗМЕНЕНО: Создание в sh_time_slots
+      // Создание нового слота (без указания id - он будет сгенерирован автоматически)
       const { error } = await supabase
         .from('sh_time_slots')
         .insert([slotData]);
@@ -433,6 +438,7 @@ const createOrUpdateTimeSlot = useCallback(async () => {
     toast.error('Ошибка сохранения слота');
   }
 }, [modalState, formatSlotTime, fetchTimeSlots]);
+
 
   
 const deleteTimeSlot = useCallback(async (id: string, type?: string) => {
