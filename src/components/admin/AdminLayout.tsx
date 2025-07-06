@@ -1,6 +1,6 @@
 // src/components/admin/AdminLayout.tsx
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../../lib/supabase'; // Используем единый экземпляр
 import { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, 
@@ -26,11 +26,6 @@ import {
 
 import { toast } from 'react-hot-toast';
 import QRScanner from './QRScanner';
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
 
 const AdminLayout = () => {
   const navigate = useNavigate();
@@ -72,16 +67,21 @@ const AdminLayout = () => {
     { to: '/admin/export', icon: Download, label: 'Экспорт данных', shortLabel: 'Экспорт' }
   ];
 
-  const handleLogout = async () => {
+  const handleSignOut = async () => {
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      
+      await supabase.auth.signOut();
       navigate('/');
-      toast.success('Вы успешно вышли из системы');
+      toast.success('Вы вышли из системы');
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error('Error signing out:', error);
       toast.error('Ошибка при выходе из системы');
+    }
+  };
+
+  const openQRScanner = () => {
+    setShowQRScanner(true);
+    if (isMobile) {
+      setIsMobileMenuOpen(false);
     }
   };
 
@@ -93,50 +93,61 @@ const AdminLayout = () => {
     setIsMobileMenuOpen(false);
   };
 
-  const openQRScanner = () => {
-    setShowQRScanner(true);
-    if (isMobile) {
-      closeMobileMenu();
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-900">
-      {/* Mobile menu overlay */}
-      {isMobileMenuOpen && (
+      {/* Mobile overlay */}
+      {isMobile && isMobileMenuOpen && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+          className="fixed inset-0 bg-black bg-opacity-50 z-40"
           onClick={closeMobileMenu}
         />
       )}
 
       {/* Top bar for mobile */}
       {isMobile && (
-        <div className="fixed top-0 left-0 right-0 bg-white dark:bg-dark-800 border-b border-gray-200 dark:border-dark-700 z-30 h-14 flex items-center justify-between px-4">
-          <button
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
-          
-          <h1 className="text-lg font-semibold">Админ панель</h1>
-          
-          {/* QR Scanner button in mobile header */}
-          <button
-            onClick={openQRScanner}
-            className="p-2 rounded-lg bg-primary-500 hover:bg-primary-600 text-white"
-            title="QR Сканер"
-          >
-            <QrCode className="h-5 w-5" />
-          </button>
+        <div className="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-dark-800 border-b border-gray-200 dark:border-dark-700 h-14">
+          <div className="flex items-center justify-between h-full px-4">
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-primary-500 rounded-lg flex items-center justify-center">
+                <BarChart3 className="h-5 w-5 text-white" />
+              </div>
+              <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Админ панель
+              </h1>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={openQRScanner}
+                className="p-2 rounded-lg bg-primary-500 hover:bg-primary-600 text-white"
+                title="QR Сканер"
+              >
+                <QrCode className="h-4 w-4" />
+              </button>
+              
+              <button
+                onClick={handleSignOut}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700 text-red-600"
+                title="Выйти"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
       {/* Sidebar */}
       <aside className={`
-        fixed top-0 left-0 h-full bg-white dark:bg-dark-800 border-r border-gray-200 dark:border-dark-700 z-50
-        transition-all duration-300 ease-in-out
+        fixed top-0 left-0 h-full bg-white dark:bg-dark-800 border-r border-gray-200 dark:border-dark-700 
+        transition-all duration-300 ease-in-out z-50 flex flex-col
         ${isMobile 
           ? `${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} w-64`
           : `${isSidebarCollapsed ? 'w-16' : 'w-64'}`
@@ -218,27 +229,20 @@ const AdminLayout = () => {
                   end={item.end} // Используем проп end для точного совпадения пути
                   onClick={isMobile ? closeMobileMenu : undefined}
                   className={({ isActive }) => `
-                    group relative flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200
-                    ${isActive
-                      ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-700'
+                    flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 group
+                    ${isActive 
+                      ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 border-r-2 border-primary-500' 
+                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-700 hover:text-gray-900 dark:hover:text-white'
                     }
-                    ${isSidebarCollapsed && !isMobile ? 'justify-center' : ''}
+                    ${isSidebarCollapsed && !isMobile ? 'justify-center px-2' : ''}
                   `}
                   title={isSidebarCollapsed && !isMobile ? item.label : ''}
                 >
-                  <Icon className="h-5 w-5 flex-shrink-0" />
+                  <Icon className={`${isSidebarCollapsed && !isMobile ? 'h-6 w-6' : 'h-5 w-5'} flex-shrink-0`} />
                   {(!isSidebarCollapsed || isMobile) && (
-                    <span className="text-sm font-medium">
-                      {item.label}
+                    <span className="font-medium truncate">
+                      {isMobile ? item.shortLabel : item.label}
                     </span>
-                  )}
-                  
-                  {/* Tooltip for collapsed state */}
-                  {isSidebarCollapsed && !isMobile && (
-                    <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
-                      {item.label}
-                    </div>
                   )}
                 </NavLink>
               );
@@ -246,34 +250,51 @@ const AdminLayout = () => {
           </div>
         </nav>
 
-        {/* Logout button */}
-        <div className="border-t border-gray-200 dark:border-dark-700 p-2">
-          <button
-            onClick={handleLogout}
-            className={`
-              group relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg
-              text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20
-              transition-all duration-200
-              ${isSidebarCollapsed && !isMobile ? 'justify-center' : ''}
-            `}
-            title={isSidebarCollapsed && !isMobile ? 'Выйти' : ''}
-          >
-            <LogOut className="h-4 w-4 flex-shrink-0" />
-            {(!isSidebarCollapsed || isMobile) && <span className="text-sm">Выйти</span>}
-            
-            {/* Tooltip for collapsed state */}
-            {isSidebarCollapsed && !isMobile && (
-              <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
-                Выйти
-              </div>
-            )}
-          </button>
+        {/* User actions */}
+        <div className="border-t border-gray-200 dark:border-dark-700 p-4">
+          {(!isSidebarCollapsed || isMobile) ? (
+            <div className="space-y-2">
+              <button
+                onClick={() => navigate('/')}
+                className="w-full flex items-center gap-3 px-3 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-700 rounded-lg transition-colors"
+              >
+                <ExternalLink className="h-4 w-4" />
+                <span className="text-sm">На сайт</span>
+              </button>
+              
+              <button
+                onClick={handleSignOut}
+                className="w-full flex items-center gap-3 px-3 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="text-sm">Выйти</span>
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <button
+                onClick={() => navigate('/')}
+                className="w-full p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-700 rounded-lg transition-colors"
+                title="На сайт"
+              >
+                <ExternalLink className="h-4 w-4 mx-auto" />
+              </button>
+              
+              <button
+                onClick={handleSignOut}
+                className="w-full p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                title="Выйти"
+              >
+                <LogOut className="h-4 w-4 mx-auto" />
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 
       {/* Main content */}
       <main className={`
-        transition-all duration-300 ease-in-out
+        transition-all duration-300 ease-in-out min-h-screen
         ${isMobile 
           ? 'ml-0 pt-14' 
           : `${isSidebarCollapsed ? 'ml-16' : 'ml-64'} pt-12`

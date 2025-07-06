@@ -1,12 +1,7 @@
 import { useState, useRef } from 'react';
 import { Calendar, Clock, Users, Plus, Edit, Trash2, X, Check, ImageIcon } from 'lucide-react';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../../lib/supabase'; // Используем единый экземпляр
 import { toast } from 'react-hot-toast';
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
 
 type Speaker = {
   id: string;
@@ -109,52 +104,43 @@ const EventFestivalProgramSection = ({
     try {
       // Generate unique filename
       const timestamp = Date.now();
-      const fileExt = file.name.split('.').pop() || 'jpg';
-      const filePath = `program-images/${timestamp}.${fileExt}`;
+      const fileExt = file.name.split('.').pop();
+      const fileName = `festival-program-${timestamp}.${fileExt}`;
 
-      // Upload image
-      const { error } = await supabase.storage
+      // Upload to Supabase Storage
+      const { data, error } = await supabase.storage
         .from('images')
-        .upload(filePath, file);
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
 
       if (error) throw error;
 
-      // Update program item
-      setCurrentProgramItem(prev => ({
-        ...prev,
-        image_url: filePath
-      }));
+      // Update program item with image URL
+      setCurrentProgramItem({
+        ...currentProgramItem,
+        image_url: data.path
+      });
 
       // Set preview URL
-      setProgramPreviewUrl(`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/images/${filePath}`);
+      setProgramPreviewUrl(`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/images/${data.path}`);
 
-      toast.success('Изображение успешно загружено');
+      toast.success('Изображение загружено');
     } catch (error) {
-      console.error('Error uploading program image:', error);
-      toast.error('Ошибка при загрузке изображения');
+      console.error('Error uploading image:', error);
+      toast.error('Ошибка загрузки изображения');
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      handleImageUpload(file);
-    }
-  };
+  const activeSpeakers = allSpeakers?.filter(s => s.active) || [];
 
   return (
-    <div className="bg-white dark:bg-dark-800 rounded-2xl shadow-lg p-8 border border-gray-100 dark:border-gray-700">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center">
-          <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-pink-100 to-pink-200 dark:from-pink-900/30 dark:to-pink-800/30 rounded-xl mr-4">
-            <Calendar className="w-6 h-6 text-pink-600 dark:text-pink-400" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white font-heading">Программа фестиваля</h2>
-            <p className="text-gray-500 dark:text-gray-400">Добавьте пункты программы</p>
-          </div>
-        </div>
-        
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+          Программа фестиваля
+        </h3>
         <button
           type="button"
           onClick={() => {
@@ -168,16 +154,15 @@ const EventFestivalProgramSection = ({
             });
             setEditingProgramIndex(null);
             setShowProgramForm(true);
-            setProgramPreviewUrl(null);
           }}
-          className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+          className="btn-primary flex items-center gap-2"
         >
-          <Plus className="h-5 w-5" />
+          <Plus className="h-4 w-4" />
           Добавить пункт
         </button>
       </div>
-      
-      {showProgramForm ? (
+
+      {showProgramForm && (
         <div className="bg-gray-50 dark:bg-dark-700 rounded-xl p-6 mb-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
             {editingProgramIndex !== null ? 'Редактирование пункта программы' : 'Новый пункт программы'}
@@ -222,7 +207,25 @@ const EventFestivalProgramSection = ({
                 />
               </div>
             </div>
-            
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                Спикер
+              </label>
+              <select
+                value={currentProgramItem.lecturer_id}
+                onChange={(e) => setCurrentProgramItem({...currentProgramItem, lecturer_id: e.target.value})}
+                className="w-full p-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-800 text-gray-900 dark:text-white focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800 transition-all duration-200"
+              >
+                <option value="">Выберите спикера</option>
+                {activeSpeakers.map((speaker) => (
+                  <option key={speaker.id} value={speaker.id}>
+                    {speaker.name} - {speaker.field_of_expertise}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div>
               <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                 Описание
@@ -235,86 +238,68 @@ const EventFestivalProgramSection = ({
                 placeholder="Описание пункта программы"
               />
             </div>
-            
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                Спикер
-              </label>
-              <select
-                value={currentProgramItem.lecturer_id}
-                onChange={(e) => setCurrentProgramItem({...currentProgramItem, lecturer_id: e.target.value})}
-                className="w-full p-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-800 text-gray-900 dark:text-white focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800 transition-all duration-200"
-              >
-                <option value="">Выберите спикера</option>
-                {allSpeakers.map(speaker => (
-                  <option key={speaker.id} value={speaker.id}>{speaker.name}</option>
-                ))}
-              </select>
-            </div>
-            
+
             <div>
               <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                 Изображение
               </label>
-              
-              {programPreviewUrl ? (
-                <div className="relative">
-                  <img
-                    src={programPreviewUrl}
-                    alt="Preview"
-                    className="w-full h-48 object-cover rounded-lg"
-                  />
-                  <div className="absolute bottom-2 right-2 flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="p-2 bg-white/90 hover:bg-white text-dark-800 rounded-full shadow-lg"
-                      title="Изменить изображение"
-                    >
-                      <Edit className="h-5 w-5" />
-                    </button>
+              <div className="space-y-4">
+                {programPreviewUrl && (
+                  <div className="relative w-full h-48 rounded-lg overflow-hidden">
+                    <img
+                      src={programPreviewUrl}
+                      alt="Preview"
+                      className="w-full h-full object-cover"
+                    />
                     <button
                       type="button"
                       onClick={() => {
-                        setCurrentProgramItem({...currentProgramItem, image_url: ''});
                         setProgramPreviewUrl(null);
+                        setCurrentProgramItem({...currentProgramItem, image_url: ''});
                       }}
-                      className="p-2 bg-red-600/90 hover:bg-red-600 text-white rounded-full shadow-lg"
-                      title="Удалить изображение"
+                      className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
                     >
-                      <Trash2 className="h-5 w-5" />
+                      <X className="h-4 w-4" />
                     </button>
                   </div>
-                </div>
-              ) : (
-                <div className="border-2 border-dashed border-gray-300 dark:border-dark-600 rounded-lg p-6 text-center">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                  <div className="flex flex-col items-center">
-                    <div className="mb-3 p-2 bg-gray-100 dark:bg-dark-700 rounded-full">
-                      <ImageIcon className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+                )}
+                
+                <div className="flex items-center justify-center w-full">
+                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 dark:hover:bg-dark-600 dark:bg-dark-700 hover:bg-gray-100 dark:border-gray-600 dark:hover:border-gray-500">
+                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                      <ImageIcon className="w-8 h-8 mb-4 text-gray-500 dark:text-gray-400" />
+                      <p className="mb-2 text-sm text-gray-500 dark:text-gray-400">
+                        <span className="font-semibold">Нажмите для загрузки</span> или перетащите файл
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">PNG, JPG или WEBP (макс. 10MB)</p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white rounded-md transition-colors text-sm"
-                    >
-                      Загрузить изображение
-                    </button>
-                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                      Рекомендуемый размер: 800x600px
-                    </p>
-                  </div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="hidden"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          handleImageUpload(file);
+                        }
+                      }}
+                    />
+                  </label>
                 </div>
-              )}
+              </div>
             </div>
-            
-            <div className="flex justify-end gap-3 pt-4">
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handleAddProgramItem}
+                className="btn-primary flex items-center gap-2"
+              >
+                <Check className="h-4 w-4" />
+                {editingProgramIndex !== null ? 'Сохранить изменения' : 'Добавить пункт'}
+              </button>
+              
               <button
                 type="button"
                 onClick={() => {
@@ -327,38 +312,30 @@ const EventFestivalProgramSection = ({
                     end_time: '',
                     lecturer_id: ''
                   });
+                  setEditingProgramIndex(null);
                   setProgramPreviewUrl(null);
                 }}
-                className="px-4 py-2 border border-gray-300 dark:border-dark-600 rounded-md hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors"
+                className="btn-secondary flex items-center gap-2"
               >
+                <X className="h-4 w-4" />
                 Отмена
-              </button>
-              <button
-                type="button"
-                onClick={handleAddProgramItem}
-                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
-              >
-                {editingProgramIndex !== null ? 'Сохранить изменения' : 'Добавить пункт'}
               </button>
             </div>
           </div>
         </div>
-      ) : null}
-      
+      )}
+
       {festivalProgram && festivalProgram.length > 0 ? (
         <div className="space-y-4">
           {festivalProgram.map((item, index) => {
-            const speaker = allSpeakers.find(s => s.id === item.lecturer_id);
+            const speaker = activeSpeakers.find(s => s.id === item.lecturer_id);
             
             return (
-              <div 
-                key={index}
-                className="bg-gray-50 dark:bg-dark-700 rounded-xl p-4 border border-gray-200 dark:border-dark-600"
-              >
-                <div className="flex justify-between items-start">
-                  <div className="flex items-start gap-4">
+              <div key={index} className="bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 rounded-xl p-6">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
                     {item.image_url && (
-                      <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
+                      <div className="w-20 h-20 rounded-lg overflow-hidden mb-4 float-right ml-4">
                         <img
                           src={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/images/${item.image_url}`}
                           alt={item.title}
@@ -367,26 +344,27 @@ const EventFestivalProgramSection = ({
                       </div>
                     )}
                     
-                    <div>
-                      <h3 className="font-semibold text-gray-900 dark:text-white">{item.title}</h3>
-                      <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        <div className="flex items-center">
-                          <Clock className="h-4 w-4 mr-1" />
-                          <span>{item.start_time} - {item.end_time}</span>
-                        </div>
-                        {speaker && (
-                          <div className="flex items-center">
-                            <Users className="h-4 w-4 mr-1" />
-                            <span>{speaker.name}</span>
-                          </div>
-                        )}
+                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                      {item.title}
+                    </h4>
+                    
+                    <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400 mb-2">
+                      <div className="flex items-center">
+                        <Clock className="h-4 w-4 mr-1" />
+                        <span>{item.start_time} - {item.end_time}</span>
                       </div>
-                      {item.description && (
-                        <p className="text-sm text-gray-600 dark:text-gray-300 mt-2 line-clamp-2">
-                          {item.description}
-                        </p>
+                      {speaker && (
+                        <div className="flex items-center">
+                          <Users className="h-4 w-4 mr-1" />
+                          <span>{speaker.name}</span>
+                        </div>
                       )}
                     </div>
+                    {item.description && (
+                      <p className="text-sm text-gray-600 dark:text-gray-300 mt-2 line-clamp-2">
+                        {item.description}
+                      </p>
+                    )}
                   </div>
                   
                   <div className="flex gap-2">
