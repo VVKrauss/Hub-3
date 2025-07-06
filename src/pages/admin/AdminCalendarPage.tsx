@@ -294,25 +294,29 @@ const AdminCalendarPage = () => {
   const groupedSlots = useSlotGrouping(filteredSlots);
   const getSlotPosition = useSlotPositioning();
 
-  // ОБНОВЛЕННАЯ ФУНКЦИЯ ЗАГРУЗКИ ИЗ НОВОЙ ТАБЛИЦЫ
-  const fetchTimeSlots = useCallback(async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('sh_time_slots')
-        .select('*')
-        .order('start_at', { ascending: true });
 
-      if (error) throw error;
-      setTimeSlots(data || []);
-    } catch (err) {
-      console.error('Error fetching time slots:', err);
-      toast.error('Ошибка загрузки слотов');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+const fetchTimeSlots = useCallback(async () => {
+  try {
+    setLoading(true);
+    
+    // ИЗМЕНЕНО: Используем sh_time_slots вместо time_slots_table
+    const { data, error } = await supabase
+      .from('sh_time_slots')
+      .select('*')
+      .order('start_at', { ascending: true });
 
+    if (error) throw error;
+    setTimeSlots(data || []);
+  } catch (err) {
+    console.error('Error fetching time slots:', err);
+    toast.error('Ошибка загрузки слотов');
+  } finally {
+    setLoading(false);
+  }
+}, []);
+
+
+  
   useEffect(() => {
     fetchTimeSlots();
   }, [fetchTimeSlots]);
