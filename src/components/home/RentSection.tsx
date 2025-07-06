@@ -1,3 +1,5 @@
+
+
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
@@ -16,92 +18,66 @@ const RentSection = () => {
   const [data, setData] = useState<RentSectionData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const imageRef = useRef<HTMLImageElement>(null);
-  const textBlockRef = useRef<HTMLDivElement>(null);
-  const imageContainerRef = useRef<HTMLDivElement>(null);
+  const isMountedRef = useRef(true);
 
+  // ИСПРАВЛЕННАЯ ВЕРСИЯ - только один раз загружаем данные
   useEffect(() => {
-    let isMounted = true;
+    isMountedRef.current = true;
     
     const fetchRentData = async () => {
       try {
+        if (!isMountedRef.current) return;
+        
+        console.log('🚀 Fetching rent section data...');
         const { data: settings, error } = await supabase
           .from('site_settings')
           .select('rent_selection')
           .single();
 
-        if (!isMounted) return;
+        if (!isMountedRef.current) return;
 
-        if (error) throw error;
+        if (error) {
+          console.log('No rent settings found, hiding section');
+          return;
+        }
 
         if (settings?.rent_selection) {
           setData(settings.rent_selection);
+          console.log('✅ Rent section data loaded');
         }
       } catch (err) {
-        console.error('Error fetching Rent section data:', err);
-        if (isMounted) setError('Не удалось загрузить данные');
+        console.error('❌ Error fetching Rent section data:', err);
+        if (isMountedRef.current) {
+          setError('Не удалось загрузить данные');
+        }
       } finally {
-        if (isMounted) setIsLoading(false);
+        if (isMountedRef.current) {
+          setIsLoading(false);
+        }
       }
     };
 
     fetchRentData();
 
     return () => {
-      isMounted = false;
+      isMountedRef.current = false;
     };
-  }, []);
-
-  useEffect(() => {
-    if (!data?.image || !imageRef.current) return;
-
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          const img = entry.target as HTMLImageElement;
-          img.src = img.dataset.src || '';
-          observer.unobserve(img);
-        }
-      });
-    }, {
-      rootMargin: '200px',
-      threshold: 0.1
-    });
-
-    observer.observe(imageRef.current);
-
-    return () => {
-      if (imageRef.current) {
-        observer.unobserve(imageRef.current);
-      }
-    };
-  }, [data?.image]);
-
-  // Ресайз обсервер для текстового блока
-  useEffect(() => {
-    if (!textBlockRef.current || !imageContainerRef.current) return;
-
-    const resizeObserver = new ResizeObserver((entries) => {
-      for (let entry of entries) {
-        if (entry.target === textBlockRef.current) {
-          imageContainerRef.current.style.height = `${entry.contentRect.height}px`;
-        }
-      }
-    });
-
-    resizeObserver.observe(textBlockRef.current);
-
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, [data]);
+  }, []); // КРИТИЧНО: пустой массив зависимостей
 
   if (isLoading) {
-    return <div className="section bg-white dark:bg-dark-900 min-h-[400px] flex items-center justify-center">Загрузка...</div>;
+    return (
+      <div className="section bg-white dark:bg-dark-900 min-h-[400px] flex items-center justify-center">
+        <div className="animate-pulse">Загрузка...</div>
+      </div>
+    );
   }
 
   if (error) {
-    return <div className="section bg-white dark:bg-dark-900 min-h-[400px] flex items-center justify-center text-red-500">{error}</div>;
+    return (
+      <div className="section bg-white dark:bg-dark-900 min-h-[400px] flex items-center justify-center text-red-500">
+        {error}
+      </div>
+    );
   }
 
   if (!data || !data.enabled) {
@@ -110,39 +86,28 @@ const RentSection = () => {
 
   return (
     <section className="section bg-white dark:bg-dark-900">
-      <div className="container grid-layout items-start">
-        {/* Изображение теперь первое в DOM для мобильных устройств */}
-        <div 
-          className="image-content order-1 md:order-none mt-8 md:mt-0" 
-          ref={imageContainerRef}
-        >
-          <div className="w-full h-full rounded-lg overflow-hidden relative">
-            <img 
-              ref={imageRef}
-              data-src={getSupabaseImageUrl(data.image)}
-              alt={data.title}
-              className="absolute inset-0 w-full h-full object-cover"
-              loading="lazy"
-              width="600"
-              height="400"
-            />
-          </div>
-        </div>
-        
-        {/* Текстовый блок */}
-        <div className="text-content order-2 md:order-none" ref={textBlockRef}>
+      <div className="container grid-layout items-center">
+        <div className="text-content">
           <h3 className="mb-6">{data.title}</h3>
           <div 
             className="text-base space-y-4 mb-8"
-            dangerouslySetInnerHTML={{ __html: data.description }}
+            dangerouslySetInnerHTML={{ __html: data.description }} 
           />
           <Link 
             to="/rent" 
             className="inline-flex items-center text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 transition-colors font-medium"
           >
-            Забронировать
+            Узнать больше
             <ArrowRight className="ml-2" />
           </Link>
+        </div>
+        <div className="image-content mt-8 md:mt-0">
+          <img 
+            src={getSupabaseImageUrl(data.image)} 
+            alt={data.title} 
+            className="w-full h-auto rounded-lg shadow-md"
+            loading="lazy"
+          />
         </div>
       </div>
     </section>
