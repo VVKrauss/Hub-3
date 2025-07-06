@@ -1,20 +1,20 @@
 // src/components/layout/Layout.tsx
-// Добавляем отладчик в Layout
+// Добавляем отладчик в существующий Layout
 
-import { memo } from 'react';
-import Header from './Header';
+import { ReactNode } from 'react';
+import TopBar from './TopBar';
 import Footer from './Footer';
 import LoadingDebugger from '../debug/LoadingDebugger';
 
-interface LayoutProps {
-  children: React.ReactNode;
-}
+type LayoutProps = {
+  children: ReactNode;
+};
 
-const Layout = memo(({ children }: LayoutProps) => {
+const Layout = ({ children }: LayoutProps) => {
   return (
-    <div className="min-h-screen bg-white dark:bg-dark-900">
-      <Header />
-      <main className="relative">
+    <div className="flex flex-col min-h-screen">
+      <TopBar />
+      <main className="flex-grow">
         {children}
       </main>
       <Footer />
@@ -23,7 +23,6 @@ const Layout = memo(({ children }: LayoutProps) => {
       {process.env.NODE_ENV === 'development' && <LoadingDebugger />}
     </div>
   );
-});
+};
 
-Layout.displayName = 'Layout';
 export default Layout;
