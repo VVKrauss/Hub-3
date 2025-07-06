@@ -1,6 +1,6 @@
-// src/pages/admin/AdminCoworking.tsx - НОВАЯ ВЕРСИЯ
+// src/pages/admin/AdminCoworking.tsx - Упрощенная версия
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Edit, Trash2, ChevronUp, ChevronDown, Save, X, Building, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, ChevronUp, ChevronDown, Save, X, Building } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import {
   getCoworkingPageSettings,
@@ -9,12 +9,10 @@ import {
   updateCoworkingService,
   deleteCoworkingService,
   reorderCoworkingServices,
-  checkLegacyCoworkingData,
   type CoworkingService,
   type CoworkingHeader,
   type CoworkingPageSettings
 } from '../../api/coworking';
-import { migrateLegacyCoworkingData } from '../../utils/coworkingMigration';
 
 const AdminCoworking: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -41,17 +39,9 @@ const AdminCoworking: React.FC = () => {
     main_service: false
   });
   const [showForm, setShowForm] = useState(false);
-  const [showMigrationPanel, setShowMigrationPanel] = useState(false);
-  const [migrating, setMigrating] = useState(false);
-  const [legacyDataStatus, setLegacyDataStatus] = useState({
-    hasLegacyHeader: false,
-    hasLegacyServices: false,
-    legacyServicesCount: 0
-  });
 
   useEffect(() => {
     fetchData();
-    checkForLegacyData();
   }, []);
 
   const fetchData = async () => {
@@ -86,19 +76,6 @@ const AdminCoworking: React.FC = () => {
       toast.error('Не удалось загрузить данные');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const checkForLegacyData = async () => {
-    try {
-      const status = await checkLegacyCoworkingData();
-      setLegacyDataStatus(status);
-      
-      if (status.hasLegacyHeader || status.hasLegacyServices) {
-        setShowMigrationPanel(true);
-      }
-    } catch (error) {
-      console.error('Error checking legacy data:', error);
     }
   };
 
@@ -208,27 +185,6 @@ const AdminCoworking: React.FC = () => {
     }
   };
 
-  const handleMigration = async () => {
-    try {
-      setMigrating(true);
-      const success = await migrateLegacyCoworkingData();
-      
-      if (success) {
-        toast.success('Данные успешно перенесены!');
-        setShowMigrationPanel(false);
-        await fetchData();
-        await checkForLegacyData();
-      } else {
-        toast.error('Ошибка при переносе данных');
-      }
-    } catch (error) {
-      console.error('Migration error:', error);
-      toast.error('Ошибка при переносе данных');
-    } finally {
-      setMigrating(false);
-    }
-  };
-
   const services = pageSettings?.services || [];
   const filteredServices = services.filter(service =>
     service.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -259,41 +215,6 @@ const AdminCoworking: React.FC = () => {
         {error && (
           <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
             <p className="text-red-600 dark:text-red-400">{error}</p>
-          </div>
-        )}
-
-        {/* Migration Panel */}
-        {showMigrationPanel && (
-          <div className="mb-8 p-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-            <div className="flex items-start gap-4">
-              <AlertTriangle className="w-6 h-6 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-1" />
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-amber-800 dark:text-amber-200 mb-2">
-                  Обнаружены данные в старом формате
-                </h3>
-                <p className="text-amber-700 dark:text-amber-300 mb-4">
-                  Найдены данные коворкинга в старой схеме базы данных:
-                  {legacyDataStatus.hasLegacyHeader && " заголовок"}
-                  {legacyDataStatus.hasLegacyServices && ` ${legacyDataStatus.legacyServicesCount} услуг`}
-                  . Рекомендуется выполнить миграцию для перехода на новую систему.
-                </p>
-                <div className="flex gap-4">
-                  <button
-                    onClick={handleMigration}
-                    disabled={migrating}
-                    className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50"
-                  >
-                    {migrating ? 'Переношу...' : 'Перенести данные'}
-                  </button>
-                  <button
-                    onClick={() => setShowMigrationPanel(false)}
-                    className="px-4 py-2 border border-amber-300 text-amber-700 rounded-lg hover:bg-amber-50"
-                  >
-                    Скрыть
-                  </button>
-                </div>
-              </div>
-            </div>
           </div>
         )}
 
@@ -611,25 +532,6 @@ const AdminCoworking: React.FC = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Описание
-                  </label>
-                  <textarea
-                    value={editData ? editData.description || '' : newService.description}
-                    onChange={(e) => {
-                      if (editData) {
-                        setEditData({...editData, description: e.target.value});
-                      } else {
-                        setNewService({...newService, description: e.target.value});
-                      }
-                    }}
-                    rows={3}
-                    className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
-                    placeholder="Описание услуги"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     URL изображения
                   </label>
                   <input
@@ -711,4 +613,23 @@ const AdminCoworking: React.FC = () => {
   );
 };
 
-export default AdminCoworking;
+export default AdminCoworking;gray-300 mb-2">
+                    Описание
+                  </label>
+                  <textarea
+                    value={editData ? editData.description || '' : newService.description}
+                    onChange={(e) => {
+                      if (editData) {
+                        setEditData({...editData, description: e.target.value});
+                      } else {
+                        setNewService({...newService, description: e.target.value});
+                      }
+                    }}
+                    rows={3}
+                    className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
+                    placeholder="Описание услуги"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-
