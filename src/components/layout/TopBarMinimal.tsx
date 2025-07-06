@@ -1,64 +1,121 @@
-// src/components/layout/TopBarMinimal.tsx
-// МИНИМАЛЬНАЯ ВЕРСИЯ TopBar - начинаем с самого простого
+// src/components/layout/TopBarStep2.tsx
+// ШАГ 2: Добавляем загрузку навигации из API (ОСТОРОЖНО!)
 
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu, X, Sun, Moon } from 'lucide-react';
+import { getNavigationItems } from '../../api/settings';
 
-// Простые типы без сложной логики
-interface SimpleNavItem {
+interface NavItem {
   id: string;
   label: string;
   path: string;
   visible: boolean;
+  order?: number;
 }
 
-// СТАТИЧЕСКАЯ навигация без API вызовов
-const STATIC_NAV_ITEMS: SimpleNavItem[] = [
-  { id: 'home', label: 'Главная', path: '/', visible: true },
-  { id: 'events', label: 'События', path: '/events', visible: true },
-  { id: 'courses', label: 'Курсы', path: '/courses', visible: true },
-  { id: 'speakers', label: 'Спикеры', path: '/speakers', visible: true },
-  { id: 'coworking', label: 'Коворкинг', path: '/coworking', visible: true },
-  { id: 'rent', label: 'Аренда', path: '/rent', visible: true },
-  { id: 'about', label: 'О нас', path: '/about', visible: true }
+// FALLBACK навигация - на случай ошибок API
+const FALLBACK_NAV_ITEMS: NavItem[] = [
+  { id: 'home', label: 'Главная', path: '/', visible: true, order: 0 },
+  { id: 'events', label: 'События', path: '/events', visible: true, order: 1 },
+  { id: 'courses', label: 'Курсы', path: '/courses', visible: true, order: 2 }, // ← КУРСЫ ВКЛЮЧЕНЫ!
+  { id: 'speakers', label: 'Спикеры', path: '/speakers', visible: true, order: 3 },
+  { id: 'coworking', label: 'Коворкинг', path: '/coworking', visible: true, order: 4 },
+  { id: 'rent', label: 'Аренда', path: '/rent', visible: true, order: 5 },
+  { id: 'about', label: 'О нас', path: '/about', visible: true, order: 6 }
 ];
 
-const TopBarMinimal = () => {
+const TopBarStep2 = () => {
   const location = useLocation();
   
-  // МИНИМАЛЬНОЕ состояние - только необходимое
+  // Состояния
+  const [navItems, setNavItems] = useState<NavItem[]>(FALLBACK_NAV_ITEMS); // Начинаем с fallback
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [loading, setLoading] = useState(false); // НЕ true! Не блокируем рендеринг
+  const [apiError, setApiError] = useState<string | null>(null);
   
-  // Простой ref для меню без сложной логики
   const menuRef = useRef<HTMLDivElement>(null);
+  const isMountedRef = useRef(true);
+  const apiLoadedRef = useRef(false); // Предотвращаем повторные загрузки
 
-  // ЕДИНСТВЕННЫЙ useEffect - только для темы из localStorage
+  // Инициализация темы (как раньше)
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
     if (savedTheme) {
       setTheme(savedTheme);
       document.documentElement.classList.toggle('dark', savedTheme === 'dark');
     }
-  }, []); // Пустой массив зависимостей!
+  }, []);
 
-  // Простой обработчик клика вне меню БЕЗ useEffect
-  const handleClickOutside = (event: MouseEvent) => {
-    if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-      setMobileMenuOpen(false);
-    }
-  };
+  // НОВЫЙ: Загрузка навигации из API - ОДИН РАЗ
+  useEffect(() => {
+    if (apiLoadedRef.current) return; // Предотвращаем повторные вызовы
+    
+    const loadNavigation = async () => {
+      try {
+        if (!isMountedRef.current) return;
+        
+        console.log('🔄 TopBar Step 2: Загружаем навигацию из API...');
+        setLoading(true);
+        setApiError(null);
+        
+        // БЕЗОПАСНЫЙ API вызов с таймаутом
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout')), 5000)
+        );
+        
+        const apiCall = getNavigationItems();
+        const response = await Promise.race([apiCall, timeoutPromise]);
+        
+        if (!isMountedRef.current) return; // Проверяем после async операции
+        
+        if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+          // Сортируем по order
+          const sortedItems = response.data.sort((a, b) => (a.order || 0) - (b.order || 0));
+          setNavItems(sortedItems);
+          console.log('✅ TopBar Step 2: Навигация загружена из API', sortedItems);
+        } else {
+          console.warn('⚠️ TopBar Step 2: API вернул пустые данные, используем fallback');
+          setNavItems(FALLBACK_NAV_ITEMS);
+        }
+        
+        apiLoadedRef.current = true; // Помечаем как загруженное
+        
+      } catch (error) {
+        console.error('❌ TopBar Step 2: Ошибка загрузки навигации:', error);
+        
+        if (isMountedRef.current) {
+          setApiError(error.message);
+          setNavItems(FALLBACK_NAV_ITEMS); // Всегда fallback при ошибке
+        }
+      } finally {
+        if (isMountedRef.current) {
+          setLoading(false);
+        }
+      }
+    };
 
-  // Добавляем/удаляем слушатель только при открытии/закрытии меню
+    loadNavigation();
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []); // КРИТИЧНО: пустой массив зависимостей!
+
+  // Обработчик клика вне меню
   useEffect(() => {
     if (mobileMenuOpen) {
+      const handleClickOutside = (event: MouseEvent) => {
+        if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+          setMobileMenuOpen(false);
+        }
+      };
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [mobileMenuOpen]);
 
-  // Простая функция переключения темы
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
@@ -66,8 +123,8 @@ const TopBarMinimal = () => {
     document.documentElement.classList.toggle('dark', newTheme === 'dark');
   };
 
-  // Фильтруем видимые элементы БЕЗ useMemo
-  const visibleNavItems = STATIC_NAV_ITEMS.filter(item => item.visible);
+  // Фильтруем видимые элементы
+  const visibleNavItems = navItems.filter(item => item.visible);
 
   return (
     <header className="sticky top-0 z-50 bg-white dark:bg-gray-900 shadow-sm border-b border-gray-200 dark:border-gray-700">
@@ -84,7 +141,7 @@ const TopBarMinimal = () => {
             </span>
           </Link>
           
-          {/* Desktop Navigation - СТАТИЧЕСКАЯ */}
+          {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center justify-center flex-1 space-x-6">
             {visibleNavItems.map(item => (
               <Link 
@@ -99,6 +156,14 @@ const TopBarMinimal = () => {
                 {item.label}
               </Link>
             ))}
+            
+            {/* Показываем индикатор загрузки, если API еще не загрузился */}
+            {loading && (
+              <div className="flex items-center gap-2 text-blue-600">
+                <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                <span className="text-sm">Загрузка...</span>
+              </div>
+            )}
           </nav>
 
           {/* Desktop Controls */}
@@ -111,7 +176,6 @@ const TopBarMinimal = () => {
               {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>
             
-            {/* Простая кнопка входа */}
             <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
               Войти
             </button>
@@ -131,10 +195,7 @@ const TopBarMinimal = () => {
 
         {/* Mobile Navigation */}
         {mobileMenuOpen && (
-          <div 
-            ref={menuRef}
-            className="md:hidden border-t border-gray-200 dark:border-gray-700 py-4"
-          >
+          <div ref={menuRef} className="md:hidden border-t border-gray-200 dark:border-gray-700 py-4">
             <nav className="space-y-2">
               {visibleNavItems.map(item => (
                 <Link
@@ -151,7 +212,6 @@ const TopBarMinimal = () => {
                 </Link>
               ))}
               
-              {/* Mobile Theme Toggle */}
               <button
                 onClick={toggleTheme}
                 className="w-full flex items-center justify-between py-3 px-4 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
@@ -160,7 +220,6 @@ const TopBarMinimal = () => {
                 {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
               </button>
 
-              {/* Mobile Login */}
               <button className="w-full mt-3 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
                 Войти
               </button>
@@ -170,16 +229,26 @@ const TopBarMinimal = () => {
       </div>
       
       {/* Debug Info */}
-      <div className="bg-green-100 border-l-4 border-green-500 p-2 text-xs">
-        <p className="text-green-700">
-          ✅ TopBar Minimal работает | 
-          Тема: {theme} | 
-          Мобильное меню: {mobileMenuOpen ? 'открыто' : 'закрыто'} |
-          Текущая страница: {location.pathname}
+      <div className={`border-l-4 p-2 text-xs ${
+        apiError ? 'bg-red-100 border-red-500' : 
+        loading ? 'bg-yellow-100 border-yellow-500' : 
+        'bg-blue-100 border-blue-500'
+      }`}>
+        <p className={`${
+          apiError ? 'text-red-700' : 
+          loading ? 'text-yellow-700' : 
+          'text-blue-700'
+        }`}>
+          🔄 TopBar Step 2 (API навигация) | 
+          Источник: {apiLoadedRef.current ? 'API' : 'Fallback'} | 
+          Элементов: {visibleNavItems.length} | 
+          {loading && 'Загружается...'} 
+          {apiError && `Ошибка: ${apiError}`}
+          {!loading && !apiError && 'Готов'}
         </p>
       </div>
     </header>
   );
 };
 
-export default TopBarMinimal;
+export default TopBarStep2;
