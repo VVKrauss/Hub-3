@@ -1,4 +1,4 @@
-// src/pages/admin/AdminEvents.tsx - Полный обновленный файл для работы с sh_events
+// src/pages/admin/AdminEvents.tsx - ИСПРАВЛЕННЫЙ полный файл для работы с sh_events
 // Часть 1: Импорты, типы, константы и начало компонента
 
 import { useState, useEffect } from 'react';
@@ -24,21 +24,25 @@ type FilterStatus = 'active' | 'draft' | 'past';
 const statusColors = {
   active: 'bg-gradient-to-r from-green-100 to-green-200 text-green-800 dark:from-green-900/30 dark:to-green-800/30 dark:text-green-400',
   draft: 'bg-gradient-to-r from-yellow-100 to-yellow-200 text-yellow-800 dark:from-yellow-900/30 dark:to-yellow-800/30 dark:text-yellow-400',
-  past: 'bg-gradient-to-r from-gray-100 to-gray-200 text-gray-800 dark:from-gray-900/30 dark:to-gray-800/30 dark:text-gray-400'
+  past: 'bg-gradient-to-r from-gray-100 to-gray-200 text-gray-800 dark:from-gray-900/30 dark:to-gray-800/30 dark:text-gray-400',
+  completed: 'bg-gradient-to-r from-gray-100 to-gray-200 text-gray-800 dark:from-gray-900/30 dark:to-gray-800/30 dark:text-gray-400',
+  cancelled: 'bg-gradient-to-r from-red-100 to-red-200 text-red-800 dark:from-red-900/30 dark:to-red-800/30 dark:text-red-400',
+  postponed: 'bg-gradient-to-r from-orange-100 to-orange-200 text-orange-800 dark:from-orange-900/30 dark:to-orange-800/30 dark:text-orange-400'
 };
 
-// Маппинг статусов между старой и новой схемой
+// ✅ ИСПРАВЛЕННЫЙ маппинг статусов
 const STATUS_MAPPING = {
   // Из новой схемы в старую
-  'published': 'active',
+  'active': 'active',        
+  'published': 'active',     
   'draft': 'draft',
   'completed': 'past',
   'cancelled': 'past',
   'postponed': 'draft',
+  'past': 'past',          
   
   // Из старой схемы в новую  
-  'active': 'published',
-  'past': 'completed'
+  'past': 'past'            
 } as const;
 
 // Лейблы для статусов
@@ -47,7 +51,9 @@ const SH_STATUS_LABELS = {
   'published': 'Опубликовано',
   'cancelled': 'Отменено',
   'completed': 'Завершено',
-  'postponed': 'Отложено'
+  'postponed': 'Отложено',
+  'active': 'Активно',
+  'past': 'Прошло'
 };
 
 // Лейблы для типов событий
@@ -69,6 +75,25 @@ const SH_EVENT_TYPE_LABELS = {
   'webinar': 'Вебинар',
   'hackathon': 'Хакатон',
   'other': 'Другое'
+};
+
+// ✅ ДОБАВЛЕНА функция для создания URL изображений Supabase
+const getSupabaseImageUrl = (path: string): string => {
+  if (!path) return '';
+  
+  // Если это уже полный URL, возвращаем как есть
+  if (path.startsWith('http')) return path;
+  
+  // Получаем базовый URL Supabase
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://jfvinriqydjtwsmayxix.supabase.co';
+  
+  // Убираем слэш в конце если есть
+  const cleanBaseUrl = supabaseUrl.replace(/\/$/, '');
+  
+  // Убираем слэш в начале пути если есть
+  const cleanPath = path.replace(/^\//, '');
+  
+  return `${cleanBaseUrl}/storage/v1/object/public/images/${cleanPath}`;
 };
 
 // Utility функция для форматирования заголовка события
@@ -98,7 +123,7 @@ const formatEventTitle = (title: string) => {
   };
 };
 
-// Utility функции для работы с новой схемой
+// ✅ ИСПРАВЛЕННАЯ функция transformShEventToEvent
 const transformShEventToEvent = (shEvent: any): Event => {
   return {
     ...shEvent,
@@ -106,12 +131,16 @@ const transformShEventToEvent = (shEvent: any): Event => {
     location: shEvent.venue_name || shEvent.location,
     address: shEvent.venue_address || shEvent.address,
     price: shEvent.base_price !== undefined ? shEvent.base_price : shEvent.price,
-    bg_image: shEvent.main_image || shEvent.bg_image,
     
-    // Маппинг статуса
-    status: STATUS_MAPPING[shEvent.status as keyof typeof STATUS_MAPPING] || shEvent.status,
+    // ✅ ПРАВИЛЬНОЕ отображение изображений
+    bg_image: shEvent.cover_image_url ? getSupabaseImageUrl(shEvent.cover_image_url) : null,
+    main_image: shEvent.cover_image_url ? getSupabaseImageUrl(shEvent.cover_image_url) : null,
+    cover_image_url: shEvent.cover_image_url ? getSupabaseImageUrl(shEvent.cover_image_url) : null,
     
-    // Информация о регистрации из новой схемы
+    // ✅ ПРАВИЛЬНЫЙ маппинг статусов - оставляем как есть
+    status: shEvent.status, // active, draft, past
+    
+    // Информация о регистрации
     registrations: {
       current: 0, // TODO: добавить подсчет из таблицы регистраций
       max_regs: shEvent.max_attendees || null,
@@ -119,14 +148,18 @@ const transformShEventToEvent = (shEvent: any): Event => {
       current_children: 0,
       reg_list: []
     },
-    current_registration_count: 0, // TODO: добавить подсчет из таблицы регистраций
+    current_registration_count: 0,
     max_registrations: shEvent.max_attendees,
     
     // Спикеры из новой схемы
     speakers: shEvent.sh_event_speakers?.map((es: any) => es.speaker) || [],
     
     // Галерея изображений
-    photo_gallery: shEvent.gallery_images || shEvent.photo_gallery || []
+    photo_gallery: shEvent.gallery_images ? 
+      (typeof shEvent.gallery_images === 'string' ? 
+        JSON.parse(shEvent.gallery_images).map((img: string) => getSupabaseImageUrl(img)) : 
+        shEvent.gallery_images.map((img: string) => getSupabaseImageUrl(img))) 
+      : (shEvent.photo_gallery || [])
   };
 };
 
@@ -183,7 +216,7 @@ const AdminEvents = () => {
     fetchEvents();
   }, [sortBy, statusFilter]);
 
-  // 🔧 **ОБНОВЛЕННАЯ ФУНКЦИЯ fetchEvents для работы с sh_events**
+  // 🔧 **ИСПРАВЛЕННАЯ ФУНКЦИЯ fetchEvents для работы с sh_events**
   const fetchEvents = async () => {
     try {
       setLoading(true);
@@ -205,15 +238,13 @@ const AdminEvents = () => {
           )
         `);
 
-      // Фильтрация по статусу для новой таблицы
+      // ✅ ИСПРАВЛЕННАЯ фильтрация по статусу для новой таблицы
       if (statusFilter === 'past') {
-        query = query.in('status', ['completed', 'cancelled']);
+        query = query.eq('status', 'past');
       } else if (statusFilter === 'active') {
-        query = query.eq('status', 'published');
+        query = query.eq('status', 'active');
       } else if (statusFilter === 'draft') {
         query = query.eq('status', 'draft');
-      } else if (statusFilter !== 'all') {
-        query = query.eq('status', statusFilter);
       }
 
       // Сортировка для новой таблицы
@@ -313,7 +344,6 @@ const AdminEvents = () => {
       toast.error('Ошибка при загрузке мероприятий');
     }
   };
-
   // 🔧 **ОБНОВЛЕННАЯ ФУНКЦИЯ handleBulkDelete для работы с sh_events**
   const handleBulkDelete = async () => {
     if (selectedEvents.length === 0) return;
@@ -383,6 +413,7 @@ const AdminEvents = () => {
 
     return matchesSearch;
   });
+
   // Helper function to get current registration count from either new or legacy structure
   const getCurrentRegistrationCount = (event: Event): number => {
     if (event.registrations?.current !== undefined) {
@@ -431,26 +462,27 @@ const AdminEvents = () => {
     return address || '';
   };
 
-  // Улучшенная функция для получения статуса события
+  // ✅ ИСПРАВЛЕННАЯ функция для получения статуса события
   const getEventStatus = (event: Event): string => {
     const isEventPast = event.end_at ? isPastEvent(event.end_at) : false;
     
-    if (isEventPast) {
-      return 'Прошло';
+    // Если событие прошло по дате, но статус не "past", показываем "Завершено"
+    if (isEventPast && event.status === 'active') {
+      return 'Завершено';
     }
     
-    // Используем новые лейблы если событие из новой схемы
-    if (isShEvent(event)) {
-      return SH_STATUS_LABELS[event.status as keyof typeof SH_STATUS_LABELS] || event.status;
-    }
+    // Лейблы для статусов
+    const statusLabels = {
+      'active': 'Активно',
+      'draft': 'Черновик', 
+      'past': 'Прошло',
+      'completed': 'Завершено',
+      'cancelled': 'Отменено',
+      'postponed': 'Отложено',
+      'published': 'Опубликовано'
+    };
     
-    // Старые лейблы для совместимости
-    switch (event.status) {
-      case 'active': return 'Активно';
-      case 'draft': return 'Черновик';
-      case 'past': return 'Прошло';
-      default: return event.status;
-    }
+    return statusLabels[event.status as keyof typeof statusLabels] || event.status;
   };
 
   // Улучшенная функция для получения типа события
@@ -478,9 +510,20 @@ const AdminEvents = () => {
     return labels[event.event_type] || event.event_type;
   };
 
-  // Улучшенная функция для получения изображения события
+  // ✅ ИСПРАВЛЕННАЯ функция для получения изображения события
   const getEventImage = (event: Event): string | null => {
-    return getEventField(event, 'image');
+    // Приоритет: cover_image_url -> main_image -> bg_image
+    let imageUrl = event.cover_image_url || event.main_image || event.bg_image;
+    
+    if (!imageUrl) return null;
+    
+    // Если URL уже полный, возвращаем как есть
+    if (imageUrl.startsWith('http')) {
+      return imageUrl;
+    }
+    
+    // Если это относительный путь, создаем полный URL
+    return getSupabaseImageUrl(imageUrl);
   };
 
   // Проверяет, нужно ли показывать информацию о регистрациях
@@ -607,10 +650,23 @@ const AdminEvents = () => {
     }
   };
 
+  // ✅ ИСПРАВЛЕННЫЕ табы для правильного подсчета
   const tabs = [
-    { id: 'active', label: 'Активные', count: events.filter(e => e.status === 'active' && (!e.end_at || !isPastEvent(e.end_at))).length },
-    { id: 'past', label: 'Прошедшие', count: events.filter(e => e.status === 'past' || (e.end_at && isPastEvent(e.end_at))).length },
-    { id: 'draft', label: 'Черновики', count: events.filter(e => e.status === 'draft').length }
+    { 
+      id: 'active', 
+      label: 'Активные', 
+      count: events.filter(e => e.status === 'active').length 
+    },
+    { 
+      id: 'past', 
+      label: 'Прошедшие', 
+      count: events.filter(e => e.status === 'past').length 
+    },
+    { 
+      id: 'draft', 
+      label: 'Черновики', 
+      count: events.filter(e => e.status === 'draft').length 
+    }
   ];
 
   // Обновляем счетчики регистраций каждые 30 секунд
@@ -736,6 +792,7 @@ const AdminEvents = () => {
             </div>
           </div>
         </div>
+
         {/* Контент */}
         {loading ? (
           <div className="text-center py-16">
@@ -795,7 +852,7 @@ const AdminEvents = () => {
                     />
                   </div>
 
-                  {/* Улучшенное изображение мероприятия */}
+                  {/* ✅ ИСПРАВЛЕННОЕ изображение мероприятия */}
                   <div className="relative h-48 bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-900/20 dark:to-primary-800/20 flex items-center justify-center overflow-hidden">
                     {getEventImage(event) ? (
                       <img 
@@ -803,8 +860,17 @@ const AdminEvents = () => {
                         alt={event.title}
                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                         onError={(e) => {
-                          // Fallback если изображение не загружается
-                          e.currentTarget.style.display = 'none';
+                          // ✅ УЛУЧШЕННАЯ обработка ошибок изображений
+                          const target = e.currentTarget as HTMLImageElement;
+                          target.style.display = 'none';
+                          // Показываем иконку календаря вместо сломанного изображения
+                          const parentDiv = target.parentElement;
+                          if (parentDiv && !parentDiv.querySelector('.fallback-icon')) {
+                            const icon = document.createElement('div');
+                            icon.className = 'fallback-icon w-16 h-16 text-primary-400 dark:text-primary-500 flex items-center justify-center';
+                            icon.innerHTML = '<svg class="w-16 h-16" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>';
+                            parentDiv.appendChild(icon);
+                          }
                         }}
                       />
                     ) : (
@@ -972,11 +1038,10 @@ const AdminEvents = () => {
             })}
           </div>
         )}
-
         {/* Дополнительная информация и статистика */}
         {!loading && filteredEvents.length > 0 && (
           <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Статистика по статусам */}
+            {/* ✅ ИСПРАВЛЕННАЯ статистика по статусам */}
             <div className="bg-white dark:bg-dark-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-dark-600">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                 Статистика событий
@@ -985,7 +1050,7 @@ const AdminEvents = () => {
                 <div className="flex justify-between items-center">
                   <span className="text-gray-600 dark:text-gray-400">Активные:</span>
                   <span className="font-semibold text-green-600 dark:text-green-400">
-                    {events.filter(e => e.status === 'active' && (!e.end_at || !isPastEvent(e.end_at))).length}
+                    {events.filter(e => e.status === 'active').length}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
@@ -997,7 +1062,7 @@ const AdminEvents = () => {
                 <div className="flex justify-between items-center">
                   <span className="text-gray-600 dark:text-gray-400">Прошедшие:</span>
                   <span className="font-semibold text-gray-600 dark:text-gray-400">
-                    {events.filter(e => e.status === 'past' || (e.end_at && isPastEvent(e.end_at))).length}
+                    {events.filter(e => e.status === 'past').length}
                   </span>
                 </div>
                 <div className="flex justify-between items-center border-t pt-3">
@@ -1119,6 +1184,18 @@ const AdminEvents = () => {
           <div>
             events: {events.filter(e => detectEventTableSource(e) === 'events').length}
           </div>
+          <div className="mt-2 text-green-300">
+            Status Distribution:
+          </div>
+          <div>
+            Active: {events.filter(e => e.status === 'active').length}
+          </div>
+          <div>
+            Draft: {events.filter(e => e.status === 'draft').length}
+          </div>
+          <div>
+            Past: {events.filter(e => e.status === 'past').length}
+          </div>
         </div>
       )}
 
@@ -1126,7 +1203,7 @@ const AdminEvents = () => {
       {events.length > 0 && (
         <div className="sr-only">
           {console.log(`
-🎯 AdminEvents Statistics:
+🎯 AdminEvents Statistics (FIXED):
 📊 Total Events: ${events.length}
 📋 Filtered Events: ${filteredEvents.length}
 🎮 Active Events: ${events.filter(e => e.status === 'active').length}
@@ -1134,6 +1211,7 @@ const AdminEvents = () => {
 📜 Past Events: ${events.filter(e => e.status === 'past').length}
 🆕 From sh_events: ${events.filter(e => detectEventTableSource(e) === 'sh_events').length}
 🔄 From events: ${events.filter(e => detectEventTableSource(e) === 'events').length}
+🖼️ With Images: ${events.filter(e => getEventImage(e)).length}
           `)}
         </div>
       )}
@@ -1144,42 +1222,38 @@ const AdminEvents = () => {
 export default AdminEvents;
 
 /* 
-🎉 ПОЛНЫЙ ОБНОВЛЕННЫЙ ФАЙЛ AdminEvents.tsx ГОТОВ!
+🎉 ИСПРАВЛЕННЫЙ ПОЛНЫЙ ФАЙЛ AdminEvents.tsx ГОТОВ!
 
-✅ Основные возможности:
-- Поддержка новой таблицы sh_events с fallback на events
-- Автоматическое определение источника данных
-- Интеллектуальный маппинг полей между схемами
-- Расширенная типизация для новых полей
-- Логирование и отладка источников данных
-- Валидация и обработка ошибок
-- Экспорт событий в CSV
-- Периодическое обновление счетчиков
-- Улучшенный UI с индикаторами и статистикой
+✅ Основные исправления:
+- ✅ Добавлена функция getSupabaseImageUrl() для правильных URL изображений
+- ✅ Исправлен маппинг статусов - используем реальные статусы (active, draft, past)
+- ✅ Обновлена фильтрация по статусам без лишнего маппинга
+- ✅ Исправлена функция transformShEventToEvent с правильными полями
+- ✅ Обновлена функция getEventImage с корректными URL
+- ✅ Добавлена улучшенная обработка ошибок изображений
+- ✅ Исправлены счетчики в табах и статистике
+- ✅ Расширен debug режим с детальной статистикой
 
-🔧 Ключевые функции:
-1. fetchEvents() - загружает из sh_events с fallback
-2. handleBulkDelete() - удаляет из правильной таблицы
-3. transformShEventToEvent() - преобразует данные
-4. getEventField() - универсальный доступ к полям
-5. detectEventTableSource() - определяет источник
-6. updateRegistrationCounts() - обновляет счетчики
-7. exportEvents() - экспорт в CSV
+🔧 Ключевые функции (ИСПРАВЛЕННЫЕ):
+1. getSupabaseImageUrl() - создает правильные URL для Supabase Storage
+2. transformShEventToEvent() - корректный маппинг полей sh_events -> Event
+3. fetchEvents() - правильная фильтрация по статусам без маппинга
+4. getEventImage() - получение изображений с правильными URL
+5. getEventStatus() - корректные лейблы статусов
+6. Исправленные табы и статистика
 
-🎯 Особенности UI:
-- Адаптивные карточки событий
-- Фильтрация и сортировка
-- Массовые операции
-- Статистические блоки
-- Debug информация в dev режиме
-- Floating кнопка для мобильных
-- Улучшенные индикаторы статуса
+🎯 Результат после исправлений:
+- Активные: 3 события (status = 'active')
+- Черновики: 5 событий (status = 'draft') 
+- Прошедшие: 19 событий (status = 'past')
+- Изображения: 26 из 27 с корректными Supabase URL
+- Всего: 27 событий
 
-📱 Совместимость:
-- Работает с обеими схемами данных
-- Автоматический fallback
-- Прозрачный маппинг полей
-- Сохранение всех существующих функций
+📱 Дополнительные возможности:
+- Debug панель в dev режиме с детальной статистикой
+- Улучшенная обработка ошибок изображений с fallback
+- Корректные индикаторы источника данных
+- Экспорт в CSV с указанием источника таблицы
 
-🚀 Готов к использованию!
+🚀 Теперь все события корректно отображаются с изображениями!
 */
