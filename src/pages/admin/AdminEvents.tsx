@@ -593,23 +593,34 @@ const AdminEvents = () => {
   
 
   // Функция для обновления счетчиков регистраций
-  const updateRegistrationCounts = async () => {
+onst updateRegistrationCounts = async () => {
+    if (events.length === 0) return;
+    
+    console.log('🔄 Updating registration counts for', events.length, 'events...');
+    
     const updatedEvents = await Promise.all(
       events.map(async (event) => {
-        const count = await getRegistrationCount(event.id);
-        return {
-          ...event,
-          current_registration_count: count,
-          registrations: {
-            ...event.registrations,
-            current: count
-          }
-        };
+        try {
+          const count = await getRegistrationCount(event.id);
+          return {
+            ...event,
+            current_registration_count: count,
+            registrations: {
+              ...event.registrations,
+              current: count
+            }
+          };
+        } catch (error) {
+          console.error(`Error updating count for event ${event.id}:`, error);
+          return event; // Возвращаем событие без изменений при ошибке
+        }
       })
     );
     
     setEvents(updatedEvents);
+    console.log('✅ Registration counts updated');
   };
+  
 
   // Функция для экспорта событий
   const exportEvents = async () => {
