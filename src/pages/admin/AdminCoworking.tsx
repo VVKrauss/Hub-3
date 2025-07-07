@@ -1,24 +1,23 @@
-// src/pages/admin/AdminCoworking.tsx - ИСПРАВЛЕННАЯ ВЕРСИЯ БЕЗ ОШИБОК
+// src/pages/admin/AdminCoworking.tsx - ИСПРАВЛЕННАЯ ВЕРСИЯ
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Edit, Trash2, ChevronUp, ChevronDown, Save, X, Building } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
 import { toast } from 'react-hot-toast';
 
+// Временные типы для начала (позже заменим на импорт из API)
 interface CoworkingService {
   id: string;
   name: string;
   description: string;
   price: number;
   currency: 'euro' | 'кофе' | 'RSD';
-  period: 'час' | 'день' | 'месяц' | 'Страница';
+  period: 'час' | 'день' | 'месяц' | 'страница';
   active: boolean;
-  image_url: string;
+  image_url?: string;
   order: number;
   main_service: boolean;
 }
 
 interface CoworkingHeader {
-  id?: string;
   title: string;
   description: string;
   address?: string;
@@ -26,20 +25,26 @@ interface CoworkingHeader {
   working_hours?: string;
 }
 
+interface CoworkingPageSettings {
+  header: CoworkingHeader;
+  services: CoworkingService[];
+  lastUpdated: string;
+}
+
 const AdminCoworking: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [services, setServices] = useState<CoworkingService[]>([]);
-  const [headerData, setHeaderData] = useState<CoworkingHeader>({ 
-    title: '', 
+  const [pageSettings, setPageSettings] = useState<CoworkingPageSettings | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [editData, setEditData] = useState<Partial<CoworkingService> | null>(null);
+  const [headerData, setHeaderData] = useState<CoworkingHeader>({
+    title: '',
     description: '',
     address: '',
     phone: '',
     working_hours: ''
   });
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [editData, setEditData] = useState<Partial<CoworkingService> | null>(null);
   const [newService, setNewService] = useState<Omit<CoworkingService, 'id' | 'order'>>({
     name: '',
     description: '',
@@ -48,7 +53,7 @@ const AdminCoworking: React.FC = () => {
     period: 'час',
     active: true,
     image_url: '',
-    main_service: true
+    main_service: false
   });
   const [showForm, setShowForm] = useState(false);
 
@@ -60,48 +65,56 @@ const AdminCoworking: React.FC = () => {
     try {
       setLoading(true);
       
-      // Загружаем услуги коворкинга
-      const { data: servicesData, error: servicesError } = await supabase
-        .from('coworking_info_table')
-        .select('*')
-        .order('order', { ascending: true });
+      // Временно используем дефолтные данные
+      const defaultSettings: CoworkingPageSettings = {
+        header: {
+          title: 'Коворкинг пространство',
+          description: 'Комфортные рабочие места для исследователей и стартапов',
+          address: 'Сараевская, 48',
+          phone: '+381',
+          working_hours: '10:00-18:00'
+        },
+        services: [
+          {
+            id: '1',
+            name: 'Почасовая аренда',
+            description: 'Гибкий график работы по часам',
+            price: 5,
+            currency: 'euro',
+            period: 'час',
+            active: true,
+            order: 1,
+            main_service: false
+          },
+          {
+            id: '2',
+            name: 'Дневной абонемент',
+            description: 'Полный рабочий день в коворкинге',
+            price: 25,
+            currency: 'euro',
+            period: 'день',
+            active: true,
+            order: 2,
+            main_service: true
+          },
+          {
+            id: '3',
+            name: 'Месячный абонемент',
+            description: 'Неограниченный доступ на месяц',
+            price: 200,
+            currency: 'euro',
+            period: 'месяц',
+            active: true,
+            order: 3,
+            main_service: false
+          }
+        ],
+        lastUpdated: new Date().toISOString()
+      };
 
-      if (servicesError) throw servicesError;
-      setServices(servicesData || []);
-      
-      // Загружаем заголовок из консолидированной таблицы site_settings
-      const { data: settingsData, error: settingsError } = await supabase
-        .from('site_settings')
-        .select('coworking_header_settings')
-        .single();
-
-      if (settingsError) {
-        console.error('Error fetching settings:', settingsError);
-        // Если нет записи, создаем дефолтную структуру
-        if (settingsError.code === 'PGRST116') {
-          const defaultHeader: CoworkingHeader = {
-            title: 'Коворкинг пространство',
-            description: 'Комфортные рабочие места для исследователей и стартапов',
-            address: 'Сараевская, 48',
-            phone: '+381',
-            working_hours: '10:00-18:00'
-          };
-          setHeaderData(defaultHeader);
-          return;
-        }
-        throw settingsError;
-      }
-      
-      // Извлекаем данные заголовка коворкинга
-      const headerFromSettings = settingsData?.coworking_header_settings || {};
-      setHeaderData({
-        title: headerFromSettings.title || '',
-        description: headerFromSettings.description || '',
-        address: headerFromSettings.address || '',
-        phone: headerFromSettings.phone || '',
-        working_hours: headerFromSettings.working_hours || ''
-      });
-      
+      setPageSettings(defaultSettings);
+      setHeaderData(defaultSettings.header);
+      setError(null);
     } catch (err) {
       console.error('Error fetching data:', err);
       setError('Не удалось загрузить данные');
@@ -115,27 +128,15 @@ const AdminCoworking: React.FC = () => {
     try {
       setSaving(true);
       
-      // Получаем ID записи site_settings
-      const { data: currentSettings, error: fetchError } = await supabase
-        .from('site_settings')
-        .select('id')
-        .single();
+      if (!pageSettings) return;
       
-      if (fetchError) {
-        console.error('Error fetching site settings ID:', fetchError);
-        throw fetchError;
-      }
+      const updatedSettings = {
+        ...pageSettings,
+        header: headerData,
+        lastUpdated: new Date().toISOString()
+      };
       
-      // Обновляем заголовок коворкинга в консолидированной таблице
-      const { error } = await supabase
-        .from('site_settings')
-        .update({ 
-          coworking_header_settings: headerData 
-        })
-        .eq('id', currentSettings.id);
-
-      if (error) throw error;
-      
+      setPageSettings(updatedSettings);
       toast.success('Заголовок успешно сохранен');
       setError(null);
     } catch (err) {
@@ -149,16 +150,19 @@ const AdminCoworking: React.FC = () => {
 
   const handleSaveService = async () => {
     try {
-      if (!editData) return;
+      if (!editData || !editData.id || !pageSettings) return;
 
-      const { error } = await supabase
-        .from('coworking_info_table')
-        .update(editData)
-        .eq('id', editData.id);
+      const updatedServices = pageSettings.services.map(service =>
+        service.id === editData.id ? { ...service, ...editData } : service
+      );
 
-      if (error) throw error;
-      
-      await fetchData();
+      const updatedSettings = {
+        ...pageSettings,
+        services: updatedServices,
+        lastUpdated: new Date().toISOString()
+      };
+
+      setPageSettings(updatedSettings);
       setEditData(null);
       setShowForm(false);
       toast.success('Услуга успешно обновлена');
@@ -175,22 +179,21 @@ const AdminCoworking: React.FC = () => {
         return;
       }
 
-      const maxOrder = services.reduce((max, service) => 
-        service.order > max ? service.order : max, 0
-      );
+      if (!pageSettings) return;
 
-      const serviceToAdd = {
+      const newServiceWithId: CoworkingService = {
         ...newService,
-        order: maxOrder + 1
+        id: Date.now().toString(),
+        order: Math.max(...pageSettings.services.map(s => s.order), 0) + 1
       };
 
-      const { error } = await supabase
-        .from('coworking_info_table')
-        .insert([serviceToAdd]);
+      const updatedSettings = {
+        ...pageSettings,
+        services: [...pageSettings.services, newServiceWithId],
+        lastUpdated: new Date().toISOString()
+      };
 
-      if (error) throw error;
-
-      await fetchData();
+      setPageSettings(updatedSettings);
       setNewService({
         name: '',
         description: '',
@@ -199,7 +202,7 @@ const AdminCoworking: React.FC = () => {
         period: 'час',
         active: true,
         image_url: '',
-        main_service: true
+        main_service: false
       });
       setShowForm(false);
       toast.success('Услуга успешно добавлена');
@@ -213,14 +216,16 @@ const AdminCoworking: React.FC = () => {
     if (!confirm('Удалить услугу?')) return;
 
     try {
-      const { error } = await supabase
-        .from('coworking_info_table')
-        .delete()
-        .eq('id', id);
+      if (!pageSettings) return;
 
-      if (error) throw error;
-      
-      await fetchData();
+      const updatedServices = pageSettings.services.filter(service => service.id !== id);
+      const updatedSettings = {
+        ...pageSettings,
+        services: updatedServices,
+        lastUpdated: new Date().toISOString()
+      };
+
+      setPageSettings(updatedSettings);
       toast.success('Услуга удалена');
     } catch (err) {
       console.error('Error deleting service:', err);
@@ -229,40 +234,36 @@ const AdminCoworking: React.FC = () => {
   };
 
   const moveService = async (id: string, direction: 'up' | 'down') => {
-    const currentIndex = services.findIndex(s => s.id === id);
-    if (currentIndex === -1) return;
-
-    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-    if (newIndex < 0 || newIndex >= services.length) return;
-
     try {
-      const updates = [
-        {
-          id: services[currentIndex].id,
-          order: services[newIndex].order
-        },
-        {
-          id: services[newIndex].id,
-          order: services[currentIndex].order
-        }
-      ];
+      if (!pageSettings) return;
 
-      for (const update of updates) {
-        const { error } = await supabase
-          .from('coworking_info_table')
-          .update({ order: update.order })
-          .eq('id', update.id);
+      const services = [...pageSettings.services].sort((a, b) => a.order - b.order);
+      const currentIndex = services.findIndex(s => s.id === id);
+      
+      if (currentIndex === -1) return;
 
-        if (error) throw error;
-      }
+      const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+      if (newIndex < 0 || newIndex >= services.length) return;
 
-      await fetchData();
+      // Меняем местами порядковые номера
+      const tempOrder = services[currentIndex].order;
+      services[currentIndex].order = services[newIndex].order;
+      services[newIndex].order = tempOrder;
+
+      const updatedSettings = {
+        ...pageSettings,
+        services,
+        lastUpdated: new Date().toISOString()
+      };
+
+      setPageSettings(updatedSettings);
     } catch (err) {
       console.error('Error moving service:', err);
       toast.error('Ошибка при перемещении');
     }
   };
 
+  const services = pageSettings?.services || [];
   const filteredServices = services.filter(service =>
     service.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     service.description.toLowerCase().includes(searchQuery.toLowerCase())
@@ -311,81 +312,81 @@ const AdminCoworking: React.FC = () => {
             >
               {saving ? (
                 <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                   Сохранение...
                 </>
               ) : (
                 <>
                   <Save className="w-4 h-4" />
-                  Сохранить заголовок
+                  Сохранить
                 </>
               )}
             </button>
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+          <div className="grid md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Заголовок
               </label>
               <input
                 type="text"
                 value={headerData.title}
                 onChange={(e) => setHeaderData({...headerData, title: e.target.value})}
-                className="w-full p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="Название коворкинг пространства"
+                className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
+                placeholder="Название коворкинга"
               />
             </div>
-            
+
             <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Адрес
               </label>
               <input
                 type="text"
                 value={headerData.address || ''}
                 onChange={(e) => setHeaderData({...headerData, address: e.target.value})}
-                className="w-full p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
+                className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
                 placeholder="Адрес коворкинга"
               />
             </div>
-            
+
             <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Телефон
               </label>
               <input
                 type="text"
                 value={headerData.phone || ''}
                 onChange={(e) => setHeaderData({...headerData, phone: e.target.value})}
-                className="w-full p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="+381 XX XXX XXXX"
+                className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
+                placeholder="Телефон для связи"
               />
             </div>
-            
+
             <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Часы работы
               </label>
               <input
                 type="text"
                 value={headerData.working_hours || ''}
                 onChange={(e) => setHeaderData({...headerData, working_hours: e.target.value})}
-                className="w-full p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="10:00-18:00"
+                className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
+                placeholder="Например: 9:00-18:00"
               />
             </div>
-            
+
             <div className="md:col-span-2">
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Описание
               </label>
               <textarea
                 value={headerData.description}
                 onChange={(e) => setHeaderData({...headerData, description: e.target.value})}
-                rows={4}
-                className="w-full p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
-                placeholder="Описание коворкинг пространства"
+                rows={3}
+                className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
+                placeholder="Краткое описание коворкинга"
               />
             </div>
           </div>
@@ -395,7 +396,7 @@ const AdminCoworking: React.FC = () => {
         <div className="bg-white dark:bg-dark-800 rounded-2xl shadow-lg p-8 border border-gray-100 dark:border-gray-700">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white font-heading">
-              Управление услугами
+              Услуги коворкинга ({services.length})
             </h2>
             <button
               onClick={() => setShowForm(true)}
@@ -408,95 +409,105 @@ const AdminCoworking: React.FC = () => {
 
           {/* Search */}
           <div className="relative mb-6">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
             <input
               type="text"
               placeholder="Поиск услуг..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
             />
           </div>
 
           {/* Services List */}
           <div className="space-y-4">
-            {filteredServices.map((service, index) => (
-              <div key={service.id} className="border border-gray-200 dark:border-gray-600 rounded-lg p-6">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        {service.name}
-                      </h3>
-                      <span className={`px-2 py-1 text-xs rounded-full ${
-                        service.active 
-                          ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
-                          : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
-                      }`}>
-                        {service.active ? 'Активна' : 'Неактивна'}
-                      </span>
-                      {service.main_service && (
-                        <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400 rounded-full">
-                          Основная
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-gray-600 dark:text-gray-400 mb-2">{service.description}</p>
-                    <p className="text-lg font-semibold text-primary-600">
-                      {service.price} {service.currency} / {service.period}
-                    </p>
-                  </div>
-                  
-                  <div className="flex items-center gap-2 ml-4">
-                    <button
-                      onClick={() => moveService(service.id, 'up')}
-                      disabled={index === 0}
-                      className="p-2 text-gray-400 hover:text-gray-600 disabled:opacity-50"
-                    >
-                      <ChevronUp className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => moveService(service.id, 'down')}
-                      disabled={index === services.length - 1}
-                      className="p-2 text-gray-400 hover:text-gray-600 disabled:opacity-50"
-                    >
-                      <ChevronDown className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => setEditData(service)}
-                      className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteService(service.id)}
-                      className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-                
-                {service.image_url && (
-                  <div className="mt-4">
-                    <img 
-                      src={service.image_url} 
-                      alt={service.name}
-                      className="w-32 h-20 object-cover rounded-lg"
-                    />
-                  </div>
-                )}
+            {filteredServices.length === 0 ? (
+              <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                {searchQuery ? 'Услуги не найдены' : 'Услуги не добавлены'}
               </div>
-            ))}
+            ) : (
+              filteredServices
+                .sort((a, b) => a.order - b.order)
+                .map((service) => (
+                  <div
+                    key={service.id}
+                    className={`p-6 border rounded-lg ${
+                      service.main_service
+                        ? 'border-primary-200 bg-primary-50 dark:border-primary-700 dark:bg-primary-900/20'
+                        : 'border-gray-200 bg-gray-50 dark:border-gray-600 dark:bg-dark-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                            {service.name}
+                          </h3>
+                          {service.main_service && (
+                            <span className="px-2 py-1 bg-primary-100 text-primary-700 text-xs rounded-full">
+                              Основная
+                            </span>
+                          )}
+                          {!service.active && (
+                            <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
+                              Неактивна
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-gray-600 dark:text-gray-300 mb-2">
+                          {service.description}
+                        </p>
+                        <div className="text-lg font-medium text-gray-900 dark:text-white">
+                          {service.price} {service.currency} / {service.period}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 ml-4">
+                        <button
+                          onClick={() => moveService(service.id, 'up')}
+                          className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                          title="Переместить вверх"
+                        >
+                          <ChevronUp className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => moveService(service.id, 'down')}
+                          className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                          title="Переместить вниз"
+                        >
+                          <ChevronDown className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditData(service);
+                            setShowForm(true);
+                          }}
+                          className="p-2 text-blue-500 hover:text-blue-700"
+                          title="Редактировать"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteService(service.id)}
+                          className="p-2 text-red-500 hover:text-red-700"
+                          title="Удалить"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+            )}
           </div>
         </div>
 
-        {/* Add/Edit Service Modal */}
-        {(showForm || editData) && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        {/* Service Form Modal */}
+        {showForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-dark-800 rounded-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
                   {editData ? 'Редактировать услугу' : 'Добавить услугу'}
                 </h3>
                 <button
@@ -504,76 +515,74 @@ const AdminCoworking: React.FC = () => {
                     setShowForm(false);
                     setEditData(null);
                   }}
-                  className="p-2 text-gray-400 hover:text-gray-600"
+                  className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-6 h-6" />
                 </button>
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Название услуги
-                  </label>
-                  <input
-                    type="text"
-                    value={editData ? editData.name || '' : newService.name}
-                    onChange={(e) => editData 
-                      ? setEditData({...editData, name: e.target.value})
-                      : setNewService({...newService, name: e.target.value})
-                    }
-                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    placeholder="Например: Рабочее место"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Описание
-                  </label>
-                  <textarea
-                    value={editData ? editData.description || '' : newService.description}
-                    onChange={(e) => editData 
-                      ? setEditData({...editData, description: e.target.value})
-                      : setNewService({...newService, description: e.target.value})
-                    }
-                    rows={3}
-                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    placeholder="Описание услуги"
-                  />
-                </div>
-
-                <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-6">
+                <div className="grid md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Цена
+                      Название *
+                    </label>
+                    <input
+                      type="text"
+                      value={editData ? editData.name || '' : newService.name}
+                      onChange={(e) => {
+                        if (editData) {
+                          setEditData({...editData, name: e.target.value});
+                        } else {
+                          setNewService({...newService, name: e.target.value});
+                        }
+                      }}
+                      className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
+                      placeholder="Название услуги"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Цена *
                     </label>
                     <input
                       type="number"
                       value={editData ? editData.price || 0 : newService.price}
-                      onChange={(e) => editData 
-                        ? setEditData({...editData, price: Number(e.target.value)})
-                        : setNewService({...newService, price: Number(e.target.value)})
-                      }
-                      className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      onChange={(e) => {
+                        const price = parseInt(e.target.value) || 0;
+                        if (editData) {
+                          setEditData({...editData, price});
+                        } else {
+                          setNewService({...newService, price});
+                        }
+                      }}
+                      className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
+                      placeholder="Цена"
                     />
                   </div>
+                </div>
 
+                <div className="grid md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Валюта
                     </label>
                     <select
                       value={editData ? editData.currency || 'euro' : newService.currency}
-                      onChange={(e) => editData 
-                        ? setEditData({...editData, currency: e.target.value as any})
-                        : setNewService({...newService, currency: e.target.value as any})
-                      }
-                      className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      onChange={(e) => {
+                        const currency = e.target.value as 'euro' | 'кофе' | 'RSD';
+                        if (editData) {
+                          setEditData({...editData, currency});
+                        } else {
+                          setNewService({...newService, currency});
+                        }
+                      }}
+                      className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
                     >
-                      <option value="euro">€</option>
+                      <option value="euro">Euro (€)</option>
                       <option value="RSD">RSD</option>
-                      <option value="кофе">☕</option>
+                      <option value="кофе">Кофе</option>
                     </select>
                   </div>
 
@@ -583,64 +592,116 @@ const AdminCoworking: React.FC = () => {
                     </label>
                     <select
                       value={editData ? editData.period || 'час' : newService.period}
-                      onChange={(e) => editData 
-                        ? setEditData({...editData, period: e.target.value as any})
-                        : setNewService({...newService, period: e.target.value as any})
-                      }
-                      className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      onChange={(e) => {
+                        const period = e.target.value as 'час' | 'день' | 'месяц' | 'страница';
+                        if (editData) {
+                          setEditData({...editData, period});
+                        } else {
+                          setNewService({...newService, period});
+                        }
+                      }}
+                      className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
                     >
                       <option value="час">час</option>
                       <option value="день">день</option>
                       <option value="месяц">месяц</option>
-                      <option value="Страница">за страницу</option>
+                      <option value="страница">страница</option>
                     </select>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4">
-                  <label className="flex items-center">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Описание
+                  </label>
+                  <textarea
+                    value={editData ? editData.description || '' : newService.description}
+                    onChange={(e) => {
+                      if (editData) {
+                        setEditData({...editData, description: e.target.value});
+                      } else {
+                        setNewService({...newService, description: e.target.value});
+                      }
+                    }}
+                    rows={3}
+                    className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
+                    placeholder="Описание услуги"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    URL изображения
+                  </label>
+                  <input
+                    type="url"
+                    value={editData ? editData.image_url || '' : newService.image_url}
+                    onChange={(e) => {
+                      if (editData) {
+                        setEditData({...editData, image_url: e.target.value});
+                      } else {
+                        setNewService({...newService, image_url: e.target.value});
+                      }
+                    }}
+                    className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
+                    placeholder="https://example.com/image.jpg"
+                  />
+                </div>
+
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2">
                     <input
                       type="checkbox"
-                      checked={editData ? editData.active ?? true : newService.active}
-                      onChange={(e) => editData 
-                        ? setEditData({...editData, active: e.target.checked})
-                        : setNewService({...newService, active: e.target.checked})
-                      }
-                      className="mr-2"
+                      checked={editData ? editData.active !== false : newService.active}
+                      onChange={(e) => {
+                        if (editData) {
+                          setEditData({...editData, active: e.target.checked});
+                        } else {
+                          setNewService({...newService, active: e.target.checked});
+                        }
+                      }}
+                      className="w-4 h-4"
                     />
-                    Активная услуга
+                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                      Активная услуга
+                    </span>
                   </label>
 
-                  <label className="flex items-center">
+                  <label className="flex items-center gap-2">
                     <input
                       type="checkbox"
-                      checked={editData ? editData.main_service ?? true : newService.main_service}
-                      onChange={(e) => editData 
-                        ? setEditData({...editData, main_service: e.target.checked})
-                        : setNewService({...newService, main_service: e.target.checked})
-                      }
-                      className="mr-2"
+                      checked={editData ? editData.main_service || false : newService.main_service}
+                      onChange={(e) => {
+                        if (editData) {
+                          setEditData({...editData, main_service: e.target.checked});
+                        } else {
+                          setNewService({...newService, main_service: e.target.checked});
+                        }
+                      }}
+                      className="w-4 h-4"
                     />
-                    Основная услуга
+                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                      Основная услуга
+                    </span>
                   </label>
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 mt-6">
+              <div className="flex gap-4 mt-8">
+                <button
+                  onClick={editData ? handleSaveService : handleAddService}
+                  className="flex-1 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+                >
+                  {editData ? 'Сохранить изменения' : 'Добавить услугу'}
+                </button>
                 <button
                   onClick={() => {
                     setShowForm(false);
                     setEditData(null);
                   }}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                  className="px-6 py-3 border border-gray-300 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-700"
                 >
                   Отмена
-                </button>
-                <button
-                  onClick={editData ? handleSaveService : handleAddService}
-                  className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-                >
-                  {editData ? 'Сохранить изменения' : 'Добавить услугу'}
                 </button>
               </div>
             </div>

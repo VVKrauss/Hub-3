@@ -1,499 +1,278 @@
-import { useState, useEffect } from 'react';
+// src/pages/CoworkingPage.tsx - ФИНАЛЬНАЯ ПРОСТАЯ ВЕРСИЯ
+import React, { useState, useEffect, useRef } from 'react';
+import { MapPin, Phone, Clock } from 'lucide-react';
 import Layout from '../components/layout/Layout';
-import PageHeader from '../components/ui/PageHeader';
-import Modal from '../components/ui/Modal'; // Предполагается, что у вас есть компонент Modal
-
 import { supabase } from '../lib/supabase';
 
-const TELEGRAM_BOT_TOKEN = import.meta.env.VITE_TELEGRAM_BOT_TOKEN;
-const TELEGRAM_CHAT_ID = import.meta.env.VITE_TELEGRAM_CHAT_ID;
-
-type CoworkingService = {
+interface CoworkingService {
   id: string;
   name: string;
   description: string;
   price: number;
-  currency: 'euro' | 'кофе';
-  period: 'час' | 'день' | 'месяц';
+  currency: 'euro' | 'кофе' | 'RSD';
+  period: 'час' | 'день' | 'месяц' | 'Страница';
   active: boolean;
-  image_url: string;
+  image_url?: string;
+  order: number;
   main_service: boolean;
-};
+}
 
-type CoworkingHeader = {
-  id: string;
-  title: string;
-  description: string;
-  address: string;
-  phone: string;
-  work_hours_weekdays: string;
-  work_hours_weekends: string;
-  working_hours: string;
-};
-
-const CoworkingPage = () => {
-  const [mainServices, setMainServices] = useState<CoworkingService[]>([]);
-  const [additionalServices, setAdditionalServices] = useState<CoworkingService[]>([]);
-  const [headerData, setHeaderData] = useState<CoworkingHeader | null>(null);
+const CoworkingPage: React.FC = () => {
+  const [services, setServices] = useState<CoworkingService[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedService, setSelectedService] = useState<CoworkingService | null>(null);
-  const [formData, setFormData] = useState({
-    name: '',
-    contact: '',
-    phone: '',
-    comment: ''
-  });
-  const [formErrors, setFormErrors] = useState({
-    name: false,
-    phone: false
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
-    let isMounted = true;
-
-    const fetchData = async () => {
+    isMountedRef.current = true;
+    
+    const loadServices = async () => {
       try {
-        setLoading(true);
-        setError(null);
-
-        const [headerResponse, servicesResponse] = await Promise.all([
-          supabase
-            .from('coworking_header')
-            .select('*')
-            .single(),
-          supabase
-            .from('coworking_info_table')
-            .select('*')
-            .eq('active', true)
-        ]);
-
-        if (!isMounted) return;
-
-        if (headerResponse.error) throw headerResponse.error;
-        if (servicesResponse.error) throw servicesResponse.error;
-
-        setHeaderData(headerResponse.data);
+        if (!isMountedRef.current) return;
         
-        // Разделяем услуги на основные и дополнительные
-        const main = servicesResponse.data?.filter(service => service.main_service) || [];
-        const additional = servicesResponse.data?.filter(service => !service.main_service) || [];
-        
-        setMainServices(main);
-        setAdditionalServices(additional);
-      } catch (err) {
-        console.error('Error fetching data:', err);
-        if (isMounted) {
-          setError('Не удалось загрузить данные. Пожалуйста, попробуйте позже.');
+        const { data, error } = await supabase
+          .from('coworking_info_table')
+          .select('*')
+          .eq('active', true)
+          .order('order', { ascending: true });
+
+        if (!isMountedRef.current) return;
+
+        if (!error && data) {
+          setServices(data);
         }
+      } catch (error) {
+        console.error('Error loading services:', error);
       } finally {
-        if (isMounted) {
+        if (isMountedRef.current) {
           setLoading(false);
         }
       }
     };
 
-    const timeoutId = setTimeout(() => {
-      if (loading) {
-        setError('Превышено время ожидания загрузки данных');
-        setLoading(false);
-      }
-    }, 10000);
-
-    fetchData();
+    loadServices();
 
     return () => {
-      isMounted = false;
-      clearTimeout(timeoutId);
+      isMountedRef.current = false;
     };
-  }, []);
+  }, []); // Пустой массив зависимостей - загружаем только один раз
 
-  const handleBookClick = (service: CoworkingService) => {
-    setSelectedService(service);
-    setIsModalOpen(true);
-    setSubmitStatus('idle');
-    setFormData({
-      name: '',
-      contact: '',
-      phone: '',
-      comment: ''
-    });
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    
-    // Сбрасываем ошибку при изменении поля
-    if (name === 'name' || name === 'phone') {
-      setFormErrors(prev => ({
-        ...prev,
-        [name]: false
-      }));
+  const formatPrice = (price: number, currency: string) => {
+    switch (currency) {
+      case 'euro': return `€${price}`;
+      case 'RSD': return `${price} RSD`;
+      case 'кофе': return price === 1 ? 'За кофе' : `${price} кофе`;
+      default: return `${price} ${currency}`;
     }
   };
 
-  const validateForm = () => {
-    const errors = {
-      name: !formData.name.trim(),
-      phone: !formData.phone.trim()
-    };
-    
-    setFormErrors(errors);
-    return !errors.name && !errors.phone;
-  };
-
-  const sendTelegramNotification = async () => {
-    const message = `Новая заявка на бронирование коворкинга:\n\n` +
-      `Услуга: ${selectedService?.name}\n` +
-      `Имя: ${formData.name}\n` +
-      `Контакт: ${formData.contact || 'не указано'}\n` +
-      `Телефон: ${formData.phone}\n` +
-      `Комментарий: ${formData.comment || 'нет комментария'}`;
-
-    try {
-      const response = await fetch(
-        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            chat_id: TELEGRAM_CHAT_ID,
-            text: message,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Ошибка при отправке уведомления');
-      }
-    } catch (error) {
-      console.error('Ошибка отправки в Telegram:', error);
-      throw error;
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!validateForm()) return;
-    
-    setIsSubmitting(true);
-    
-    try {
-      await sendTelegramNotification();
-      setSubmitStatus('success');
-      // Очищаем форму через 2 секунды после успешной отправки
-      setTimeout(() => {
-        setIsModalOpen(false);
-      }, 2000);
-    } catch (error) {
-      setSubmitStatus('error');
-    } finally {
-      setIsSubmitting(false);
-    }
+  const formatPeriod = (period: string) => {
+    return period === 'Страница' ? 'за страницу' : `/ ${period}`;
   };
 
   if (loading) {
     return (
       <Layout>
-        <PageHeader title="Загрузка...\" description="Загружаем данные о коворкинге" />
-        <div className="section bg-gray-50 dark:bg-dark-800">
-          <div className="container">
-            <div className="animate-pulse space-y-4 py-12">
-              <div className="h-8 w-64 bg-gray-200 dark:bg-dark-700 rounded"></div>
-              <div className="h-12 bg-gray-200 dark:bg-dark-700 rounded"></div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="h-64 bg-gray-200 dark:bg-dark-700 rounded-lg"></div>
-                ))}
-              </div>
-            </div>
-          </div>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
         </div>
       </Layout>
     );
   }
 
+  const mainServices = services.filter(s => s.main_service).sort((a, b) => a.order - b.order);
+  const additionalServices = services.filter(s => !s.main_service).sort((a, b) => a.order - b.order);
+
   return (
     <Layout>
-      {headerData && (
-        <PageHeader 
-          title={headerData.title} 
-          description={headerData.description}
-        />
-      )}
-      
-      <main className="section bg-gray-50 dark:bg-dark-800">
-        <div className="container">
-          {/* Основные услуги */}
-          <div className="mb-16">
-            <h2 className="text-3xl font-semibold text-gray-900 dark:text-white mb-8 text-center">
-              Наши услуги
-            </h2>
-            
-            {mainServices.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-gray-500 dark:text-gray-400">
-                  В данный момент нет доступных услуг. Пожалуйста, проверьте позже.
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {mainServices.map((service) => (
-                  <ServiceCard 
-                    key={service.id} 
-                    service={service} 
-                    onBookClick={() => handleBookClick(service)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Дополнительные услуги */}
-          {additionalServices.length > 0 && (
-            <div className="mb-16">
-              <h2 className="text-3xl font-semibold text-gray-900 dark:text-white mb-8 text-center">
-                Дополнительные услуги
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {additionalServices.map((service) => (
-                  <ServiceCard 
-                    key={service.id} 
-                    service={service} 
-                    onBookClick={() => handleBookClick(service)}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Контактная информация */}
-          {headerData && (
-            <div className="bg-white dark:bg-dark-700 rounded-xl shadow-lg p-8">
-              <h2 className="text-3xl font-semibold text-gray-900 dark:text-white mb-6 text-center">
-                Контакты
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div className="text-center">
-                  <h3 className="text-xl font-medium text-gray-900 dark:text-white mb-3">Адрес</h3>
-                  <div 
-                    className="text-gray-600 dark:text-gray-300" 
-                    dangerouslySetInnerHTML={{ __html: headerData.address }} 
-                  />
-                </div>
-                <div className="text-center">
-                  <h3 className="text-xl font-medium text-gray-900 dark:text-white mb-3">Телефон</h3>
-                  <div 
-                    className="text-gray-600 dark:text-gray-300" 
-                    dangerouslySetInnerHTML={{ __html: headerData.phone }} 
-                  />
-                </div>
-                <div className="text-center">
-                  <h3 className="text-xl font-medium text-gray-900 dark:text-white mb-3">Часы работы</h3>
-                  <div 
-                    className="text-gray-600 dark:text-gray-300" 
-                    dangerouslySetInnerHTML={{ __html: headerData.working_hours }} 
-                  />
-                </div>
-              </div>
-            </div>
-          )}
+      {/* Hero Section */}
+      <section className="py-20 bg-gradient-to-br from-primary-50 to-secondary-50 dark:from-dark-800 dark:to-dark-900">
+        <div className="max-w-7xl mx-auto px-4 text-center">
+          <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-primary-600 via-primary-500 to-secondary-500 bg-clip-text text-transparent mb-6">
+            Коворкинг пространство
+          </h1>
+          <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
+            Комфортные рабочие места для исследователей и стартапов
+          </p>
         </div>
-      </main>
+      </section>
 
-      {/* Модальное окно бронирования */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="p-6">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-            Бронирование: {selectedService?.name}
-          </h2>
-          
-          {submitStatus === 'success' ? (
-            <div className="text-center py-8">
-              <div className="text-green-500 text-5xl mb-4">✓</div>
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                Заявка отправлена!
-              </h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                Мы свяжемся с вами в ближайшее время.
+      {/* Contact Info */}
+      <section className="py-16 bg-white dark:bg-dark-800">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="grid md:grid-cols-3 gap-8 text-center md:text-left">
+            <div className="flex items-center justify-center md:justify-start gap-4">
+              <div className="w-12 h-12 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center">
+                <MapPin className="w-6 h-6 text-primary-600 dark:text-primary-400" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900 dark:text-white">Адрес</h3>
+                <p className="text-gray-600 dark:text-gray-300">Сараевская, 48</p>
+              </div>
+            </div>
+            <div className="flex items-center justify-center md:justify-start gap-4">
+              <div className="w-12 h-12 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center">
+                <Phone className="w-6 h-6 text-primary-600 dark:text-primary-400" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900 dark:text-white">Телефон</h3>
+                <p className="text-gray-600 dark:text-gray-300">+381</p>
+              </div>
+            </div>
+            <div className="flex items-center justify-center md:justify-start gap-4">
+              <div className="w-12 h-12 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center">
+                <Clock className="w-6 h-6 text-primary-600 dark:text-primary-400" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900 dark:text-white">Часы работы</h3>
+                <p className="text-gray-600 dark:text-gray-300">10:00-18:00</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Main Services */}
+      {mainServices.length > 0 && (
+        <section className="py-20 bg-gray-50 dark:bg-dark-900">
+          <div className="max-w-7xl mx-auto px-4">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
+                Основные тарифы
+              </h2>
+              <p className="text-xl text-gray-600 dark:text-gray-300">
+                Выберите подходящий план для работы
               </p>
             </div>
-          ) : (
-            <form onSubmit={handleSubmit}>
-              <div className="space-y-4">
-                <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Ваше имя <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    id="name"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    className={`w-full px-3 py-2 border rounded-lg ${formErrors.name ? 'border-red-500' : 'border-gray-300 dark:border-dark-600'} bg-white dark:bg-dark-800`}
-                    placeholder="Иван Иванов"
-                  />
-                  {formErrors.name && (
-                    <p className="mt-1 text-sm text-red-500">Это поле обязательно для заполнения</p>
+            <div className="grid md:grid-cols-3 gap-8">
+              {mainServices.map((service, index) => (
+                <div key={service.id} className={`bg-white dark:bg-dark-800 rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all duration-300 relative ${
+                  index === 1 ? 'border-2 border-primary-200 dark:border-primary-700' : 'border border-gray-200 dark:border-gray-700'
+                }`}>
+                  {index === 1 && (
+                    <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                      <span className="bg-gradient-to-r from-primary-600 to-secondary-600 text-white px-6 py-2 rounded-full text-sm font-semibold">
+                        Популярный
+                      </span>
+                    </div>
                   )}
-                </div>
-                
-                <div>
-                  <label htmlFor="contact" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Контакт (соцсеть или почта)
-                  </label>
-                  <input
-                    type="text"
-                    id="contact"
-                    name="contact"
-                    value={formData.contact}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-800"
-                    placeholder="telegram: @username или email@example.com"
-                  />
-                </div>
-                
-                <div>
-                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Телефон <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="tel"
-                    id="phone"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    className={`w-full px-3 py-2 border rounded-lg ${formErrors.phone ? 'border-red-500' : 'border-gray-300 dark:border-dark-600'} bg-white dark:bg-dark-800`}
-                    placeholder="+7 (123) 456-78-90"
-                  />
-                  {formErrors.phone && (
-                    <p className="mt-1 text-sm text-red-500">Это поле обязательно для заполнения</p>
+                  
+                  {service.image_url && (
+                    <div className="mb-6 rounded-lg overflow-hidden">
+                      <img 
+                        src={service.image_url} 
+                        alt={service.name} 
+                        className="w-full h-48 object-cover"
+                      />
+                    </div>
                   )}
+                  
+                  <div className="text-center">
+                    <h3 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">
+                      {service.name}
+                    </h3>
+                    <div className="mb-6">
+                      <span className="text-4xl font-bold text-primary-600 dark:text-primary-400">
+                        {formatPrice(service.price, service.currency)}
+                      </span>
+                      <span className="text-gray-600 dark:text-gray-300 ml-2">
+                        {formatPeriod(service.period)}
+                      </span>
+                    </div>
+                    <div className="text-gray-600 dark:text-gray-300 mb-8 text-left">
+                      {service.description.split(' | ').map((line, i) => (
+                        <div key={i} className="mb-2 flex items-start gap-2">
+                          <span className="w-2 h-2 bg-primary-500 rounded-full mt-2 flex-shrink-0"></span>
+                          <span className="text-sm">{line.trim()}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <button className={`w-full py-3 px-6 rounded-lg font-semibold transition-colors ${
+                      index === 1 
+                        ? 'bg-gradient-to-r from-primary-600 to-secondary-600 text-white hover:from-primary-700 hover:to-secondary-700' 
+                        : 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-200'
+                    }`}>
+                      Забронировать
+                    </button>
+                  </div>
                 </div>
-                
-                <div>
-                  <label htmlFor="comment" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Комментарий
-                  </label>
-                  <textarea
-                    id="comment"
-                    name="comment"
-                    value={formData.comment}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-800"
-                    rows={3}
-                    placeholder="Напишите, когда бы вам хотелось у нас поработать"
-                  />
-                </div>
-              </div>
-              
-              <div className="mt-6 flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-gray-300 dark:border-dark-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors"
-                  disabled={isSubmitting}
-                >
-                  Отмена
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors disabled:opacity-50"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? 'Отправка...' : 'Отправить заявку'}
-                </button>
-              </div>
-              
-              {submitStatus === 'error' && (
-                <div className="mt-4 p-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-sm">
-                  Произошла ошибка при отправке. Пожалуйста, попробуйте позже.
-                </div>
-              )}
-            </form>
-          )}
-        </div>
-      </Modal>
-    </Layout>
-  );
-};
-
-// Обновленный компонент карточки услуги
-const ServiceCard = ({ 
-  service, 
-  onBookClick 
-}: { 
-  service: CoworkingService;
-  onBookClick: () => void;
-}) => {
-  const getCurrencySymbol = () => {
-    switch (service.currency) {
-      case 'euro': return '€';
-      case 'кофе': return '☕';
-      default: return service.currency;
-    }
-  };
-
-  const getPeriodText = () => {
-    switch (service.period) {
-      case 'час': return 'час';
-      case 'день': return 'день';
-      case 'месяц': return 'месяц';
-      default: return service.period;
-    }
-  };
-
-  return (
-    <div className="bg-white dark:bg-dark-700 rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300 h-full flex flex-col">
-      {service.image_url && (
-        <div className="h-48 overflow-hidden">
-          <img 
-            src={service.image_url} 
-            alt={service.name}
-            className="w-full h-full object-cover"
-            loading="lazy"
-          />
-        </div>
-      )}
-      <div className="p-6 flex flex-col flex-grow">
-        <div className="flex-grow">
-          <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-            {service.name}
-          </h3>
-          <div 
-            className="text-gray-600 dark:text-gray-300 mb-4 prose dark:prose-invert max-w-none"
-            dangerouslySetInnerHTML={{ __html: service.description }}
-          />
-        </div>
-        <div className="flex justify-between items-center mt-auto">
-          <div>
-            <span className="text-2xl font-bold text-primary-600 dark:text-primary-400">
-              {service.price} {getCurrencySymbol()}
-            </span>
-            <span className="text-gray-500 dark:text-gray-400 ml-1">
-              / {getPeriodText()}
-            </span>
+              ))}
+            </div>
           </div>
-          <button 
-            onClick={onBookClick}
-            className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
-          >
-            Забронировать
-          </button>
+        </section>
+      )}
+
+      {/* Additional Services */}
+      {additionalServices.length > 0 && (
+        <section className="py-20 bg-white dark:bg-dark-800">
+          <div className="max-w-7xl mx-auto px-4">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
+                Дополнительные услуги
+              </h2>
+              <p className="text-xl text-gray-600 dark:text-gray-300">
+                Офисные услуги для вашего удобства
+              </p>
+            </div>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 justify-center">
+              {additionalServices.map((service) => (
+                <div key={service.id} className="bg-gray-50 dark:bg-dark-700 rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-200 dark:border-gray-600">
+                  {service.image_url && (
+                    <div className="mb-4 rounded-lg overflow-hidden">
+                      <img 
+                        src={service.image_url} 
+                        alt={service.name} 
+                        className="w-full h-32 object-cover"
+                      />
+                    </div>
+                  )}
+                  <div className="text-center">
+                    <h3 className="text-xl font-bold mb-2 text-gray-900 dark:text-white">
+                      {service.name}
+                    </h3>
+                    <div className="mb-4">
+                      <span className="text-2xl font-bold text-primary-600 dark:text-primary-400">
+                        {formatPrice(service.price, service.currency)}
+                      </span>
+                      <span className="text-gray-600 dark:text-gray-300 ml-1">
+                        {formatPeriod(service.period)}
+                      </span>
+                    </div>
+                    <div className="text-gray-600 dark:text-gray-300 text-sm text-left">
+                      {service.description.split(' | ').map((line, i) => (
+                        <div key={i} className="mb-1 flex items-start gap-2">
+                          <span className="w-1.5 h-1.5 bg-primary-500 rounded-full mt-1.5 flex-shrink-0"></span>
+                          <span>{line.trim()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* CTA Section */}
+      <section className="py-20 bg-gradient-to-br from-primary-600 via-primary-500 to-secondary-500">
+        <div className="max-w-4xl mx-auto px-4 text-center">
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
+            Готовы начать работу?
+          </h2>
+          <p className="text-xl text-primary-100 mb-8 max-w-2xl mx-auto">
+            Свяжитесь с нами для бронирования рабочего места или получения дополнительной информации
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <button className="px-8 py-4 bg-white text-primary-600 rounded-lg font-semibold hover:bg-primary-50 transition-colors">
+              Забронировать место
+            </button>
+            <button className="px-8 py-4 border-2 border-white text-white rounded-lg font-semibold hover:bg-white hover:text-primary-600 transition-colors">
+              Связаться с нами
+            </button>
+          </div>
         </div>
-      </div>
-    </div>
+      </section>
+    </Layout>
   );
 };
 

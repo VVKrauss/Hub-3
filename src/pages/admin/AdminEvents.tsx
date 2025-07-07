@@ -67,11 +67,94 @@ const AdminEvents = () => {
 
 
 
-  const fetchEvents = async () => {
+const fetchEvents = async () => {
   try {
     setLoading(true);
 
-    // ИЗМЕНЕНО: Используем новую таблицу sh_time_slots вместо time_slots_table
+    // ИЗМЕНЕНО: Используем новую таблицу sh_events вместо events
+    let query = supabase
+      .from('sh_events')
+      .select(`
+        *,
+        sh_event_speakers(
+          id,
+          speaker:sh_speakers(
+            id,
+            name,
+            avatar_url,
+            field_of_expertise
+          )
+        )
+      `);
+
+    // Фильтрация по статусу для новой таблицы
+    if (statusFilter === 'past') {
+      query = query.in('status', ['completed', 'cancelled']);
+    } else if (statusFilter === 'active') {
+      query = query.eq('status', 'published');
+    } else if (statusFilter === 'draft') {
+      query = query.eq('status', 'draft');
+    } else if (statusFilter !== 'all') {
+      query = query.eq('status', statusFilter);
+    }
+
+    // Сортировка
+    if (sortBy === 'date') {
+      query = query.order('start_at', { ascending: true });
+    } else if (sortBy === 'created') {
+      query = query.order('created_at', { ascending: false });
+    } else if (sortBy === 'title') {
+      query = query.order('title', { ascending: true });
+    }
+
+    const { data, error } = await query;
+    
+    if (error) {
+      console.error('Error fetching from sh_events:', error);
+      // Fallback к старой таблице если новая не работает
+      return fetchEventsFromOldTable();
+    }
+
+    console.log('✅ Loaded from sh_events:', data?.length, 'events');
+
+    // Преобразуем данные из новой схемы в формат, ожидаемый интерфейсом
+    const enrichedEvents = (data || []).map(event => ({
+      ...event,
+      // Маппинг полей из новой схемы в старый формат для совместимости
+      location: event.venue_name,
+      address: event.venue_address,
+      price: event.base_price,
+      payment_type: event.payment_type,
+      description: event.description || event.short_description,
+      event_type: event.event_type,
+      
+      // Информация о регистрации (пока используем заглушки)
+      registrations: {
+        current: 0, // TODO: добавить подсчет из таблицы регистраций
+        max_regs: event.max_attendees
+      },
+      current_registration_count: 0, // TODO: добавить подсчет из таблицы регистраций
+      max_registrations: event.max_attendees,
+      
+      // Спикеры
+      speakers: event.sh_event_speakers?.map(es => es.speaker) || []
+    }));
+
+    setEvents(enrichedEvents);
+  } catch (error) {
+    console.error('Error fetching events:', error);
+    // В случае ошибки пытаемся загрузить из старой таблицы
+    fetchEventsFromOldTable();
+  } finally {
+    setLoading(false);
+  }
+};
+
+// Добавьте эту новую функцию для fallback
+const fetchEventsFromOldTable = async () => {
+  try {
+    console.log('🔄 Fallback: Loading from old events table...');
+    
     let query = supabase
       .from('events')
       .select(`
@@ -83,86 +166,44 @@ const AdminEvents = () => {
         )
       `);
 
-    // Фильтрация по статусу (без изменений)
+    // Фильтрация по статусу для старой таблицы
     if (statusFilter === 'past') {
       query = query.or('status.eq.past,status.eq.active');
     } else if (statusFilter !== 'all') {
       query = query.eq('status', statusFilter);
     }
 
+    // Сортировка
+    if (sortBy === 'date') {
+      query = query.order('start_at', { ascending: true });
+    } else if (sortBy === 'created') {
+      query = query.order('created_at', { ascending: false });
+    } else if (sortBy === 'title') {
+      query = query.order('title', { ascending: true });
+    }
+
     const { data, error } = await query;
     if (error) throw error;
 
-    // Обогащаем события временными данными (без изменений)
+    console.log('✅ Fallback loaded from events:', data?.length, 'events');
+
+    // Обогащаем события временными данными из sh_time_slots
     const enrichedEvents = (data || []).map(event => ({
       ...event,
       start_at: event.time_slot?.[0]?.start_at || event.start_at,
       end_at: event.time_slot?.[0]?.end_at || event.end_at
     }));
 
-    // Остальная логика остается без изменений
-    let filteredData = enrichedEvents;
-    if (statusFilter === 'past') {
-      filteredData = enrichedEvents.filter(event => 
-        event.status === 'past' || 
-        (event.end_at && isPastEvent(event.end_at))
-      );
-    } else if (statusFilter === 'active') {
-      filteredData = enrichedEvents.filter(event => 
-        event.status === 'active' && 
-        (!event.end_at || !isPastEvent(event.end_at))
-      );
-    }
-
-    // Сортировка остается без изменений
-    switch (sortBy) {
-      case 'chronological':
-        if (statusFilter === 'active') {
-          filteredData.sort((a, b) => {
-            const dateA = new Date(a.start_at || 0);
-            const dateB = new Date(b.start_at || 0);
-            return dateA.getTime() - dateB.getTime();
-          });
-        } else {
-          filteredData.sort((a, b) => {
-            const dateA = new Date(a.created_at || 0);
-            const dateB = new Date(b.created_at || 0);
-            return dateB.getTime() - dateA.getTime();
-          });
-        }
-        break;
-      case 'date-asc':
-        filteredData.sort((a, b) => {
-          const dateA = new Date(a.start_at || 0);
-          const dateB = new Date(b.start_at || 0);
-          return dateA.getTime() - dateB.getTime();
-        });
-        break;
-      case 'date-desc':
-        filteredData.sort((a, b) => {
-          const dateA = new Date(a.start_at || 0);
-          const dateB = new Date(b.start_at || 0);
-          return dateB.getTime() - dateA.getTime();
-        });
-        break;
-      case 'title-asc':
-        filteredData.sort((a, b) => a.title.localeCompare(b.title));
-        break;
-      case 'title-desc':
-        filteredData.sort((a, b) => b.title.localeCompare(a.title));
-        break;
-    }
-
-    setEvents(filteredData);
-    setSelectedEvents([]);
+    setEvents(enrichedEvents);
   } catch (error) {
-    console.error('Error fetching events:', error);
-    toast.error('Ошибка при загрузке мероприятий');
-  } finally {
-    setLoading(false);
+    console.error('Error in fallback fetch:', error);
+    setEvents([]);
   }
 };
 
+
+
+  
 // ЗАМЕНИТЬ handleDeleteSelected функцию:
 const handleDeleteSelected = async () => {
   if (selectedEvents.length === 0) return;
