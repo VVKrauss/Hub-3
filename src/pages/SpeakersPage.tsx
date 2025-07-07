@@ -1,12 +1,25 @@
-// src/pages/SpeakersPage.tsx - Правильная версия
+// src/pages/SpeakersPage.tsx - Версия с социальными иконками
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Search, Filter, Grid, List, User, Users, Clock, Calendar, MapPin, ArrowRight, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Search, Filter, Grid, List, User, Users, Clock, Calendar, MapPin, ArrowRight, ChevronLeft, ChevronRight, X, ExternalLink, Globe, Linkedin, Twitter, Instagram, Facebook, Youtube, Github } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
 import { supabase } from '../lib/supabase';
 import { getSupabaseImageUrl } from '../utils/imageUtils';
 
 // Типы
+interface SpeakerSocialLink {
+  id: string;
+  speaker_id: string;
+  platform: string;
+  url: string;
+  display_name?: string;
+  description?: string;
+  is_public: boolean;
+  is_primary: boolean;
+  display_order?: number;
+  created_at: string;
+}
+
 interface Speaker {
   id: string;
   slug: string;
@@ -21,6 +34,7 @@ interface Speaker {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  sh_speaker_social_links?: SpeakerSocialLink[];
 }
 
 type ViewMode = 'grid' | 'list';
@@ -40,7 +54,125 @@ interface SpeakerFilters {
 const ITEMS_PER_PAGE = 12;
 const SLIDESHOW_SPEAKERS_COUNT = 5;
 
-// Утилиты для форматирования
+// Утилиты для иконок социальных сетей
+const getSocialIcon = (platform: string, className: string = "h-4 w-4") => {
+  const platformLower = platform.toLowerCase();
+  
+  switch (platformLower) {
+    case 'website':
+    case 'сайт':
+      return <Globe className={className} />;
+    case 'linkedin':
+      return <Linkedin className={className} />;
+    case 'twitter':
+    case 'x':
+      return <Twitter className={className} />;
+    case 'instagram':
+      return <Instagram className={className} />;
+    case 'facebook':
+      return <Facebook className={className} />;
+    case 'youtube':
+      return <Youtube className={className} />;
+    case 'github':
+      return <Github className={className} />;
+    case 'telegram':
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.568 8.16l-1.614 7.608c-.121.555-.444.695-.9.432l-2.484-1.831-1.196 1.152c-.132.132-.245.245-.504.245l.18-2.52 4.644-4.194c.204-.18-.044-.284-.312-.108l-5.736 3.6-2.472-.768c-.54-.168-.548-.54.108-.804l9.648-3.708c.444-.168.84.108.696.804z"/>
+        </svg>
+      );
+    case 'vk':
+    case 'вконтакте':
+      return (
+        <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm6.4 12.96c.8.72 1.68 1.44 2.24 2.4.24.44.24.92-.16 1.16h-2.96c-.56 0-.92-.28-1.28-.68-.36-.36-.68-.76-1.08-1.08-.4-.32-.84-.6-1.36-.48-.76.16-1.16.96-1.12 1.88 0 .28-.12.56-.64.56H9.6c-.88.04-1.72-.12-2.48-.56-.76-.4-1.36-.96-1.88-1.6-.96-1.24-1.68-2.6-2.36-4 0-.2 0-.4.2-.48h2.96c.36 0 .56.16.68.48.4.96.92 1.84 1.68 2.56.36.32.72.56 1.2.4.56-.2.8-.76.84-1.32.08-.88.08-1.76-.16-2.6-.16-.56-.56-.92-1.16-.96-.32-.04-.28-.16-.12-.36.24-.32.48-.52 1-.52h2.88c.44.08.68.36.72.8l.04 3.6c0 .28.12 1.12.68 1.28.44.12.72-.28 1-.56.76-.8 1.28-1.76 1.72-2.76.2-.44.36-.88.52-1.32.12-.32.32-.48.68-.48h3.24c.08 0 .16 0 .2.04.28.08.36.32.28.6-.12.52-.4 1-.68 1.44-.64.96-1.36 1.84-2.04 2.76-.28.36-.24.56.08.84z"/>
+        </svg>
+      );
+    default:
+      return <ExternalLink className={className} />;
+  }
+};
+
+const getSocialColor = (platform: string): string => {
+  const platformLower = platform.toLowerCase();
+  
+  switch (platformLower) {
+    case 'linkedin':
+      return 'text-blue-600 hover:text-blue-700';
+    case 'twitter':
+    case 'x':
+      return 'text-blue-400 hover:text-blue-500';
+    case 'instagram':
+      return 'text-pink-600 hover:text-pink-700';
+    case 'facebook':
+      return 'text-blue-600 hover:text-blue-700';
+    case 'youtube':
+      return 'text-red-600 hover:text-red-700';
+    case 'github':
+      return 'text-gray-800 dark:text-gray-200 hover:text-gray-900 dark:hover:text-gray-100';
+    case 'telegram':
+      return 'text-blue-500 hover:text-blue-600';
+    case 'vk':
+    case 'вконтакте':
+      return 'text-blue-500 hover:text-blue-600';
+    case 'website':
+    case 'сайт':
+      return 'text-green-600 hover:text-green-700';
+    default:
+      return 'text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300';
+  }
+};
+
+// Компонент для отображения социальных ссылок
+interface SocialLinksProps {
+  socialLinks: SpeakerSocialLink[];
+  maxLinks?: number;
+  size?: 'sm' | 'md' | 'lg';
+}
+
+const SocialLinks: React.FC<SocialLinksProps> = ({ socialLinks, maxLinks = 4, size = 'md' }) => {
+  const iconSizes = {
+    sm: 'h-3 w-3',
+    md: 'h-4 w-4', 
+    lg: 'h-5 w-5'
+  };
+
+  const iconSize = iconSizes[size];
+
+  if (!socialLinks || socialLinks.length === 0) {
+    return null;
+  }
+
+  const visibleLinks = socialLinks
+    .filter(link => link.is_public)
+    .sort((a, b) => {
+      // Сначала основные ссылки, потом по порядку отображения
+      if (a.is_primary && !b.is_primary) return -1;
+      if (!a.is_primary && b.is_primary) return 1;
+      return (a.display_order || 0) - (b.display_order || 0);
+    })
+    .slice(0, maxLinks);
+
+  return (
+    <div className="flex items-center gap-2">
+      {visibleLinks.map((social) => (
+        <a
+          key={social.id}
+          href={social.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`transition-colors ${getSocialColor(social.platform)}`}
+          title={social.display_name || social.platform}
+          onClick={(e) => e.stopPropagation()} // Предотвращаем переход к профилю спикера
+        >
+          {getSocialIcon(social.platform, iconSize)}
+        </a>
+      ))}
+    </div>
+  );
+};
+
+// Утилиты для форматирования (без изменений)
 const formatRussianDate = (dateString: string): string => {
   const date = new Date(dateString);
   return date.toLocaleDateString('ru-RU', {
@@ -149,8 +281,7 @@ const filterSpeakers = (speakers: Speaker[], filters: SpeakerFilters): Speaker[]
     return true;
   });
 };
-
-// SpeakersSlideshow - Компонент слайдшоу в стиле EventsPage
+// SpeakersSlideshow - Компонент слайдшоу в стиле EventsPage (без изменений)
 interface SpeakersHeroSliderProps {
   speakers: Speaker[];
   autoPlay?: boolean;
@@ -257,6 +388,17 @@ const SpeakersHeroSlider: React.FC<SpeakersHeroSliderProps> = ({
               </p>
             )}
 
+            {/* Социальные ссылки в слайдшоу */}
+            {currentSpeaker.sh_speaker_social_links && currentSpeaker.sh_speaker_social_links.length > 0 && (
+              <div className="mb-6">
+                <SocialLinks 
+                  socialLinks={currentSpeaker.sh_speaker_social_links} 
+                  maxLinks={5}
+                  size="lg"
+                />
+              </div>
+            )}
+
             {/* Кнопка */}
             <div className="mb-6">
               <Link
@@ -312,7 +454,8 @@ const SpeakersHeroSlider: React.FC<SpeakersHeroSliderProps> = ({
     </div>
   );
 };
-// Горизонтальная панель фильтров между слайдшоу и галереей
+
+// Горизонтальная панель фильтров (без изменений из предыдущей версии)
 interface HorizontalFiltersProps {
   filters: SpeakerFilters;
   uniqueFields: string[];
@@ -435,7 +578,6 @@ const HorizontalFilters: React.FC<HorizontalFiltersProps> = ({
                 </button>
               </div>
             </div>
-
             {/* Десктопные фильтры */}
             <div className="hidden lg:grid lg:grid-cols-12 gap-4 items-end">
               {/* Поиск */}
@@ -611,7 +753,8 @@ const HorizontalFilters: React.FC<HorizontalFiltersProps> = ({
     </>
   );
 };
-// Компонент карточки спикера с кликабельностью вместо кнопки "подробнее"
+
+// Компонент карточки спикера с социальными иконками вместо статусов
 interface SpeakerCardProps {
   speaker: Speaker;
   viewMode: ViewMode;
@@ -623,32 +766,6 @@ const SpeakerCard: React.FC<SpeakerCardProps> = ({ speaker, viewMode }) => {
       return getSupabaseImageUrl(speaker.avatar_url);
     }
     return '';
-  };
-
-  const getStatusLabel = (status: string): string => {
-    switch (status) {
-      case 'active':
-        return 'Активный';
-      case 'inactive':
-        return 'Неактивный';
-      case 'pending':
-        return 'На рассмотрении';
-      default:
-        return status;
-    }
-  };
-
-  const getStatusColor = (status: string): string => {
-    switch (status) {
-      case 'active':
-        return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400';
-      case 'inactive':
-        return 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
-      case 'pending':
-        return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400';
-      default:
-        return 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
-    }
   };
 
   if (viewMode === 'list') {
@@ -678,10 +795,8 @@ const SpeakerCard: React.FC<SpeakerCardProps> = ({ speaker, viewMode }) => {
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
+                  {/* Рекомендуемый бейдж */}
                   <div className="flex flex-wrap items-center gap-2 mb-2">
-                    <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${getStatusColor(speaker.status)}`}>
-                      {getStatusLabel(speaker.status)}
-                    </span>
                     {speaker.is_featured && (
                       <span className="inline-flex items-center bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 px-2 py-1 rounded text-xs">
                         Рекомендуемый
@@ -700,9 +815,18 @@ const SpeakerCard: React.FC<SpeakerCardProps> = ({ speaker, viewMode }) => {
                   )}
 
                   {speaker.bio && (
-                    <p className="text-gray-600 dark:text-gray-300 text-sm line-clamp-2 md:line-clamp-3">
+                    <p className="text-gray-600 dark:text-gray-300 text-sm line-clamp-2 md:line-clamp-3 mb-3">
                       {speaker.bio}
                     </p>
+                  )}
+
+                  {/* Социальные ссылки */}
+                  {speaker.sh_speaker_social_links && speaker.sh_speaker_social_links.length > 0 && (
+                    <SocialLinks 
+                      socialLinks={speaker.sh_speaker_social_links} 
+                      maxLinks={4}
+                      size="sm"
+                    />
                   )}
                 </div>
               </div>
@@ -712,414 +836,3 @@ const SpeakerCard: React.FC<SpeakerCardProps> = ({ speaker, viewMode }) => {
       </Link>
     );
   }
-
-  // Grid view
-  return (
-    <Link
-      to={`/speakers/${speaker.slug || speaker.id}`}
-      className="group block"
-    >
-      <div className="bg-white dark:bg-dark-800 rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 hover:scale-[1.02] h-full">
-        {/* Изображение */}
-        <div className="relative aspect-square overflow-hidden">
-          {speaker.avatar_url ? (
-            <img
-              src={getSpeakerImage(speaker)}
-              alt={speaker.name}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-900/30 dark:to-primary-800/30">
-              <User className="w-16 h-16 text-primary-400" />
-            </div>
-          )}
-          
-          {/* Статусы в углу */}
-          <div className="absolute top-3 right-3 flex flex-col gap-1 items-end">
-            <span className={`px-2 py-1 rounded-lg text-xs font-medium ${getStatusColor(speaker.status)}`}>
-              {getStatusLabel(speaker.status)}
-            </span>
-            {speaker.is_featured && (
-              <span className="bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300 px-2 py-1 rounded-lg text-xs font-medium">
-                Рекомендуемый
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Контент */}
-        <div className="p-4 md:p-6 flex flex-col h-full">
-          <h3 className="font-bold text-lg md:text-xl text-gray-900 dark:text-white mb-2 md:mb-3 line-clamp-2 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
-            {speaker.name}
-          </h3>
-
-          {speaker.field_of_expertise && (
-            <p className="text-primary-600 dark:text-primary-400 text-sm font-medium mb-2 md:mb-3">
-              {speaker.field_of_expertise}
-            </p>
-          )}
-
-          {speaker.bio && (
-            <p className="text-gray-600 dark:text-gray-400 text-sm mb-4 line-clamp-3 flex-grow">
-              {speaker.bio}
-            </p>
-          )}
-
-          <div className="flex justify-between items-center mt-auto">
-            <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-              <User className="h-4 w-4 mr-1" />
-              Спикер
-            </div>
-          </div>
-        </div>
-      </div>
-    </Link>
-  );
-};
-
-// Адаптивная сетка для спикеров
-const ResponsiveSpeakersGrid: React.FC<{
-  speakers: Speaker[];
-  viewMode: ViewMode;
-  className?: string;
-}> = ({ speakers, viewMode, className = '' }) => {
-  if (viewMode === 'list') {
-    return (
-      <div className={`space-y-4 ${className}`}>
-        {speakers.map((speaker) => (
-          <SpeakerCard
-            key={speaker.id}
-            speaker={speaker}
-            viewMode={viewMode}
-          />
-        ))}
-      </div>
-    );
-  }
-
-  // Grid view с улучшенной адаптивностью
-  return (
-    <div className={`
-      grid gap-4 md:gap-6
-      grid-cols-1 
-      sm:grid-cols-2 
-      lg:grid-cols-3 
-      xl:grid-cols-4
-      ${className}
-    `}>
-      {speakers.map((speaker) => (
-        <SpeakerCard
-          key={speaker.id}
-          speaker={speaker}
-          viewMode={viewMode}
-        />
-      ))}
-    </div>
-  );
-};
-
-// Основной компонент страницы спикеров
-const SpeakersPage: React.FC = () => {
-  // Состояние
-  const [allSpeakers, setAllSpeakers] = useState<Speaker[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-
-  // Фильтры
-  const [filters, setFilters] = useState<SpeakerFilters>({
-    search: '',
-    field_of_expertise: 'all',
-    status: 'active', // По умолчанию показываем только активных
-    is_featured: null,
-    sortBy: 'random',
-    sortOrder: 'asc'
-  });
-
-  // Инициализация с рандомной сортировкой
-  const [initialRandomSort, setInitialRandomSort] = useState(true);
-
-  // Загрузка спикеров
-  const fetchSpeakers = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      let query = supabase
-        .from('sh_speakers')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      const { data, error: fetchError } = await query;
-
-      if (fetchError) {
-        throw fetchError;
-      }
-
-      if (data) {
-        // При первой загрузке применяем рандомную сортировку
-        const processedData = initialRandomSort ? shuffleArray(data) : data;
-        setAllSpeakers(processedData);
-        setInitialRandomSort(false);
-      }
-    } catch (err) {
-      console.error('Error fetching speakers:', err);
-      setError(err instanceof Error ? err.message : 'Произошла ошибка при загрузке спикеров');
-    } finally {
-      setLoading(false);
-    }
-  }, [initialRandomSort]);
-
-  // Эффект для загрузки данных
-  useEffect(() => {
-    fetchSpeakers();
-  }, [fetchSpeakers]);
-
-  // Получение уникальных полей экспертизы
-  const uniqueFields = useMemo(() => getUniqueFields(allSpeakers), [allSpeakers]);
-
-  // Фильтрация и сортировка спикеров
-  const filteredAndSortedSpeakers = useMemo(() => {
-    const filtered = filterSpeakers(allSpeakers, filters);
-    return sortSpeakers(filtered, filters.sortBy, filters.sortOrder);
-  }, [allSpeakers, filters]);
-
-  // Пагинация
-  const paginatedSpeakers = useMemo(() => {
-    return filteredAndSortedSpeakers.slice(0, page * ITEMS_PER_PAGE);
-  }, [filteredAndSortedSpeakers, page]);
-
-  // Проверка есть ли еще элементы для загрузки
-  useEffect(() => {
-    setHasMore(paginatedSpeakers.length < filteredAndSortedSpeakers.length);
-  }, [paginatedSpeakers.length, filteredAndSortedSpeakers.length]);
-
-  // Загрузка еще спикеров
-  const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMore) return;
-    
-    setLoadingMore(true);
-    // Симулируем небольшую задержку для лучшего UX
-    await new Promise(resolve => setTimeout(resolve, 300));
-    setPage(prev => prev + 1);
-    setLoadingMore(false);
-  }, [loadingMore, hasMore]);
-
-  // Обновление фильтров
-  const updateFilters = useCallback((newFilters: Partial<SpeakerFilters>) => {
-    setFilters(prev => ({ ...prev, ...newFilters }));
-    setPage(1); // Сброс пагинации при изменении фильтров
-  }, []);
-
-  // Очистка фильтров
-  const clearFilters = useCallback(() => {
-    setFilters({
-      search: '',
-      field_of_expertise: 'all',
-      status: 'active',
-      is_featured: null,
-      sortBy: 'name',
-      sortOrder: 'asc'
-    });
-    setPage(1);
-  }, []);
-
-  // Проверка активных фильтров
-  const hasActiveFilters = useMemo(() => {
-    return (
-      filters.search.trim() !== '' ||
-      filters.field_of_expertise !== 'all' ||
-      filters.status !== 'active' ||
-      filters.is_featured !== null ||
-      filters.sortBy !== 'random'
-    );
-  }, [filters]);
-
-  // Обработчики
-  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    updateFilters({ search: e.target.value });
-  }, [updateFilters]);
-
-  const handleFieldChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    updateFilters({ field_of_expertise: e.target.value });
-  }, [updateFilters]);
-
-  const handleStatusChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    updateFilters({ status: e.target.value });
-  }, [updateFilters]);
-
-  const handleFeaturedChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value;
-    updateFilters({ 
-      is_featured: value === 'all' ? null : value === 'true' 
-    });
-  }, [updateFilters]);
-
-  const handleSortChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    const [sortBy, sortOrder] = e.target.value.split('-') as [SortOption, SortOrder];
-    updateFilters({ sortBy, sortOrder });
-  }, [updateFilters]);
-
-  if (loading) {
-    return (
-      <Layout>
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
-            <p className="text-gray-600 dark:text-gray-400">Загрузка спикеров...</p>
-          </div>
-        </div>
-      </Layout>
-    );
-  }
-
-  if (error) {
-    return (
-      <Layout>
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="text-center max-w-md mx-auto px-4">
-            <div className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 p-4 rounded-lg mb-4">
-              <h2 className="text-xl font-bold mb-2">Ошибка загрузки</h2>
-              <p className="text-sm">{error}</p>
-            </div>
-            <button
-              onClick={fetchSpeakers}
-              className="bg-primary-600 hover:bg-primary-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-            >
-              Попробовать снова
-            </button>
-          </div>
-        </div>
-      </Layout>
-    );
-  }
-
-  return (
-    <Layout>
-      {/* Слайдшоу */}
-      <SpeakersHeroSlider speakers={allSpeakers} />
-
-      {/* Горизонтальные фильтры */}
-      <HorizontalFilters
-        filters={filters}
-        uniqueFields={uniqueFields}
-        onSearchChange={handleSearchChange}
-        onFieldChange={handleFieldChange}
-        onSortChange={handleSortChange}
-        onClearFilters={clearFilters}
-        hasActiveFilters={hasActiveFilters}
-        totalSpeakers={allSpeakers.length}
-        filteredCount={filteredAndSortedSpeakers.length}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-      />
-
-      {/* Основной контент */}
-      <main className="py-8 bg-gray-50 dark:bg-dark-900 min-h-screen">
-        <div className="container mx-auto px-4">
-          {/* Список спикеров */}
-          <div className="space-y-6">
-            {filteredAndSortedSpeakers.length > 0 ? (
-              <>
-                <ResponsiveSpeakersGrid
-                  speakers={paginatedSpeakers}
-                  viewMode={viewMode}
-                />
-
-                {/* Кнопка "Загрузить еще" */}
-                {hasMore && (
-                  <div className="flex justify-center mt-12">
-                    <button
-                      onClick={loadMore}
-                      disabled={loadingMore}
-                      className="inline-flex items-center px-8 py-4 bg-primary-600 hover:bg-primary-700 disabled:bg-primary-400 text-white rounded-lg font-medium transition-colors shadow-lg hover:shadow-xl"
-                    >
-                      {loadingMore ? (
-                        <>
-                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
-                          Загрузка...
-                        </>
-                      ) : (
-                        <>
-                          Загрузить еще
-                          <ArrowRight className="ml-2 h-5 w-5" />
-                        </>
-                      )}
-                    </button>
-                  </div>
-                )}
-
-                {/* Показать количество загруженных спикеров */}
-                {paginatedSpeakers.length < filteredAndSortedSpeakers.length && (
-                  <div className="text-center text-sm text-gray-500 dark:text-gray-400 mt-4">
-                    Показано {paginatedSpeakers.length} из {filteredAndSortedSpeakers.length} спикеров
-                  </div>
-                )}
-              </>
-            ) : (
-              /* Состояние "ничего не найдено" */
-              <div className="text-center py-16">
-                <div className="max-w-md mx-auto">
-                  <Users className="h-20 w-20 text-gray-300 dark:text-gray-600 mx-auto mb-6" />
-                  <h3 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">
-                    Спикеры не найдены
-                  </h3>
-                  <p className="text-gray-500 dark:text-gray-400 mb-6">
-                    {hasActiveFilters 
-                      ? 'Попробуйте изменить параметры поиска или очистить фильтры'
-                      : 'В данный момент нет доступных спикеров'
-                    }
-                  </p>
-                  
-                  {hasActiveFilters && (
-                    <div className="space-y-3">
-                      <button
-                        onClick={clearFilters}
-                        className="inline-flex items-center px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium"
-                      >
-                        <X className="mr-2 h-4 w-4" />
-                        Очистить фильтры
-                      </button>
-                      
-                      {/* Показать активные фильтры */}
-                      <div className="text-sm text-gray-500 dark:text-gray-400">
-                        <p>Активные фильтры:</p>
-                        <div className="flex flex-wrap justify-center gap-2 mt-2">
-                          {filters.search && (
-                            <span className="bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 px-2 py-1 rounded text-xs">
-                              Поиск: "{filters.search}"
-                            </span>
-                          )}
-                          {filters.field_of_expertise !== 'all' && (
-                            <span className="bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 px-2 py-1 rounded text-xs">
-                              Область: {filters.field_of_expertise}
-                            </span>
-                          )}
-                          {filters.status !== 'active' && (
-                            <span className="bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 px-2 py-1 rounded text-xs">
-                              Статус: {filters.status}
-                            </span>
-                          )}
-                          {filters.is_featured !== null && (
-                            <span className="bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 px-2 py-1 rounded text-xs">
-                              {filters.is_featured ? 'Рекомендуемые' : 'Обычные'}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </main>
-    </Layout>
-  );
-};
-
-export default SpeakersPage;
