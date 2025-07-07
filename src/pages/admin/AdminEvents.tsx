@@ -1,6 +1,4 @@
 // src/pages/admin/AdminEvents.tsx
-// Обновленная версия для работы с новой системой регистраций (sh_events, sh_registrations)
-
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
@@ -23,48 +21,40 @@ import { toast } from 'react-hot-toast';
 import { formatRussianDate, formatTimeRange, formatTimeFromTimestamp, isPastEvent } from '../../utils/dateUtils';
 import EventDetailsModal from '../../components/admin/EventDetailsModal';
 
-// Интерфейс для события (совместимый с новой системой)
+// Интерфейс для события
 interface Event {
-  // Поля из sh_events
   id: string;
-  slug: string;
   title: string;
-  short_description?: string;
   description?: string;
-  event_type: string;
-  status: 'draft' | 'active' | 'past' | 'cancelled';
-  age_category: string;
-  language_code: string;
+  location?: string;
   start_at: string;
-  end_at: string;
-  timezone: string;
-  location_type: string;
-  venue_name?: string;
-  venue_address?: string;
-  payment_type: 'free' | 'paid' | 'donation';
-  base_price?: number;
-  currency: string;
-  registration_required: boolean;
-  registration_enabled: boolean;
-  max_attendees?: number;
-  attendee_limit_per_registration: number;
-  is_featured: boolean;
-  is_public: boolean;
+  end_at?: string;
+  status: 'active' | 'draft' | 'past';
+  payment_type: 'free' | 'cost' | 'donation';
+  price?: number;
+  currency?: string;
   created_at: string;
   updated_at: string;
   
-  // Вычисляемые поля для регистраций
-  sh_registrations_count?: number;
-  
-  // Для обратной совместимости с существующим кодом
-  location?: string; // venue_name
-  price?: number;    // base_price
-  current_registration_count?: number;
-  max_registrations?: number;
+  // Поля регистраций (старая система)
   registrations?: {
     current: number;
     max_regs?: number;
+    reg_list?: any[];
+    current_adults?: number;
+    current_children?: number;
   };
+  registrations_list?: any[];
+  current_registration_count?: string | number;
+  max_registrations?: number;
+  active_registrations_count?: number;
+  total_registrations_count?: number;
+  current_registrations?: number;
+  available_spots?: number;
+  
+  // Новые поля для работы с sh_registrations
+  sh_registrations_count?: number;
+  max_attendees?: number;
 }
 
 const AdminEvents: React.FC = () => {
@@ -77,58 +67,151 @@ const AdminEvents: React.FC = () => {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
 
-  // Статус цвета для карточек
   const statusColors = {
     active: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400',
     draft: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400',
-    past: 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400',
-    cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
+    past: 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400'
   };
 
-  // Загрузка событий из новой системы
+  // Функция для загрузки событий из новой таблицы sh_events
+  const fetchEventsFromNewTable = async () => {
+    console.log('🔄 Trying to load from sh_events...');
+    
+    let query = supabase
+      .from('sh_events')
+      .select('*');
+
+    // Применяем фильтр статуса
+    if (statusFilter === 'active') {
+      query = query.eq('status', 'active');
+    } else if (statusFilter === 'past') {
+      query = query.eq('status', 'past');
+    } else if (statusFilter === 'draft') {
+      query = query.eq('status', 'draft');
+    } else if (statusFilter !== 'all') {
+      query = query.eq('status', statusFilter);
+    }
+
+    // Сортировка
+    if (sortBy === 'date') {
+      query = query.order('start_at', { ascending: true });
+    } else if (sortBy === 'created') {
+      query = query.order('created_at', { ascending: false });
+    } else if (sortBy === 'title') {
+      query = query.order('title', { ascending: true });
+    }
+
+    const { data, error } = await query;
+    
+    if (error) {
+      console.error('Error fetching from sh_events:', error);
+      // Fallback к старой таблице если новая не работает
+      return fetchEventsFromOldTable();
+    }
+
+    console.log('✅ Loaded from sh_events:', data?.length, 'events');
+
+    // Преобразуем данные из новой схемы в формат, ожидаемый интерфейсом
+    const enrichedEvents = (data || []).map(event => ({
+      ...event,
+      // Маппинг полей из новой схемы в старый формат для совместимости
+      location: event.venue_name,
+      address: event.venue_address,
+      price: event.base_price,
+      payment_type: event.payment_type,
+      description: event.description || event.short_description,
+      event_type: event.event_type,
+      
+      // Информация о регистрации (пока используем заглушки)
+      registrations: {
+        current: 0, // TODO: добавить подсчет из таблицы регистраций
+        max_regs: event.max_attendees
+      },
+      current_registration_count: 0, // TODO: добавить подсчет из таблицы регистраций
+      max_registrations: event.max_attendees,
+      
+      // Используем данные из старой системы как fallback
+      active_registrations_count: 0,
+      total_registrations_count: 0,
+      current_registrations: 0,
+      available_spots: event.max_attendees
+    }));
+
+    // НОВАЯ ЛОГИКА: Получаем актуальное количество регистраций из sh_registrations
+    const eventsWithRegistrationCounts = await Promise.all(
+      enrichedEvents.map(async (event) => {
+        const { count } = await supabase
+          .from('sh_registrations')
+          .select('*', { count: 'exact', head: true })
+          .eq('event_id', event.id)
+          .eq('registration_status', 'active');
+
+        return {
+          ...event,
+          sh_registrations_count: count || 0,
+          // Обновляем и старые поля для совместимости
+          active_registrations_count: count || 0,
+          current_registration_count: count || 0,
+          registrations: {
+            ...event.registrations,
+            current: count || 0
+          }
+        };
+      })
+    );
+
+    return eventsWithRegistrationCounts;
+  };
+
+  // Fallback функция для загрузки из старой таблицы
+  const fetchEventsFromOldTable = async () => {
+    console.log('📦 Fallback to events table...');
+    
+    let query = supabase
+      .from('events')
+      .select('*');
+
+    // Применяем фильтры и сортировку
+    if (statusFilter === 'active') {
+      query = query.eq('status', 'active');
+    } else if (statusFilter === 'past') {
+      query = query.eq('status', 'past');  
+    } else if (statusFilter === 'draft') {
+      query = query.eq('status', 'draft');
+    } else if (statusFilter !== 'all') {
+      query = query.eq('status', statusFilter);
+    }
+
+    if (sortBy === 'date') {
+      query = query.order('start_at', { ascending: true });
+    } else if (sortBy === 'created') {
+      query = query.order('created_at', { ascending: false });
+    } else if (sortBy === 'title') {
+      query = query.order('title', { ascending: true });
+    }
+
+    const { data, error } = await query;
+    
+    if (error) {
+      console.error('Error fetching events:', error);
+      throw error;
+    }
+
+    console.log('📦 Loaded from events table:', data?.length, 'events');
+    return data || [];
+  };
+
+  // Основная функция загрузки событий
   const fetchEvents = async () => {
     try {
       setIsLoading(true);
       
-      // Загружаем события из sh_events
-      const { data: eventsData, error } = await supabase
-        .from('sh_events')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching from sh_events:', error);
-        throw error;
-      }
-
-      // Получаем количество регистраций для каждого события
-      const eventsWithCounts = await Promise.all(
-        (eventsData || []).map(async (event) => {
-          const { count } = await supabase
-            .from('sh_registrations')
-            .select('*', { count: 'exact', head: true })
-            .eq('event_id', event.id)
-            .eq('registration_status', 'active');
-
-          return {
-            ...event,
-            // Маппинг новых полей на старые для совместимости
-            location: event.venue_name,
-            price: event.base_price,
-            sh_registrations_count: count || 0,
-            current_registration_count: count || 0,
-            max_registrations: event.max_attendees,
-            registrations: {
-              current: count || 0,
-              max_regs: event.max_attendees
-            }
-          };
-        })
-      );
-
-      setEvents(eventsWithCounts);
+      // Сначала пробуем загрузить из новой таблицы
+      const eventsData = await fetchEventsFromNewTable();
+      setEvents(eventsData);
+      
     } catch (error) {
-      console.error('Error fetching events:', error);
+      console.error('Error in fetchEvents:', error);
       toast.error('Ошибка при загрузке мероприятий');
     } finally {
       setIsLoading(false);
@@ -137,33 +220,42 @@ const AdminEvents: React.FC = () => {
 
   useEffect(() => {
     fetchEvents();
-  }, []);
+  }, [statusFilter, sortBy]);
 
-  // Удаление событий
+  // Функция удаления событий
   const handleDeleteEvents = async () => {
     if (!confirm(`Вы уверены, что хотите удалить ${selectedEvents.length} ${selectedEvents.length === 1 ? 'мероприятие' : 'мероприятия'}?`)) {
       return;
     }
 
     try {
-      // Удаляем из новой таблицы sh_events
-      const { error } = await supabase
+      // Пробуем удалить из новой таблицы sh_events
+      let { error } = await supabase
         .from('sh_events')
         .delete()
         .in('id', selectedEvents);
 
-      if (error) throw error;
+      if (error) {
+        console.log('Failed to delete from sh_events, trying events table:', error);
+        
+        // Если не получилось, удаляем из старой таблицы
+        const { error: oldTableError } = await supabase
+          .from('events')
+          .delete()
+          .in('id', selectedEvents);
+
+        if (oldTableError) throw oldTableError;
+      }
 
       toast.success(`Удалено ${selectedEvents.length} ${selectedEvents.length === 1 ? 'мероприятие' : 'мероприятия'}`);
       setSelectedEvents([]);
       fetchEvents();
     } catch (error) {
       console.error('Error deleting events:', error);
-      toast.error('Ошибка при удалении мероприятий');
+      toast.error('Ошибка при удалении мероприятий'); 
     }
   };
 
-  // Переключение выбора событий
   const toggleEventSelection = (eventId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setSelectedEvents(prev => 
@@ -182,38 +274,59 @@ const AdminEvents: React.FC = () => {
     }
   };
 
-  // Фильтрация событий
   const filteredEvents = events.filter(event => {
     const matchesSearch = 
       event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       event.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      event.venue_name?.toLowerCase().includes(searchQuery.toLowerCase());
+      event.location?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesStatus = statusFilter === 'all' || event.status === statusFilter;
-
-    return matchesSearch && matchesStatus;
+    return matchesSearch;
   });
 
-  // Функции для получения данных о регистрациях (обновленные для новой системы)
+  // ОБНОВЛЕННЫЕ ФУНКЦИИ ДЛЯ РАБОТЫ С РЕГИСТРАЦИЯМИ
+  
+  // Helper function to get current registration count from either new or legacy structure
   const getCurrentRegistrationCount = (event: Event): number => {
-    return event.sh_registrations_count || 0;
+    // НОВАЯ ЛОГИКА - приоритет данным из sh_registrations
+    if (event.sh_registrations_count !== undefined) {
+      return event.sh_registrations_count;
+    }
+    
+    // Фоллбэк на старую систему
+    if (event.registrations?.current !== undefined) {
+      return event.registrations.current;
+    }
+    
+    // Последний фоллбэк
+    return typeof event.current_registration_count === 'string' 
+      ? parseInt(event.current_registration_count) || 0
+      : event.current_registration_count || 0;
   };
 
+  // Helper function to get max registrations from either new or legacy structure
   const getMaxRegistrations = (event: Event): number | null => {
-    return event.max_attendees || null;
+    // НОВАЯ ЛОГИКА - приоритет новой системе
+    if (event.max_attendees !== undefined) {
+      return event.max_attendees;
+    }
+    
+    // Фоллбэк на старую систему
+    if (event.registrations?.max_regs !== undefined) {
+      return event.registrations.max_regs;
+    }
+    return event.max_registrations || null;
   };
-
-  // Функция отображения цены
+  // Helper function to get price display text based on payment type
   const getPriceDisplay = (event: Event): string => {
     const paymentType = event.payment_type;
-    const price = event.base_price;
+    const price = event.price;
 
     if (paymentType === 'free') {
       return 'Бесплатно';
     } else if (paymentType === 'donation') {
       return 'Донат';
-    } else if (paymentType === 'paid' && price !== null && price !== undefined) {
-      return price === 0 ? 'Бесплатно' : `${price} ${event.currency || 'RSD'}`;
+    } else if (paymentType === 'cost' && price !== null && price !== undefined) {
+      return price === 0 ? 'Бесплатно' : `${price} ${event.currency || 'RUB'}`;
     } else {
       return 'Бесплатно';
     }
@@ -228,14 +341,13 @@ const AdminEvents: React.FC = () => {
       currentCount > 0 || // Есть регистрации
       maxRegs !== null || // Установлен лимит
       event.payment_type !== 'free' || // Платное мероприятие
-      event.status === 'active' || // Активное мероприятие
-      event.registration_required // Требуется регистрация
+      event.status === 'active' // Активное мероприятие
     );
   };
 
   // Проверяет, есть ли система регистраций в мероприятии
   const hasRegistrationSystem = (event: Event): boolean => {
-    return event.registration_required && event.registration_enabled;
+    return !!(event.registrations || event.registrations_list || event.current_registration_count !== undefined);
   };
 
   // Функция для отображения даты и времени
@@ -268,28 +380,10 @@ const AdminEvents: React.FC = () => {
     setShowDetailsModal(true);
   };
 
-  // Счетчики для табов
   const tabs = [
-    { 
-      id: 'all', 
-      label: 'Все', 
-      count: events.length 
-    },
-    { 
-      id: 'active', 
-      label: 'Активные', 
-      count: events.filter(e => e.status === 'active' && (!e.end_at || !isPastEvent(e.end_at))).length 
-    },
-    { 
-      id: 'past', 
-      label: 'Прошедшие', 
-      count: events.filter(e => e.status === 'past' || (e.end_at && isPastEvent(e.end_at))).length 
-    },
-    { 
-      id: 'draft', 
-      label: 'Черновики', 
-      count: events.filter(e => e.status === 'draft').length 
-    }
+    { id: 'active', label: 'Активные', count: events.filter(e => e.status === 'active' && (!e.end_at || !isPastEvent(e.end_at))).length },
+    { id: 'past', label: 'Прошедшие', count: events.filter(e => e.status === 'past' || (e.end_at && isPastEvent(e.end_at))).length },
+    { id: 'draft', label: 'Черновики', count: events.filter(e => e.status === 'draft').length }
   ];
 
   return (
@@ -422,143 +516,4 @@ const AdminEvents: React.FC = () => {
               const currentRegistrationCount = getCurrentRegistrationCount(event);
               const fillPercentage = maxRegistrations ? (currentRegistrationCount / maxRegistrations) * 100 : 0;
               const isEventPast = event.end_at ? isPastEvent(event.end_at) : false;
-
-              return (
-                <div
-                  key={event.id}
-                  className="group bg-white dark:bg-dark-800 rounded-2xl shadow-lg border border-gray-200 dark:border-dark-700 overflow-hidden hover:shadow-xl transition-all duration-300 cursor-pointer transform hover:scale-[1.02]"
-                  onClick={() => handleEventClick(event)}
-                >
-                  {/* Заголовок карточки */}
-                  <div className="relative p-4 border-b border-gray-200 dark:border-dark-600">
-                    <div className="flex items-center justify-between">
-                      <button
-                        onClick={(e) => toggleEventSelection(event.id, e)}
-                        className="text-gray-400 hover:text-primary-600 transition-colors"
-                      >
-                        {selectedEvents.includes(event.id) ? (
-                          <CheckSquare className="h-5 w-5 text-primary-600" />
-                        ) : (
-                          <Square className="h-5 w-5" />
-                        )}
-                      </button>
-                      
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        isEventPast ? statusColors.past : statusColors[event.status as keyof typeof statusColors]
-                      }`}>
-                        {isEventPast ? 'Прошло' : 
-                         event.status === 'active' ? 'Активно' : 
-                         event.status === 'draft' ? 'Черновик' : 'Прошло'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Контент карточки */}
-                  <div className="p-6">
-                    {/* Заголовок */}
-                    <div className="h-[4rem] mb-4 overflow-hidden">
-                      <h3 className="text-lg font-bold text-gray-900 dark:text-white font-heading group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
-                        {line1}
-                        {line2 && (
-                          <>
-                            <br />
-                            {line2}
-                          </>
-                        )}
-                      </h3>
-                    </div>
-                    
-                    {/* Детали мероприятия */}
-                    <div className="space-y-3 mb-4">
-                      <div className="flex items-center text-gray-600 dark:text-gray-300 text-sm">
-                        <div className="flex items-center justify-center w-8 h-8 bg-primary-100 dark:bg-primary-900/30 rounded-lg mr-3">
-                          <Calendar className="w-4 h-4 text-primary-600 dark:text-primary-400" />
-                        </div>
-                        <span className="truncate font-medium">{formatEventDateTime(event)}</span>
-                      </div>
-                      
-                      {event.venue_name && (
-                        <div className="flex items-center text-gray-600 dark:text-gray-300 text-sm">
-                          <div className="flex items-center justify-center w-8 h-8 bg-primary-100 dark:bg-primary-900/30 rounded-lg mr-3">
-                            <MapPin className="w-4 h-4 text-primary-600 dark:text-primary-400" />
-                          </div>
-                          <span className="truncate font-medium">{event.venue_name}</span>
-                        </div>
-                      )}
-                      
-                      {/* Информация о регистрациях */}
-                      {shouldShowRegistrations(event) && (
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between text-sm">
-                            <div className="flex items-center text-gray-600 dark:text-gray-300">
-                              <div className="flex items-center justify-center w-8 h-8 bg-primary-100 dark:bg-primary-900/30 rounded-lg mr-3">
-                                <Users className="w-4 h-4 text-primary-600 dark:text-primary-400" />
-                              </div>
-                              <span className="font-medium">
-                                {hasRegistrationSystem(event) ? 'Регистрации' : 'Участие'}
-                              </span>
-                            </div>
-                            <span className="font-bold text-gray-900 dark:text-white">
-                              {currentRegistrationCount}
-                              {maxRegistrations && maxRegistrations > 0 ? `/${maxRegistrations}` : ''}
-                            </span>
-                          </div>
-                          
-                          {/* Прогресс-бар только при наличии лимита */}
-                          {maxRegistrations && maxRegistrations > 0 && (
-                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
-                              <div 
-                                className="h-2 bg-gradient-to-r from-primary-400 to-primary-600 rounded-full transition-all duration-500"
-                                style={{ width: `${Math.min(fillPercentage, 100)}%` }}
-                              ></div>
-                            </div>
-                          )}
-                          
-                          {/* Статус для неограниченных регистраций */}
-                          {(!maxRegistrations || maxRegistrations === 0) && currentRegistrationCount > 0 && (
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                              Без ограничений
-                            </div>
-                          )}
-                          
-                          {/* Показываем если система регистраций не настроена */}
-                          {!hasRegistrationSystem(event) && (
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                              Регистрация не требуется
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Цена */}
-                    <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
-                      <span className="text-sm text-gray-600 dark:text-gray-400 font-medium">Стоимость:</span>
-                      <span className="font-bold text-lg text-primary-600 dark:text-primary-400">
-                        {getPriceDisplay(event)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Модальное окно деталей */}
-        {selectedEvent && (
-          <EventDetailsModal
-            isOpen={showDetailsModal}
-            onClose={() => {
-              setShowDetailsModal(false);
-              setSelectedEvent(null);
-            }}
-            event={selectedEvent}
-          />
-        )}
-      </div>
-    </div>
-  );
-};
-
-export default AdminEvents;
+            
