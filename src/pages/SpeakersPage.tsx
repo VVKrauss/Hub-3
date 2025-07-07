@@ -1,4 +1,4 @@
-// src/pages/SpeakersPage.tsx - Версия с социальными иконками
+// src/pages/SpeakersPage.tsx - Полный исправленный файл
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Search, Filter, Grid, List, User, Users, Clock, Calendar, MapPin, ArrowRight, ChevronLeft, ChevronRight, X, ExternalLink, Globe, Linkedin, Twitter, Instagram, Facebook, Youtube, Github } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -53,6 +53,13 @@ interface SpeakerFilters {
 // Константы
 const ITEMS_PER_PAGE = 12;
 const SLIDESHOW_SPEAKERS_COUNT = 5;
+const BIO_TRUNCATE_LENGTH = 200;
+
+// Утилита для обрезки текста
+const truncateText = (text: string, maxLength: number): string => {
+  if (!text || text.length <= maxLength) return text;
+  return text.slice(0, maxLength).trim() + '...';
+};
 
 // Утилиты для иконок социальных сетей
 const getSocialIcon = (platform: string, className: string = "h-4 w-4") => {
@@ -98,26 +105,26 @@ const getSocialColor = (platform: string): string => {
   
   switch (platformLower) {
     case 'linkedin':
-      return 'text-blue-600 hover:text-blue-700';
+      return 'text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300';
     case 'twitter':
     case 'x':
-      return 'text-blue-400 hover:text-blue-500';
+      return 'text-blue-400 hover:text-blue-500 dark:text-blue-300 dark:hover:text-blue-200';
     case 'instagram':
-      return 'text-pink-600 hover:text-pink-700';
+      return 'text-pink-600 hover:text-pink-700 dark:text-pink-400 dark:hover:text-pink-300';
     case 'facebook':
-      return 'text-blue-600 hover:text-blue-700';
+      return 'text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300';
     case 'youtube':
-      return 'text-red-600 hover:text-red-700';
+      return 'text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300';
     case 'github':
       return 'text-gray-800 dark:text-gray-200 hover:text-gray-900 dark:hover:text-gray-100';
     case 'telegram':
-      return 'text-blue-500 hover:text-blue-600';
+      return 'text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300';
     case 'vk':
     case 'вконтакте':
-      return 'text-blue-500 hover:text-blue-600';
+      return 'text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300';
     case 'website':
     case 'сайт':
-      return 'text-green-600 hover:text-green-700';
+      return 'text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300';
     default:
       return 'text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300';
   }
@@ -146,7 +153,6 @@ const SocialLinks: React.FC<SocialLinksProps> = ({ socialLinks, maxLinks = 4, si
   const visibleLinks = socialLinks
     .filter(link => link.is_public)
     .sort((a, b) => {
-      // Сначала основные ссылки, потом по порядку отображения
       if (a.is_primary && !b.is_primary) return -1;
       if (!a.is_primary && b.is_primary) return 1;
       return (a.display_order || 0) - (b.display_order || 0);
@@ -163,7 +169,7 @@ const SocialLinks: React.FC<SocialLinksProps> = ({ socialLinks, maxLinks = 4, si
           rel="noopener noreferrer"
           className={`transition-colors ${getSocialColor(social.platform)}`}
           title={social.display_name || social.platform}
-          onClick={(e) => e.stopPropagation()} // Предотвращаем переход к профилю спикера
+          onClick={(e) => e.stopPropagation()}
         >
           {getSocialIcon(social.platform, iconSize)}
         </a>
@@ -172,25 +178,7 @@ const SocialLinks: React.FC<SocialLinksProps> = ({ socialLinks, maxLinks = 4, si
   );
 };
 
-// Утилиты для форматирования (без изменений)
-const formatRussianDate = (dateString: string): string => {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('ru-RU', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric'
-  });
-};
-
-const formatTime = (dateString: string): string => {
-  const date = new Date(dateString);
-  return date.toLocaleTimeString('ru-RU', {
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-};
-
-// Функция для получения уникальных полей экспертизы
+// Утилиты
 const getUniqueFields = (speakers: Speaker[]): string[] => {
   const fields = speakers
     .map(speaker => speaker.field_of_expertise)
@@ -200,7 +188,6 @@ const getUniqueFields = (speakers: Speaker[]): string[] => {
   return Array.from(new Set(fields)).sort();
 };
 
-// Функция для перемешивания массива (Fisher-Yates shuffle)
 const shuffleArray = <T,>(array: T[]): T[] => {
   const shuffled = [...array];
   for (let i = shuffled.length - 1; i > 0; i--) {
@@ -210,7 +197,6 @@ const shuffleArray = <T,>(array: T[]): T[] => {
   return shuffled;
 };
 
-// Функция для сортировки спикеров
 const sortSpeakers = (speakers: Speaker[], sortBy: SortOption, sortOrder: SortOrder): Speaker[] => {
   if (sortBy === 'random') {
     return shuffleArray(speakers);
@@ -242,10 +228,8 @@ const sortSpeakers = (speakers: Speaker[], sortBy: SortOption, sortOrder: SortOr
   });
 };
 
-// Функция для фильтрации спикеров
 const filterSpeakers = (speakers: Speaker[], filters: SpeakerFilters): Speaker[] => {
   return speakers.filter(speaker => {
-    // Поиск по имени и био
     if (filters.search.trim()) {
       const searchTerm = filters.search.toLowerCase().trim();
       const nameMatch = speaker.name.toLowerCase().includes(searchTerm);
@@ -257,21 +241,18 @@ const filterSpeakers = (speakers: Speaker[], filters: SpeakerFilters): Speaker[]
       }
     }
 
-    // Фильтр по полю экспертизы
     if (filters.field_of_expertise && filters.field_of_expertise !== 'all') {
       if (speaker.field_of_expertise !== filters.field_of_expertise) {
         return false;
       }
     }
 
-    // Фильтр по статусу
     if (filters.status && filters.status !== 'all') {
       if (speaker.status !== filters.status) {
         return false;
       }
     }
 
-    // Фильтр по избранным
     if (filters.is_featured !== null) {
       if (speaker.is_featured !== filters.is_featured) {
         return false;
@@ -282,9 +263,7 @@ const filterSpeakers = (speakers: Speaker[], filters: SpeakerFilters): Speaker[]
   });
 };
 
-// SpeakersSlideshow - ИСПРАВЛЕННОЕ точно как в Events
-
-// SpeakersSlideshow - ИСПРАВЛЕННОЕ точно как в Events
+// SpeakersSlideshow - Исправленное точно как в Events
 interface SpeakersHeroSliderProps {
   speakers: Speaker[];
   autoPlay?: boolean;
@@ -299,7 +278,6 @@ const SpeakersHeroSlider: React.FC<SpeakersHeroSliderProps> = ({
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
 
-  // Перемешиваем спикеров и берем первые 5 активных с фото
   const slideshowSpeakers = useMemo(() => {
     const activeSpeakersWithPhotos = speakers.filter(speaker => 
       speaker.status === 'active' && 
@@ -309,7 +287,6 @@ const SpeakersHeroSlider: React.FC<SpeakersHeroSliderProps> = ({
     return shuffleArray(activeSpeakersWithPhotos).slice(0, SLIDESHOW_SPEAKERS_COUNT);
   }, [speakers]);
 
-  // Автопрокрутка как в Events
   useEffect(() => {
     if (!isAutoPlaying || slideshowSpeakers.length <= 1) return;
 
@@ -356,112 +333,100 @@ const SpeakersHeroSlider: React.FC<SpeakersHeroSliderProps> = ({
   return (
     <div className="container mx-auto px-4 mb-8">
       <div className="relative w-full h-[400px] overflow-hidden rounded-xl shadow-2xl">
-        {/* Слайды */}
         <div className="relative w-full h-full">
-        {slideshowSpeakers.map((speaker, index) => (
-          <div
-            key={speaker.id}
-            className={`absolute inset-0 transition-opacity duration-500 ${
-              index === currentSlide ? 'opacity-100' : 'opacity-0'
-            }`}
-          >
-            {/* Фоновое изображение */}
-            <div className="absolute inset-0">
-              <img
-                src={getSupabaseImageUrl(speaker.avatar_url!)}
-                alt={speaker.name}
-                className="w-full h-full object-cover"
-              />
-              {/* Темный оверлей для читаемости текста - КАК В EVENTS */}
-              <div className="absolute inset-0 bg-black bg-opacity-40"></div>
-            </div>
+          {slideshowSpeakers.map((speaker, index) => (
+            <div
+              key={speaker.id}
+              className={`absolute inset-0 transition-opacity duration-500 ${
+                index === currentSlide ? 'opacity-100' : 'opacity-0'
+              }`}
+            >
+              <div className="absolute inset-0">
+                <img
+                  src={getSupabaseImageUrl(speaker.avatar_url!)}
+                  alt={speaker.name}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-black bg-opacity-40"></div>
+              </div>
 
-            {/* Контент слайда - КАК В EVENTS (внизу) */}
-            <div className="relative z-10 h-full flex items-end">
-              <div className="w-full p-6 md:p-8 text-white">
-                <div className="max-w-3xl">
-                  {/* Имя спикера */}
-                  <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 leading-tight">
-                    {speaker.name}
-                  </h2>
-                  
-                  {/* Область экспертизы */}
-                  {speaker.field_of_expertise && (
-                    <p className="text-lg md:text-xl lg:text-2xl text-gray-200 mb-6 leading-relaxed">
-                      {speaker.field_of_expertise}
-                    </p>
-                  )}
-                  
-                  {/* Социальные ссылки (аналог даты и времени в Events) */}
-                  {speaker.sh_speaker_social_links && speaker.sh_speaker_social_links.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-4 md:gap-6 text-base md:text-lg">
-                      <SocialLinks 
-                        socialLinks={speaker.sh_speaker_social_links} 
-                        maxLinks={4}
-                        size="lg"
-                      />
-                    </div>
-                  )}
+              <div className="relative z-10 h-full flex items-end">
+                <div className="w-full p-6 md:p-8 text-white">
+                  <div className="max-w-3xl">
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 leading-tight">
+                      {speaker.name}
+                    </h2>
+                    
+                    {speaker.field_of_expertise && (
+                      <p className="text-lg md:text-xl lg:text-2xl text-gray-200 mb-6 leading-relaxed">
+                        {speaker.field_of_expertise}
+                      </p>
+                    )}
+                    
+                    {speaker.sh_speaker_social_links && speaker.sh_speaker_social_links.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-4 md:gap-6 text-base md:text-lg">
+                        <SocialLinks 
+                          socialLinks={speaker.sh_speaker_social_links} 
+                          maxLinks={4}
+                          size="lg"
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
+
+              <Link 
+                to={`/speakers/${speaker.slug || speaker.id}`}
+                className="absolute inset-0 z-5"
+                aria-label={`Перейти к профилю спикера: ${speaker.name}`}
+              />
             </div>
-
-            {/* Ссылка на спикера */}
-            <Link 
-              to={`/speakers/${speaker.slug || speaker.id}`}
-              className="absolute inset-0 z-5"
-              aria-label={`Перейти к профилю спикера: ${speaker.name}`}
-            />
-          </div>
-        ))}
-      </div>
-
-      {/* Стрелки навигации - КАК В EVENTS */}
-      {slideshowSpeakers.length > 1 && (
-        <>
-          <button
-            onClick={prevSlide}
-            className="absolute left-2 md:left-4 top-1/2 transform -translate-y-1/2 z-20 bg-white bg-opacity-20 hover:bg-opacity-30 backdrop-blur-sm rounded-full p-2 md:p-3 transition-all duration-200"
-            aria-label="Предыдущий слайд"
-          >
-            <ChevronLeft className="h-5 w-5 md:h-6 md:w-6 text-white" />
-          </button>
-
-          <button
-            onClick={nextSlide}
-            className="absolute right-2 md:right-4 top-1/2 transform -translate-y-1/2 z-20 bg-white bg-opacity-20 hover:bg-opacity-30 backdrop-blur-sm rounded-full p-2 md:p-3 transition-all duration-200"
-            aria-label="Следующий слайд"
-          >
-            <ChevronRight className="h-5 w-5 md:h-6 md:w-6 text-white" />
-          </button>
-        </>
-      )}
-
-      {/* Индикаторы слайдов - КАК В EVENTS */}
-      {slideshowSpeakers.length > 1 && (
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-20 flex space-x-2">
-          {slideshowSpeakers.map((_, index) => (
-            <button
-              key={index}
-              onClick={() => goToSlide(index)}
-              className={`w-3 h-3 rounded-full transition-all duration-200 ${
-                index === currentSlide
-                  ? 'bg-white scale-110'
-                  : 'bg-white bg-opacity-50 hover:bg-opacity-75'
-              }`}
-              aria-label={`Перейти к слайду ${index + 1}`}
-            />
           ))}
         </div>
-      )}
+
+        {slideshowSpeakers.length > 1 && (
+          <>
+            <button
+              onClick={prevSlide}
+              className="absolute left-2 md:left-4 top-1/2 transform -translate-y-1/2 z-20 bg-white bg-opacity-20 hover:bg-opacity-30 backdrop-blur-sm rounded-full p-2 md:p-3 transition-all duration-200"
+              aria-label="Предыдущий слайд"
+            >
+              <ChevronLeft className="h-5 w-5 md:h-6 md:w-6 text-white" />
+            </button>
+
+            <button
+              onClick={nextSlide}
+              className="absolute right-2 md:right-4 top-1/2 transform -translate-y-1/2 z-20 bg-white bg-opacity-20 hover:bg-opacity-30 backdrop-blur-sm rounded-full p-2 md:p-3 transition-all duration-200"
+              aria-label="Следующий слайд"
+            >
+              <ChevronRight className="h-5 w-5 md:h-6 md:w-6 text-white" />
+            </button>
+          </>
+        )}
+
+        {slideshowSpeakers.length > 1 && (
+          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-20 flex space-x-2">
+            {slideshowSpeakers.map((_, index) => (
+              <button
+                key={index}
+                onClick={() => goToSlide(index)}
+                className={`w-3 h-3 rounded-full transition-all duration-200 ${
+                  index === currentSlide
+                    ? 'bg-white scale-110'
+                    : 'bg-white bg-opacity-50 hover:bg-opacity-75'
+                }`}
+                aria-label={`Перейти к слайду ${index + 1}`}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
 
-
-
-
-// Горизонтальная панель фильтров (без изменений из предыдущей версии)
+// Горизонтальная панель фильтров
 interface HorizontalFiltersProps {
   filters: SpeakerFilters;
   uniqueFields: string[];
@@ -493,10 +458,8 @@ const HorizontalFilters: React.FC<HorizontalFiltersProps> = ({
 
   return (
     <>
-      {/* Горизонтальная панель фильтров */}
       <div className="bg-white dark:bg-dark-800 border-b border-gray-200 dark:border-gray-700 py-4">
         <div className="container mx-auto px-4">
-          {/* Заголовок и статистика */}
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-4">
             <div className="mb-4 lg:mb-0">
               <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white mb-1">
@@ -510,7 +473,6 @@ const HorizontalFilters: React.FC<HorizontalFiltersProps> = ({
               </p>
             </div>
 
-            {/* Переключатель вида - только для десктопа */}
             <div className="hidden lg:flex items-center gap-2">
               <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
                 <button
@@ -539,9 +501,7 @@ const HorizontalFilters: React.FC<HorizontalFiltersProps> = ({
             </div>
           </div>
 
-          {/* Фильтры */}
           <div className="space-y-4">
-            {/* Мобильная кнопка фильтров */}
             <div className="flex items-center justify-between lg:hidden">
               <button
                 onClick={() => setMobileFiltersOpen(true)}
@@ -558,7 +518,6 @@ const HorizontalFilters: React.FC<HorizontalFiltersProps> = ({
                 )}
               </button>
 
-              {/* Переключатель вида для мобильных */}
               <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
                 <button
                   onClick={() => onViewModeChange('grid')}
@@ -584,9 +543,8 @@ const HorizontalFilters: React.FC<HorizontalFiltersProps> = ({
                 </button>
               </div>
             </div>
-            {/* Десктопные фильтры */}
+
             <div className="hidden lg:grid lg:grid-cols-12 gap-4 items-end">
-              {/* Поиск */}
               <div className="col-span-4">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Поиск
@@ -603,7 +561,6 @@ const HorizontalFilters: React.FC<HorizontalFiltersProps> = ({
                 </div>
               </div>
 
-              {/* Область экспертизы */}
               <div className="col-span-3">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Область экспертизы
@@ -622,7 +579,6 @@ const HorizontalFilters: React.FC<HorizontalFiltersProps> = ({
                 </select>
               </div>
 
-              {/* Сортировка */}
               <div className="col-span-3">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Сортировка
@@ -640,7 +596,6 @@ const HorizontalFilters: React.FC<HorizontalFiltersProps> = ({
                 </select>
               </div>
 
-              {/* Кнопка очистки */}
               <div className="col-span-2">
                 {hasActiveFilters && (
                   <button
@@ -657,19 +612,15 @@ const HorizontalFilters: React.FC<HorizontalFiltersProps> = ({
         </div>
       </div>
 
-      {/* Мобильная панель фильтров */}
       {mobileFiltersOpen && (
         <>
-          {/* Оверлей */}
           <div 
             className="fixed inset-0 bg-black/50 z-40 lg:hidden"
             onClick={() => setMobileFiltersOpen(false)}
           />
           
-          {/* Панель фильтров */}
           <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-dark-800 rounded-t-xl shadow-xl z-50 max-h-[80vh] overflow-y-auto lg:hidden">
             <div className="p-6">
-              {/* Заголовок с кнопкой закрытия */}
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                   <Filter className="h-5 w-5" />
@@ -683,7 +634,6 @@ const HorizontalFilters: React.FC<HorizontalFiltersProps> = ({
                 </button>
               </div>
 
-              {/* Поиск */}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Поиск
@@ -700,7 +650,6 @@ const HorizontalFilters: React.FC<HorizontalFiltersProps> = ({
                 </div>
               </div>
 
-              {/* Область экспертизы */}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Область экспертизы
@@ -719,7 +668,6 @@ const HorizontalFilters: React.FC<HorizontalFiltersProps> = ({
                 </select>
               </div>
 
-              {/* Сортировка */}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Сортировка
@@ -737,7 +685,6 @@ const HorizontalFilters: React.FC<HorizontalFiltersProps> = ({
                 </select>
               </div>
 
-              {/* Кнопки */}
               <div className="flex gap-3">
                 <button
                   onClick={onClearFilters}
@@ -760,7 +707,7 @@ const HorizontalFilters: React.FC<HorizontalFiltersProps> = ({
   );
 };
 
-// Компонент карточки спикера с социальными иконками вместо статусов
+// Компонент карточки спикера
 interface SpeakerCardProps {
   speaker: Speaker;
   viewMode: ViewMode;
@@ -782,7 +729,6 @@ const SpeakerCard: React.FC<SpeakerCardProps> = ({ speaker, viewMode }) => {
       >
         <div className="bg-white dark:bg-dark-800 rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 hover:scale-[1.01]">
           <div className="flex gap-4 p-6">
-            {/* Аватар */}
             <div className="w-20 h-20 md:w-24 md:h-24 flex-shrink-0 overflow-hidden rounded-xl">
               {speaker.avatar_url ? (
                 <img
@@ -797,11 +743,9 @@ const SpeakerCard: React.FC<SpeakerCardProps> = ({ speaker, viewMode }) => {
               )}
             </div>
 
-            {/* Контент */}
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  {/* Рекомендуемый бейдж */}
                   <div className="flex flex-wrap items-center gap-2 mb-2">
                     {speaker.is_featured && (
                       <span className="inline-flex items-center bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 px-2 py-1 rounded text-xs">
@@ -822,11 +766,10 @@ const SpeakerCard: React.FC<SpeakerCardProps> = ({ speaker, viewMode }) => {
 
                   {speaker.bio && (
                     <p className="text-gray-600 dark:text-gray-300 text-sm line-clamp-2 md:line-clamp-3 mb-3">
-                      {speaker.bio}
+                      {truncateText(speaker.bio, BIO_TRUNCATE_LENGTH)}
                     </p>
                   )}
 
-                  {/* Социальные ссылки */}
                   {speaker.sh_speaker_social_links && speaker.sh_speaker_social_links.length > 0 && (
                     <SocialLinks 
                       socialLinks={speaker.sh_speaker_social_links} 
@@ -842,6 +785,7 @@ const SpeakerCard: React.FC<SpeakerCardProps> = ({ speaker, viewMode }) => {
       </Link>
     );
   }
+
   // Grid view
   return (
     <Link
@@ -849,7 +793,6 @@ const SpeakerCard: React.FC<SpeakerCardProps> = ({ speaker, viewMode }) => {
       className="group block"
     >
       <div className="bg-white dark:bg-dark-800 rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 hover:scale-[1.02] h-full">
-        {/* Изображение */}
         <div className="relative aspect-square overflow-hidden">
           {speaker.avatar_url ? (
             <img
@@ -863,7 +806,6 @@ const SpeakerCard: React.FC<SpeakerCardProps> = ({ speaker, viewMode }) => {
             </div>
           )}
           
-          {/* Рекомендуемый бейдж в углу */}
           {speaker.is_featured && (
             <div className="absolute top-3 right-3">
               <span className="bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300 px-2 py-1 rounded-lg text-xs font-medium">
@@ -873,7 +815,6 @@ const SpeakerCard: React.FC<SpeakerCardProps> = ({ speaker, viewMode }) => {
           )}
         </div>
 
-        {/* Контент */}
         <div className="p-4 md:p-6 flex flex-col h-full">
           <h3 className="font-bold text-lg md:text-xl text-gray-900 dark:text-white mb-2 md:mb-3 line-clamp-2 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
             {speaker.name}
@@ -887,11 +828,10 @@ const SpeakerCard: React.FC<SpeakerCardProps> = ({ speaker, viewMode }) => {
 
           {speaker.bio && (
             <p className="text-gray-600 dark:text-gray-400 text-sm mb-4 line-clamp-3 flex-grow">
-              {speaker.bio}
+              {truncateText(speaker.bio, BIO_TRUNCATE_LENGTH)}
             </p>
           )}
 
-          {/* Социальные ссылки внизу карточки */}
           <div className="flex justify-between items-center mt-auto">
             <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
               <User className="h-4 w-4 mr-1" />
@@ -932,7 +872,6 @@ const ResponsiveSpeakersGrid: React.FC<{
     );
   }
 
-  // Grid view с улучшенной адаптивностью
   return (
     <div className={`
       grid gap-4 md:gap-6
@@ -955,7 +894,6 @@ const ResponsiveSpeakersGrid: React.FC<{
 
 // Основной компонент страницы спикеров
 const SpeakersPage: React.FC = () => {
-  // Состояние
   const [allSpeakers, setAllSpeakers] = useState<Speaker[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -964,20 +902,17 @@ const SpeakersPage: React.FC = () => {
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  // Фильтры
   const [filters, setFilters] = useState<SpeakerFilters>({
     search: '',
     field_of_expertise: 'all',
-    status: 'active', // По умолчанию показываем только активных
+    status: 'active',
     is_featured: null,
     sortBy: 'random',
     sortOrder: 'asc'
   });
 
-  // Инициализация с рандомной сортировкой
   const [initialRandomSort, setInitialRandomSort] = useState(true);
 
-  // Загрузка спикеров с социальными ссылками
   const fetchSpeakers = useCallback(async () => {
     try {
       setLoading(true);
@@ -1007,7 +942,6 @@ const SpeakersPage: React.FC = () => {
       }
 
       if (data) {
-        // При первой загрузке применяем рандомную сортировку
         const processedData = initialRandomSort ? shuffleArray(data) : data;
         setAllSpeakers(processedData);
         setInitialRandomSort(false);
@@ -1020,48 +954,39 @@ const SpeakersPage: React.FC = () => {
     }
   }, [initialRandomSort]);
 
-  // Эффект для загрузки данных
   useEffect(() => {
     fetchSpeakers();
   }, [fetchSpeakers]);
 
-  // Получение уникальных полей экспертизы
   const uniqueFields = useMemo(() => getUniqueFields(allSpeakers), [allSpeakers]);
 
-  // Фильтрация и сортировка спикеров
   const filteredAndSortedSpeakers = useMemo(() => {
     const filtered = filterSpeakers(allSpeakers, filters);
     return sortSpeakers(filtered, filters.sortBy, filters.sortOrder);
   }, [allSpeakers, filters]);
 
-  // Пагинация
   const paginatedSpeakers = useMemo(() => {
     return filteredAndSortedSpeakers.slice(0, page * ITEMS_PER_PAGE);
   }, [filteredAndSortedSpeakers, page]);
 
-  // Проверка есть ли еще элементы для загрузки
   useEffect(() => {
     setHasMore(paginatedSpeakers.length < filteredAndSortedSpeakers.length);
   }, [paginatedSpeakers.length, filteredAndSortedSpeakers.length]);
 
-  // Загрузка еще спикеров
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
     
     setLoadingMore(true);
-    // Симулируем небольшую задержку для лучшего UX
     await new Promise(resolve => setTimeout(resolve, 300));
     setPage(prev => prev + 1);
     setLoadingMore(false);
   }, [loadingMore, hasMore]);
 
-  // Обновление фильтров
   const updateFilters = useCallback((newFilters: Partial<SpeakerFilters>) => {
     setFilters(prev => ({ ...prev, ...newFilters }));
-    setPage(1); // Сброс пагинации при изменении фильтров
+    setPage(1);
   }, []);
 
-  // Очистка фильтров
   const clearFilters = useCallback(() => {
     setFilters({
       search: '',
@@ -1074,7 +999,6 @@ const SpeakersPage: React.FC = () => {
     setPage(1);
   }, []);
 
-  // Проверка активных фильтров
   const hasActiveFilters = useMemo(() => {
     return (
       filters.search.trim() !== '' ||
@@ -1085,7 +1009,6 @@ const SpeakersPage: React.FC = () => {
     );
   }, [filters]);
 
-  // Обработчики
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     updateFilters({ search: e.target.value });
   }, [updateFilters]);
@@ -1135,10 +1058,8 @@ const SpeakersPage: React.FC = () => {
 
   return (
     <Layout>
-      {/* Слайдшоу */}
       <SpeakersHeroSlider speakers={allSpeakers} />
 
-      {/* Горизонтальные фильтры */}
       <HorizontalFilters
         filters={filters}
         uniqueFields={uniqueFields}
@@ -1153,10 +1074,8 @@ const SpeakersPage: React.FC = () => {
         onViewModeChange={setViewMode}
       />
 
-      {/* Основной контент */}
       <main className="py-8 bg-gray-50 dark:bg-dark-900 min-h-screen">
         <div className="container mx-auto px-4">
-          {/* Список спикеров */}
           <div className="space-y-6">
             {filteredAndSortedSpeakers.length > 0 ? (
               <>
@@ -1165,7 +1084,6 @@ const SpeakersPage: React.FC = () => {
                   viewMode={viewMode}
                 />
 
-                {/* Кнопка "Загрузить еще" */}
                 {hasMore && (
                   <div className="flex justify-center mt-12">
                     <button
@@ -1188,7 +1106,6 @@ const SpeakersPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* Показать количество загруженных спикеров */}
                 {paginatedSpeakers.length < filteredAndSortedSpeakers.length && (
                   <div className="text-center text-sm text-gray-500 dark:text-gray-400 mt-4">
                     Показано {paginatedSpeakers.length} из {filteredAndSortedSpeakers.length} спикеров
@@ -1196,7 +1113,6 @@ const SpeakersPage: React.FC = () => {
                 )}
               </>
             ) : (
-              /* Состояние "ничего не найдено" */
               <div className="text-center py-16">
                 <div className="max-w-md mx-auto">
                   <Users className="h-20 w-20 text-gray-300 dark:text-gray-600 mx-auto mb-6" />
@@ -1220,7 +1136,6 @@ const SpeakersPage: React.FC = () => {
                         Очистить фильтры
                       </button>
                       
-                      {/* Показать активные фильтры */}
                       <div className="text-sm text-gray-500 dark:text-gray-400">
                         <p>Активные фильтры:</p>
                         <div className="flex flex-wrap justify-center gap-2 mt-2">
