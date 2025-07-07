@@ -281,7 +281,8 @@ const filterSpeakers = (speakers: Speaker[], filters: SpeakerFilters): Speaker[]
     return true;
   });
 };
-// SpeakersSlideshow - Компонент слайдшоу в стиле EventsPage (без изменений)
+
+// SpeakersSlideshow - ИСПРАВЛЕННОЕ точно как в Events
 interface SpeakersHeroSliderProps {
   speakers: Speaker[];
   autoPlay?: boolean;
@@ -294,6 +295,7 @@ const SpeakersHeroSlider: React.FC<SpeakersHeroSliderProps> = ({
   autoPlayInterval = 5000 
 }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [isAutoPlaying, setIsAutoPlaying] = useState(true);
 
   // Перемешиваем спикеров и берем первые 5 активных с фото
   const slideshowSpeakers = useMemo(() => {
@@ -305,146 +307,142 @@ const SpeakersHeroSlider: React.FC<SpeakersHeroSliderProps> = ({
     return shuffleArray(activeSpeakersWithPhotos).slice(0, SLIDESHOW_SPEAKERS_COUNT);
   }, [speakers]);
 
+  // Автопрокрутка как в Events
   useEffect(() => {
-    if (!autoPlay || slideshowSpeakers.length <= 1) return;
+    if (!isAutoPlaying || slideshowSpeakers.length <= 1) return;
 
     const interval = setInterval(() => {
-      setCurrentSlide(prev => (prev + 1) % slideshowSpeakers.length);
+      setCurrentSlide((prev) => (prev + 1) % slideshowSpeakers.length);
     }, autoPlayInterval);
 
     return () => clearInterval(interval);
-  }, [autoPlay, autoPlayInterval, slideshowSpeakers.length]);
+  }, [slideshowSpeakers.length, isAutoPlaying, autoPlayInterval]);
+
+  const nextSlide = () => {
+    setCurrentSlide((prev) => (prev + 1) % slideshowSpeakers.length);
+    setIsAutoPlaying(false);
+  };
+
+  const prevSlide = () => {
+    setCurrentSlide((prev) => (prev - 1 + slideshowSpeakers.length) % slideshowSpeakers.length);
+    setIsAutoPlaying(false);
+  };
 
   const goToSlide = (index: number) => {
     setCurrentSlide(index);
-  };
-
-  const goToPrevious = () => {
-    setCurrentSlide(prev => 
-      prev === 0 ? slideshowSpeakers.length - 1 : prev - 1
-    );
-  };
-
-  const goToNext = () => {
-    setCurrentSlide(prev => (prev + 1) % slideshowSpeakers.length);
+    setIsAutoPlaying(false);
   };
 
   if (slideshowSpeakers.length === 0) {
     return (
-      <div className="relative h-[400px] md:h-[500px] bg-gradient-to-r from-primary-600 to-secondary-600 overflow-hidden">
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center text-white px-4">
-            <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
-            <h2 className="text-3xl md:text-4xl font-bold mb-2">Наши спикеры</h2>
-            <p className="text-lg text-gray-200">Эксперты в различных областях науки</p>
+      <div className="relative w-full h-[400px] overflow-hidden rounded-xl shadow-2xl mb-8">
+        <div className="absolute inset-0 bg-gradient-to-r from-primary-600 to-secondary-600">
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-center text-white px-4">
+              <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
+              <h2 className="text-3xl md:text-4xl font-bold mb-2">Наши спикеры</h2>
+              <p className="text-lg text-gray-200">Эксперты в различных областях науки</p>
+            </div>
           </div>
         </div>
       </div>
     );
   }
 
-  const currentSpeaker = slideshowSpeakers[currentSlide];
-
   return (
-    <div className="relative h-[400px] md:h-[500px] overflow-hidden group">
-      {/* Основное изображение с градиентом */}
-      <div className="absolute inset-0">
-        {currentSpeaker.avatar_url ? (
-          <>
-            <img
-              src={getSupabaseImageUrl(currentSpeaker.avatar_url)}
-              alt={currentSpeaker.name}
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-black/20"></div>
-          </>
-        ) : (
-          <div className="w-full h-full bg-gradient-to-r from-primary-600 to-secondary-600 flex items-center justify-center">
-            <User className="w-32 h-32 text-white opacity-50" />
-          </div>
-        )}
-      </div>
-
-      {/* Контент поверх изображения */}
-      <div className="absolute inset-0 flex items-center">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-3xl">
-            {/* Заголовок */}
-            <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-4 leading-tight">
-              {currentSpeaker.name}
-            </h1>
-
-            {/* Поле экспертизы */}
-            {currentSpeaker.field_of_expertise && (
-              <p className="text-lg md:text-xl text-primary-200 mb-4 font-medium">
-                {currentSpeaker.field_of_expertise}
-              </p>
-            )}
-
-            {/* Краткая биография */}
-            {currentSpeaker.bio && (
-              <p className="text-base md:text-lg text-gray-200 mb-6 line-clamp-3 max-w-2xl">
-                {currentSpeaker.bio}
-              </p>
-            )}
-
-            {/* Социальные ссылки в слайдшоу */}
-            {currentSpeaker.sh_speaker_social_links && currentSpeaker.sh_speaker_social_links.length > 0 && (
-              <div className="mb-6">
-                <SocialLinks 
-                  socialLinks={currentSpeaker.sh_speaker_social_links} 
-                  maxLinks={5}
-                  size="lg"
-                />
-              </div>
-            )}
-
-            {/* Кнопка */}
-            <div className="mb-6">
-              <Link
-                to={`/speakers/${currentSpeaker.slug || currentSpeaker.id}`}
-                className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white border border-white/20 px-6 py-3 rounded-full font-medium transition-all hover:scale-105"
-              >
-                Подробнее
-                <ArrowRight className="h-5 w-5" />
-              </Link>
+    <div className="relative w-full h-[400px] overflow-hidden rounded-xl shadow-2xl mb-8">
+      {/* Слайды */}
+      <div className="relative w-full h-full">
+        {slideshowSpeakers.map((speaker, index) => (
+          <div
+            key={speaker.id}
+            className={`absolute inset-0 transition-opacity duration-500 ${
+              index === currentSlide ? 'opacity-100' : 'opacity-0'
+            }`}
+          >
+            {/* Фоновое изображение */}
+            <div className="absolute inset-0">
+              <img
+                src={getSupabaseImageUrl(speaker.avatar_url!)}
+                alt={speaker.name}
+                className="w-full h-full object-cover"
+              />
+              {/* Темный оверлей для читаемости текста - КАК В EVENTS */}
+              <div className="absolute inset-0 bg-black bg-opacity-40"></div>
             </div>
+
+            {/* Контент слайда - КАК В EVENTS (внизу) */}
+            <div className="relative z-10 h-full flex items-end">
+              <div className="w-full p-8 text-white">
+                <div className="max-w-4xl">
+                  {/* Имя спикера */}
+                  <h2 className="text-4xl md:text-5xl font-bold mb-4 leading-tight">
+                    {speaker.name}
+                  </h2>
+                  
+                  {/* Область экспертизы */}
+                  {speaker.field_of_expertise && (
+                    <p className="text-xl md:text-2xl text-gray-200 mb-6 leading-relaxed">
+                      {speaker.field_of_expertise}
+                    </p>
+                  )}
+                  
+                  {/* Социальные ссылки (аналог даты и времени в Events) */}
+                  {speaker.sh_speaker_social_links && speaker.sh_speaker_social_links.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-6 text-lg">
+                      <SocialLinks 
+                        socialLinks={speaker.sh_speaker_social_links} 
+                        maxLinks={4}
+                        size="lg"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Ссылка на спикера */}
+            <Link 
+              to={`/speakers/${speaker.slug || speaker.id}`}
+              className="absolute inset-0 z-5"
+              aria-label={`Перейти к профилю спикера: ${speaker.name}`}
+            />
           </div>
-        </div>
+        ))}
       </div>
 
-      {/* Навигационные стрелки */}
+      {/* Стрелки навигации - КАК В EVENTS */}
       {slideshowSpeakers.length > 1 && (
         <>
           <button
-            onClick={goToPrevious}
-            className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black/30 hover:bg-black/50 text-white p-3 rounded-full transition-all opacity-0 group-hover:opacity-100"
-            aria-label="Предыдущий спикер"
+            onClick={prevSlide}
+            className="absolute left-4 top-1/2 transform -translate-y-1/2 z-20 bg-white bg-opacity-20 hover:bg-opacity-30 backdrop-blur-sm rounded-full p-3 transition-all duration-200"
+            aria-label="Предыдущий слайд"
           >
-            <ChevronLeft className="h-6 w-6" />
+            <ChevronLeft className="h-6 w-6 text-white" />
           </button>
-          
+
           <button
-            onClick={goToNext}
-            className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-black/30 hover:bg-black/50 text-white p-3 rounded-full transition-all opacity-0 group-hover:opacity-100"
-            aria-label="Следующий спикер"
+            onClick={nextSlide}
+            className="absolute right-4 top-1/2 transform -translate-y-1/2 z-20 bg-white bg-opacity-20 hover:bg-opacity-30 backdrop-blur-sm rounded-full p-3 transition-all duration-200"
+            aria-label="Следующий слайд"
           >
-            <ChevronRight className="h-6 w-6" />
+            <ChevronRight className="h-6 w-6 text-white" />
           </button>
         </>
       )}
 
-      {/* Индикаторы слайдов */}
+      {/* Индикаторы слайдов - КАК В EVENTS */}
       {slideshowSpeakers.length > 1 && (
-        <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex space-x-2">
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-20 flex space-x-2">
           {slideshowSpeakers.map((_, index) => (
             <button
               key={index}
               onClick={() => goToSlide(index)}
-              className={`w-3 h-3 rounded-full transition-all duration-300 ${
+              className={`w-3 h-3 rounded-full transition-all duration-200 ${
                 index === currentSlide
                   ? 'bg-white scale-110'
-                  : 'bg-white/50 hover:bg-white/75'
+                  : 'bg-white bg-opacity-50 hover:bg-opacity-75'
               }`}
               aria-label={`Перейти к слайду ${index + 1}`}
             />
@@ -454,7 +452,6 @@ const SpeakersHeroSlider: React.FC<SpeakersHeroSliderProps> = ({
     </div>
   );
 };
-
 // Горизонтальная панель фильтров (без изменений из предыдущей версии)
 interface HorizontalFiltersProps {
   filters: SpeakerFilters;
