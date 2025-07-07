@@ -840,16 +840,188 @@ const AdminEvents = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-         
-            
-   {/* карточки мероприятий     */}
-            
-   {/* карточки мероприятий     */}
+            {filteredEvents.map(event => {
+              const { line1, line2 } = formatEventTitle(event.title);
+              const maxRegistrations = getMaxRegistrations(event);
+              const currentRegistrationCount = getCurrentRegistrationCount(event);
+              const fillPercentage = maxRegistrations ? (currentRegistrationCount / maxRegistrations) * 100 : 0;
+              const isEventPast = event.end_at ? isPastEvent(event.end_at) : false;
 
-<div />
+              return (
+                <div
+                  key={event.id}
+                  className="group bg-white dark:bg-dark-800 rounded-xl shadow-md hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 overflow-hidden border border-gray-200 dark:border-dark-600 relative cursor-pointer"
+                  onClick={() => {
+                    setSelectedEvent(event);
+                    setShowDetailsModal(true);
+                  }}
+                >
+                  {/* Checkbox для выбора */}
+                  <div className="absolute top-3 left-3 z-20">
+                    <input
+                      type="checkbox"
+                      checked={selectedEvents.includes(event.id)}
+                      onChange={(e) => toggleEventSelection(event.id, e)}
+                      className="w-4 h-4 text-primary-600 bg-white border-2 border-gray-300 rounded focus:ring-primary-500 dark:focus:ring-primary-600 dark:ring-offset-gray-800 focus:ring-2"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </div>
 
-            
+                  {/* Кнопки действий в правом верхнем углу */}
+                  <div className="absolute top-3 right-3 z-20 flex items-center gap-1">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedEvent(event);
+                        setShowDetailsModal(true);
+                      }}
+                      className="w-8 h-8 bg-white/90 dark:bg-dark-700/90 backdrop-blur-sm hover:bg-white dark:hover:bg-dark-600 text-gray-600 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 rounded-lg transition-all duration-200 flex items-center justify-center shadow-sm"
+                      title="Просмотр"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </button>
+                    
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/admin/events/${event.id}/edit`);
+                      }}
+                      className="w-8 h-8 bg-white/90 dark:bg-dark-700/90 backdrop-blur-sm hover:bg-primary-50 dark:hover:bg-primary-900/40 text-gray-600 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 rounded-lg transition-all duration-200 flex items-center justify-center shadow-sm"
+                      title="Редактировать"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {/* Изображение мероприятия */}
+                  <div className="relative h-40 bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-900/20 dark:to-primary-800/20 flex items-center justify-center overflow-hidden">
+                    {getEventImage(event) ? (
+                      <img 
+                        src={getEventImage(event)!} 
+                        alt={event.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        onError={(e) => {
+                          const target = e.currentTarget as HTMLImageElement;
+                          target.style.display = 'none';
+                          const parentDiv = target.parentElement;
+                          if (parentDiv && !parentDiv.querySelector('.fallback-icon')) {
+                            const icon = document.createElement('div');
+                            icon.className = 'fallback-icon w-12 h-12 text-primary-400 dark:text-primary-500 flex items-center justify-center';
+                            icon.innerHTML = '<svg class="w-12 h-12" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>';
+                            parentDiv.appendChild(icon);
+                          }
+                        }}
+                      />
+                    ) : (
+                      <Calendar className="w-12 h-12 text-primary-400 dark:text-primary-500" />
+                    )}
+                    
+                    {/* Статус мероприятия */}
+                    <div className="absolute bottom-2 left-2">
+                      <span className={`px-2 py-1 rounded-md text-xs font-medium ${
+                        isEventPast 
+                          ? statusColors.past
+                          : statusColors[event.status as keyof typeof statusColors] || statusColors.active
+                      }`}>
+                        {getEventStatus(event)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Контент карточки */}
+                  <div className="p-4">
+                    {/* Заголовок с ограничением в 2 строки */}
+                    <div className="mb-3">
+                      <h3 className="text-base font-semibold text-gray-900 dark:text-white line-clamp-2 leading-tight group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+                        {event.title}
+                      </h3>
+                    </div>
+                    
+                    {/* Компактная информация без иконок */}
+                    <div className="space-y-1 mb-3 text-sm">
+                      <div className="text-gray-600 dark:text-gray-300 truncate">
+                        <span className="font-medium">{formatEventDateTime(event)}</span>
+                      </div>
+                      
+                      {getEventLocation(event) !== 'Место не указано' && (
+                        <div className="text-gray-600 dark:text-gray-300 truncate">
+                          {getEventLocation(event)}
+                        </div>
+                      )}
+                      
+                      {/* Информация о регистрациях */}
+                      {shouldShowRegistrations(event) && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-600 dark:text-gray-300">
+                            {hasRegistrationSystem(event) ?
+                              `${currentRegistrationCount}${maxRegistrations ? `/${maxRegistrations}` : ''}` :
+                              'Без регистрации'
+                            }
+                          </span>
+                          <span className="text-sm font-semibold text-primary-600 dark:text-primary-400">
+                            {getPriceDisplay(event)}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* Прогресс-бар для заполненности */}
+                      {maxRegistrations && maxRegistrations > 0 && (
+                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-2">
+                          <div 
+                            className="bg-gradient-to-r from-primary-500 to-primary-600 h-1.5 rounded-full transition-all duration-300"
+                            style={{ width: `${Math.min(fillPercentage, 100)}%` }}
+                          ></div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Нижняя секция с типом и индикаторами */}
+                    <div className="flex items-center justify-between">
+                      <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                        {getEventTypeLabel(event)}
+                      </span>
+                      
+                      {/* Компактные индикаторы */}
+                      <div className="flex items-center gap-1">
+                        {event.is_featured && (
+                          <span className="text-yellow-500" title="Рекомендуем">
+                            ⭐
+                          </span>
+                        )}
+                        
+                        {!event.is_public && (
+                          <span className="text-red-500" title="Приватное">
+                            🔒
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Теги (если есть) */}
+                    {(event.tags && event.tags.length > 0) && (
+                      <div className="mt-3 flex flex-wrap gap-1">
+                        {event.tags.slice(0, 2).map((tag, index) => (
+                          <span 
+                            key={index}
+                            className="inline-block px-2 py-0.5 text-xs rounded-md bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400"
+                          >
+                            #{tag}
+                          </span>
+                        ))}
+                        {event.tags.length > 2 && (
+                          <span className="inline-block px-2 py-0.5 text-xs rounded-md bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+                            +{event.tags.length - 2}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
+
         {/* Дополнительная информация и статистика */}
         {!loading && filteredEvents.length > 0 && (
           <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1015,14 +1187,14 @@ const AdminEvents = () => {
       {events.length > 0 && (
         <div className="sr-only">
           {console.log(`
-🎯 AdminEvents Statistics (FIXED):
+🎯 AdminEvents Statistics (IMPROVED):
 📊 Total Events: ${events.length}
 📋 Filtered Events: ${filteredEvents.length}
 🎮 Active Events: ${events.filter(e => e.status === 'active').length}
 📝 Draft Events: ${events.filter(e => e.status === 'draft').length}
 📜 Past Events: ${events.filter(e => e.status === 'past').length}
 🆕 From sh_events: ${events.filter(e => detectEventTableSource(e) === 'sh_events').length}
-🔄 From events: {events.filter(e => detectEventTableSource(e) === 'events').length}
+🔄 From events: ${events.filter(e => detectEventTableSource(e) === 'events').length}
 🖼️ With Images: ${events.filter(e => getEventImage(e)).length}
           `)}
         </div>
@@ -1032,3 +1204,30 @@ const AdminEvents = () => {
 };
 
 export default AdminEvents;
+
+/* 
+🎉 УЛУЧШЕННЫЕ БЛОКИ 3 И 4 AdminEvents.tsx ГОТОВЫ!
+
+✨ Основные улучшения карточек:
+- ✅ Убрана надпись "sh_events" 
+- ✅ Кнопки перенесены в правый верхний угол (иконки с backdrop-blur)
+- ✅ Уменьшен шрифт заголовка (text-base)
+- ✅ Добавлено сокращение заголовка (line-clamp-2)
+- ✅ Убраны иконки из информационных строк
+- ✅ Уменьшены зазоры между строками (space-y-1)
+- ✅ Компактная высота изображения (h-40)
+- ✅ Улучшенные hover эффекты
+
+🎨 CSS стили:
+Добавьте в ваш CSS файл:
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+🚀 Теперь карточки выглядят современно и компактно!
+*/
