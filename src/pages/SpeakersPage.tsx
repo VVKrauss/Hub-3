@@ -283,6 +283,8 @@ const filterSpeakers = (speakers: Speaker[], filters: SpeakerFilters): Speaker[]
 };
 
 // SpeakersSlideshow - ИСПРАВЛЕННОЕ точно как в Events
+
+// SpeakersSlideshow - ИСПРАВЛЕННОЕ точно как в Events
 interface SpeakersHeroSliderProps {
   speakers: Speaker[];
   autoPlay?: boolean;
@@ -335,13 +337,15 @@ const SpeakersHeroSlider: React.FC<SpeakersHeroSliderProps> = ({
 
   if (slideshowSpeakers.length === 0) {
     return (
-      <div className="relative w-full h-[400px] overflow-hidden rounded-xl shadow-2xl mb-8">
-        <div className="absolute inset-0 bg-gradient-to-r from-primary-600 to-secondary-600">
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-center text-white px-4">
-              <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
-              <h2 className="text-3xl md:text-4xl font-bold mb-2">Наши спикеры</h2>
-              <p className="text-lg text-gray-200">Эксперты в различных областях науки</p>
+      <div className="container mx-auto px-4 mb-8">
+        <div className="relative w-full h-[400px] overflow-hidden rounded-xl shadow-2xl">
+          <div className="absolute inset-0 bg-gradient-to-r from-primary-600 to-secondary-600">
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-center text-white px-4">
+                <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                <h2 className="text-3xl md:text-4xl font-bold mb-2">Наши спикеры</h2>
+                <p className="text-lg text-gray-200">Эксперты в различных областях науки</p>
+              </div>
             </div>
           </div>
         </div>
@@ -350,9 +354,10 @@ const SpeakersHeroSlider: React.FC<SpeakersHeroSliderProps> = ({
   }
 
   return (
-    <div className="relative w-full h-[400px] overflow-hidden rounded-xl shadow-2xl mb-8">
-      {/* Слайды */}
-      <div className="relative w-full h-full">
+    <div className="container mx-auto px-4 mb-8">
+      <div className="relative w-full h-[400px] overflow-hidden rounded-xl shadow-2xl">
+        {/* Слайды */}
+        <div className="relative w-full h-full">
         {slideshowSpeakers.map((speaker, index) => (
           <div
             key={speaker.id}
@@ -373,23 +378,23 @@ const SpeakersHeroSlider: React.FC<SpeakersHeroSliderProps> = ({
 
             {/* Контент слайда - КАК В EVENTS (внизу) */}
             <div className="relative z-10 h-full flex items-end">
-              <div className="w-full p-8 text-white">
-                <div className="max-w-4xl">
+              <div className="w-full p-6 md:p-8 text-white">
+                <div className="max-w-3xl">
                   {/* Имя спикера */}
-                  <h2 className="text-4xl md:text-5xl font-bold mb-4 leading-tight">
+                  <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 leading-tight">
                     {speaker.name}
                   </h2>
                   
                   {/* Область экспертизы */}
                   {speaker.field_of_expertise && (
-                    <p className="text-xl md:text-2xl text-gray-200 mb-6 leading-relaxed">
+                    <p className="text-lg md:text-xl lg:text-2xl text-gray-200 mb-6 leading-relaxed">
                       {speaker.field_of_expertise}
                     </p>
                   )}
                   
                   {/* Социальные ссылки (аналог даты и времени в Events) */}
                   {speaker.sh_speaker_social_links && speaker.sh_speaker_social_links.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-6 text-lg">
+                    <div className="flex flex-wrap items-center gap-4 md:gap-6 text-base md:text-lg">
                       <SocialLinks 
                         socialLinks={speaker.sh_speaker_social_links} 
                         maxLinks={4}
@@ -416,18 +421,18 @@ const SpeakersHeroSlider: React.FC<SpeakersHeroSliderProps> = ({
         <>
           <button
             onClick={prevSlide}
-            className="absolute left-4 top-1/2 transform -translate-y-1/2 z-20 bg-white bg-opacity-20 hover:bg-opacity-30 backdrop-blur-sm rounded-full p-3 transition-all duration-200"
+            className="absolute left-2 md:left-4 top-1/2 transform -translate-y-1/2 z-20 bg-white bg-opacity-20 hover:bg-opacity-30 backdrop-blur-sm rounded-full p-2 md:p-3 transition-all duration-200"
             aria-label="Предыдущий слайд"
           >
-            <ChevronLeft className="h-6 w-6 text-white" />
+            <ChevronLeft className="h-5 w-5 md:h-6 md:w-6 text-white" />
           </button>
 
           <button
             onClick={nextSlide}
-            className="absolute right-4 top-1/2 transform -translate-y-1/2 z-20 bg-white bg-opacity-20 hover:bg-opacity-30 backdrop-blur-sm rounded-full p-3 transition-all duration-200"
+            className="absolute right-2 md:right-4 top-1/2 transform -translate-y-1/2 z-20 bg-white bg-opacity-20 hover:bg-opacity-30 backdrop-blur-sm rounded-full p-2 md:p-3 transition-all duration-200"
             aria-label="Следующий слайд"
           >
-            <ChevronRight className="h-6 w-6 text-white" />
+            <ChevronRight className="h-5 w-5 md:h-6 md:w-6 text-white" />
           </button>
         </>
       )}
@@ -452,6 +457,10 @@ const SpeakersHeroSlider: React.FC<SpeakersHeroSliderProps> = ({
     </div>
   );
 };
+
+
+
+
 // Горизонтальная панель фильтров (без изменений из предыдущей версии)
 interface HorizontalFiltersProps {
   filters: SpeakerFilters;
