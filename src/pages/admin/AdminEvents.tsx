@@ -1,4 +1,5 @@
-// src/pages/admin/AdminEvents.tsx - Часть 1: Импорты, типы, константы
+// src/pages/admin/AdminEvents.tsx - Полный обновленный файл для работы с sh_events
+// Часть 1: Импорты, типы, константы и начало компонента
 
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
@@ -24,6 +25,50 @@ const statusColors = {
   active: 'bg-gradient-to-r from-green-100 to-green-200 text-green-800 dark:from-green-900/30 dark:to-green-800/30 dark:text-green-400',
   draft: 'bg-gradient-to-r from-yellow-100 to-yellow-200 text-yellow-800 dark:from-yellow-900/30 dark:to-yellow-800/30 dark:text-yellow-400',
   past: 'bg-gradient-to-r from-gray-100 to-gray-200 text-gray-800 dark:from-gray-900/30 dark:to-gray-800/30 dark:text-gray-400'
+};
+
+// Маппинг статусов между старой и новой схемой
+const STATUS_MAPPING = {
+  // Из новой схемы в старую
+  'published': 'active',
+  'draft': 'draft',
+  'completed': 'past',
+  'cancelled': 'past',
+  'postponed': 'draft',
+  
+  // Из старой схемы в новую  
+  'active': 'published',
+  'past': 'completed'
+} as const;
+
+// Лейблы для статусов
+const SH_STATUS_LABELS = {
+  'draft': 'Черновик',
+  'published': 'Опубликовано',
+  'cancelled': 'Отменено',
+  'completed': 'Завершено',
+  'postponed': 'Отложено'
+};
+
+// Лейблы для типов событий
+const SH_EVENT_TYPE_LABELS = {
+  'lecture': 'Лекция',
+  'workshop': 'Мастер-класс',
+  'discussion': 'Дискуссия',
+  'conference': 'Конференция',
+  'seminar': 'Семинар',
+  'festival': 'Фестиваль',
+  'concert': 'Концерт',
+  'standup': 'Стенд-ап',
+  'excursion': 'Экскурсия',
+  'quiz': 'Квиз',
+  'swap': 'Своп',
+  'meetup': 'Митап',
+  'networking': 'Нетворкинг',
+  'training': 'Тренинг',
+  'webinar': 'Вебинар',
+  'hackathon': 'Хакатон',
+  'other': 'Другое'
 };
 
 // Utility функция для форматирования заголовка события
@@ -53,7 +98,75 @@ const formatEventTitle = (title: string) => {
   };
 };
 
-// src/pages/admin/AdminEvents.tsx - Часть 2: Основной компонент и состояние
+// Utility функции для работы с новой схемой
+const transformShEventToEvent = (shEvent: any): Event => {
+  return {
+    ...shEvent,
+    // Маппинг полей из новой схемы в старый формат
+    location: shEvent.venue_name || shEvent.location,
+    address: shEvent.venue_address || shEvent.address,
+    price: shEvent.base_price !== undefined ? shEvent.base_price : shEvent.price,
+    bg_image: shEvent.main_image || shEvent.bg_image,
+    
+    // Маппинг статуса
+    status: STATUS_MAPPING[shEvent.status as keyof typeof STATUS_MAPPING] || shEvent.status,
+    
+    // Информация о регистрации из новой схемы
+    registrations: {
+      current: 0, // TODO: добавить подсчет из таблицы регистраций
+      max_regs: shEvent.max_attendees || null,
+      current_adults: 0,
+      current_children: 0,
+      reg_list: []
+    },
+    current_registration_count: 0, // TODO: добавить подсчет из таблицы регистраций
+    max_registrations: shEvent.max_attendees,
+    
+    // Спикеры из новой схемы
+    speakers: shEvent.sh_event_speakers?.map((es: any) => es.speaker) || [],
+    
+    // Галерея изображений
+    photo_gallery: shEvent.gallery_images || shEvent.photo_gallery || []
+  };
+};
+
+const detectEventTableSource = (event: any): 'sh_events' | 'events' => {
+  // Если есть поля специфичные для новой схемы
+  if (event.venue_name !== undefined || event.base_price !== undefined || event.max_attendees !== undefined) {
+    return 'sh_events';
+  }
+  
+  // Если есть поля специфичные для старой схемы
+  if (event.location !== undefined || event.price !== undefined || event.max_registrations !== undefined) {
+    return 'events';
+  }
+  
+  // По умолчанию считаем новой схемой
+  return 'sh_events';
+};
+
+const getEventField = (event: Event, field: string): any => {
+  switch (field) {
+    case 'location':
+      return event.venue_name || event.location;
+    case 'address':
+      return event.venue_address || event.address;
+    case 'price':
+      return event.base_price !== undefined ? event.base_price : event.price;
+    case 'max_registrations':
+      return event.max_attendees || event.max_registrations;
+    case 'image':
+      return event.main_image || event.bg_image;
+    case 'gallery':
+      return event.gallery_images || event.photo_gallery;
+    default:
+      return event[field as keyof Event];
+  }
+};
+
+const isShEvent = (event: any): boolean => {
+  return detectEventTableSource(event) === 'sh_events';
+};
 
 const AdminEvents = () => {
   const navigate = useNavigate();
@@ -131,30 +244,7 @@ const AdminEvents = () => {
       console.log('✅ Loaded from sh_events:', data?.length, 'events');
 
       // Преобразуем данные из новой схемы в формат, ожидаемый интерфейсом
-      const enrichedEvents = (data || []).map(event => ({
-        ...event,
-        // Маппинг полей из новой схемы в старый формат для совместимости
-        location: event.venue_name,
-        address: event.venue_address,
-        price: event.base_price,
-        payment_type: event.payment_type,
-        description: event.description || event.short_description,
-        event_type: event.event_type,
-        
-        // Информация о регистрации
-        registrations: {
-          current: 0, // TODO: добавить подсчет из таблицы регистраций
-          max_regs: event.max_attendees
-        },
-        current_registration_count: 0, // TODO: добавить подсчет из таблицы регистраций
-        max_registrations: event.max_attendees,
-        
-        // Спикеры из новой схемы
-        speakers: event.sh_event_speakers?.map(es => es.speaker) || [],
-        
-        // Статусы для совместимости с UI
-        status: event.status === 'published' ? 'active' : event.status
-      }));
+      const enrichedEvents = (data || []).map(event => transformShEventToEvent(event));
 
       setEvents(enrichedEvents);
     } catch (error) {
@@ -224,8 +314,6 @@ const AdminEvents = () => {
     }
   };
 
-  // src/pages/admin/AdminEvents.tsx - Часть 3: Функции обработчики и helpers
-
   // 🔧 **ОБНОВЛЕННАЯ ФУНКЦИЯ handleBulkDelete для работы с sh_events**
   const handleBulkDelete = async () => {
     if (selectedEvents.length === 0) return;
@@ -291,11 +379,10 @@ const AdminEvents = () => {
     const matchesSearch = 
       event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       event.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      event.location?.toLowerCase().includes(searchQuery.toLowerCase());
+      getEventField(event, 'location')?.toLowerCase().includes(searchQuery.toLowerCase());
 
     return matchesSearch;
   });
-
   // Helper function to get current registration count from either new or legacy structure
   const getCurrentRegistrationCount = (event: Event): number => {
     if (event.registrations?.current !== undefined) {
@@ -317,17 +404,17 @@ const AdminEvents = () => {
     const paymentType = event.payment_type;
     
     // Для новой схемы используем base_price, для старой - price
-    const price = event.base_price !== undefined ? event.base_price : event.price;
+    const price = getEventField(event, 'price');
 
     if (paymentType === 'free') {
       return 'Бесплатно';
     } else if (paymentType === 'donation') {
       return 'Донат';
     } else if (paymentType === 'paid' && price !== null && price !== undefined) {
-      return price === 0 ? 'Бесплатно' : `${price} ${event.currency || 'RUB'}`;
+      return price === 0 ? 'Бесплатно' : `${price} ${event.currency || 'RSD'}`;
     } else if (paymentType === 'cost' && price !== null && price !== undefined) {
       // Совместимость со старой схемой
-      return price === 0 ? 'Бесплатно' : `${price} ${event.currency || 'RUB'}`;
+      return price === 0 ? 'Бесплатно' : `${price} ${event.currency || 'RSD'}`;
     } else {
       return 'Бесплатно';
     }
@@ -335,15 +422,65 @@ const AdminEvents = () => {
 
   // Дополнительные helper функции для новой схемы
   const getEventLocation = (event: Event): string => {
-    // Для новой схемы используем venue_name, для старой - location
-    const location = event.venue_name || event.location;
+    const location = getEventField(event, 'location');
     return location || 'Место не указано';
   };
 
   const getEventAddress = (event: Event): string => {
-    // Для новой схемы используем venue_address, для старой - address
-    const address = event.venue_address || event.address;
+    const address = getEventField(event, 'address');
     return address || '';
+  };
+
+  // Улучшенная функция для получения статуса события
+  const getEventStatus = (event: Event): string => {
+    const isEventPast = event.end_at ? isPastEvent(event.end_at) : false;
+    
+    if (isEventPast) {
+      return 'Прошло';
+    }
+    
+    // Используем новые лейблы если событие из новой схемы
+    if (isShEvent(event)) {
+      return SH_STATUS_LABELS[event.status as keyof typeof SH_STATUS_LABELS] || event.status;
+    }
+    
+    // Старые лейблы для совместимости
+    switch (event.status) {
+      case 'active': return 'Активно';
+      case 'draft': return 'Черновик';
+      case 'past': return 'Прошло';
+      default: return event.status;
+    }
+  };
+
+  // Улучшенная функция для получения типа события
+  const getEventTypeLabel = (event: Event): string => {
+    if (isShEvent(event)) {
+      return SH_EVENT_TYPE_LABELS[event.event_type as keyof typeof SH_EVENT_TYPE_LABELS] || event.event_type;
+    }
+    
+    // Старые лейблы для совместимости
+    const labels: Record<string, string> = {
+      'lecture': 'Лекция',
+      'workshop': 'Мастер-класс',
+      'discussion': 'Дискуссия',
+      'conference': 'Конференция',
+      'seminar': 'Семинар',
+      'festival': 'Фестиваль',
+      'concert': 'Концерт',
+      'standup': 'Стенд-ап',
+      'excursion': 'Экскурсия',
+      'quiz': 'Квиз',
+      'swap': 'Своп',
+      'other': 'Другое'
+    };
+    
+    return labels[event.event_type] || event.event_type;
+  };
+
+  // Улучшенная функция для получения изображения события
+  const getEventImage = (event: Event): string | null => {
+    return getEventField(event, 'image');
   };
 
   // Проверяет, нужно ли показывать информацию о регистрациях
@@ -376,13 +513,116 @@ const AdminEvents = () => {
     return `${dateStr} • ${timeStr}`;
   };
 
+  // Функция для получения количества регистраций с учетом новой схемы
+  const getRegistrationCount = async (eventId: string): Promise<number> => {
+    try {
+      // Сначала пытаемся получить из новой таблицы sh_registrations
+      const { data: shRegistrations, error: shError } = await supabase
+        .from('sh_registrations')
+        .select('id', { count: 'exact' })
+        .eq('event_id', eventId)
+        .eq('registration_status', 'confirmed');
+
+      if (!shError && shRegistrations) {
+        return shRegistrations.length;
+      }
+
+      // Fallback на старую логику
+      const { data: event } = await supabase
+        .from('events')
+        .select('registrations, current_registration_count')
+        .eq('id', eventId)
+        .single();
+
+      if (event?.registrations?.current !== undefined) {
+        return event.registrations.current;
+      }
+
+      return event?.current_registration_count || 0;
+    } catch (error) {
+      console.error('Error getting registration count:', error);
+      return 0;
+    }
+  };
+
+  // Функция для обновления счетчиков регистраций
+  const updateRegistrationCounts = async () => {
+    const updatedEvents = await Promise.all(
+      events.map(async (event) => {
+        const count = await getRegistrationCount(event.id);
+        return {
+          ...event,
+          current_registration_count: count,
+          registrations: {
+            ...event.registrations,
+            current: count
+          }
+        };
+      })
+    );
+    
+    setEvents(updatedEvents);
+  };
+
+  // Функция для экспорта событий
+  const exportEvents = async () => {
+    try {
+      const eventsData = events.map(event => ({
+        id: event.id,
+        title: event.title,
+        type: getEventTypeLabel(event),
+        status: getEventStatus(event),
+        date: formatEventDateTime(event),
+        location: getEventLocation(event),
+        registrations: `${getCurrentRegistrationCount(event)}/${getMaxRegistrations(event) || '∞'}`,
+        price: getPriceDisplay(event),
+        source: detectEventTableSource(event)
+      }));
+
+      const csvContent = [
+        ['ID', 'Название', 'Тип', 'Статус', 'Дата', 'Место', 'Регистрации', 'Цена', 'Источник'],
+        ...eventsData.map(event => [
+          event.id,
+          event.title,
+          event.type,
+          event.status,
+          event.date,
+          event.location,
+          event.registrations,
+          event.price,
+          event.source
+        ])
+      ].map(row => row.join(',')).join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `events_${new Date().toISOString().split('T')[0]}.csv`;
+      link.click();
+
+      toast.success('События экспортированы в CSV');
+    } catch (error) {
+      console.error('Error exporting events:', error);
+      toast.error('Ошибка при экспорте событий');
+    }
+  };
+
   const tabs = [
     { id: 'active', label: 'Активные', count: events.filter(e => e.status === 'active' && (!e.end_at || !isPastEvent(e.end_at))).length },
     { id: 'past', label: 'Прошедшие', count: events.filter(e => e.status === 'past' || (e.end_at && isPastEvent(e.end_at))).length },
     { id: 'draft', label: 'Черновики', count: events.filter(e => e.status === 'draft').length }
   ];
 
-  // src/pages/admin/AdminEvents.tsx - Часть 4: JSX рендер часть 1
+  // Обновляем счетчики регистраций каждые 30 секунд
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (events.length > 0) {
+        updateRegistrationCounts();
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [events.length]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-dark-900 dark:via-dark-900 dark:to-dark-800 py-8 font-sans">
@@ -469,6 +709,15 @@ const AdminEvents = () => {
                 <option value="title-desc">Название ↓</option>
               </select>
 
+              {/* Кнопка экспорта */}
+              <button
+                onClick={exportEvents}
+                className="px-4 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-xl transition-colors flex items-center gap-2"
+              >
+                <Filter className="h-4 w-4" />
+                Экспорт
+              </button>
+
               {/* Массовые действия */}
               {selectedEvents.length > 0 && (
                 <div className="flex items-center gap-2">
@@ -487,9 +736,6 @@ const AdminEvents = () => {
             </div>
           </div>
         </div>
-
-     // src/pages/admin/AdminEvents.tsx - Часть 5: JSX рендер часть 2 - карточки событий
-
         {/* Контент */}
         {loading ? (
           <div className="text-center py-16">
@@ -549,58 +795,41 @@ const AdminEvents = () => {
                     />
                   </div>
 
-                  {/* Изображение мероприятия */}
+                  {/* Улучшенное изображение мероприятия */}
                   <div className="relative h-48 bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-900/20 dark:to-primary-800/20 flex items-center justify-center overflow-hidden">
-                    {event.main_image ? (
+                    {getEventImage(event) ? (
                       <img 
-                        src={event.main_image} 
+                        src={getEventImage(event)!} 
                         alt={event.title}
                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                        onError={(e) => {
+                          // Fallback если изображение не загружается
+                          e.currentTarget.style.display = 'none';
+                        }}
                       />
                     ) : (
                       <Calendar className="w-16 h-16 text-primary-400 dark:text-primary-500" />
                     )}
                     
-                    {/* Статус мероприятия */}
+                    {/* Улучшенный статус мероприятия */}
                     <div className="absolute top-4 right-4">
                       <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
                         isEventPast 
                           ? statusColors.past
-                          : statusColors[event.status as keyof typeof statusColors]
+                          : statusColors[event.status as keyof typeof statusColors] || statusColors.active
                       }`}>
-                        {isEventPast ? 'Прошло' : 
-                         event.status === 'active' ? 'Активно' : 
-                         event.status === 'draft' ? 'Черновик' : 'Прошло'}
+                        {getEventStatus(event)}
                       </span>
                     </div>
-                  </div>
-
-                  // src/pages/admin/AdminEvents.tsx - Часть 6: JSX рендер часть 3 - продолжение карточек
-
-                  {/* Изображение мероприятия */}
-                  <div className="relative h-48 bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-900/20 dark:to-primary-800/20 flex items-center justify-center overflow-hidden">
-                    {event.main_image ? (
-                      <img 
-                        src={event.main_image} 
-                        alt={event.title}
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                      />
-                    ) : (
-                      <Calendar className="w-16 h-16 text-primary-400 dark:text-primary-500" />
-                    )}
                     
-                    {/* Статус мероприятия */}
-                    <div className="absolute top-4 right-4">
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                        isEventPast 
-                          ? statusColors.past
-                          : statusColors[event.status as keyof typeof statusColors]
-                      }`}>
-                        {isEventPast ? 'Прошло' : 
-                         event.status === 'active' ? 'Активно' : 
-                         event.status === 'draft' ? 'Черновик' : 'Прошло'}
-                      </span>
-                    </div>
+                    {/* Индикатор источника данных для отладки */}
+                    {process.env.NODE_ENV === 'development' && (
+                      <div className="absolute bottom-2 left-2">
+                        <span className="px-2 py-1 bg-black/50 text-white text-xs rounded">
+                          {detectEventTableSource(event)}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Контент карточки */}
@@ -627,7 +856,7 @@ const AdminEvents = () => {
                         <span className="truncate font-medium">{formatEventDateTime(event)}</span>
                       </div>
                       
-                      {getEventLocation(event) && (
+                      {getEventLocation(event) !== 'Место не указано' && (
                         <div className="flex items-center text-gray-600 dark:text-gray-300 text-sm">
                           <div className="flex items-center justify-center w-8 h-8 bg-primary-100 dark:bg-primary-900/30 rounded-lg mr-3">
                             <MapPin className="w-4 h-4 text-primary-600 dark:text-primary-400" />
@@ -667,6 +896,28 @@ const AdminEvents = () => {
                           )}
                         </div>
                       )}
+
+                      {/* Тип события */}
+                      <div className="flex items-center justify-between">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
+                          {getEventTypeLabel(event)}
+                        </span>
+                        
+                        {/* Дополнительные индикаторы */}
+                        <div className="flex items-center gap-1">
+                          {event.is_featured && (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300">
+                              ⭐ Рекомендуем
+                            </span>
+                          )}
+                          
+                          {!event.is_public && (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300">
+                              🔒 Приватно
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
                     {/* Кнопки действий */}
@@ -695,9 +946,128 @@ const AdminEvents = () => {
                       </button>
                     </div>
                   </div>
+
+                  {/* Дополнительная информация в футере карточки */}
+                  {(event.tags && event.tags.length > 0) && (
+                    <div className="px-6 pb-4">
+                      <div className="flex flex-wrap gap-1">
+                        {event.tags.slice(0, 3).map((tag, index) => (
+                          <span 
+                            key={index}
+                            className="inline-block px-2 py-1 text-xs rounded-full bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400"
+                          >
+                            #{tag}
+                          </span>
+                        ))}
+                        {event.tags.length > 3 && (
+                          <span className="inline-block px-2 py-1 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                            +{event.tags.length - 3}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Дополнительная информация и статистика */}
+        {!loading && filteredEvents.length > 0 && (
+          <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Статистика по статусам */}
+            <div className="bg-white dark:bg-dark-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-dark-600">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                Статистика событий
+              </h3>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600 dark:text-gray-400">Активные:</span>
+                  <span className="font-semibold text-green-600 dark:text-green-400">
+                    {events.filter(e => e.status === 'active' && (!e.end_at || !isPastEvent(e.end_at))).length}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600 dark:text-gray-400">Черновики:</span>
+                  <span className="font-semibold text-yellow-600 dark:text-yellow-400">
+                    {events.filter(e => e.status === 'draft').length}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600 dark:text-gray-400">Прошедшие:</span>
+                  <span className="font-semibold text-gray-600 dark:text-gray-400">
+                    {events.filter(e => e.status === 'past' || (e.end_at && isPastEvent(e.end_at))).length}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center border-t pt-3">
+                  <span className="text-gray-900 dark:text-white font-medium">Всего:</span>
+                  <span className="font-bold text-primary-600 dark:text-primary-400">
+                    {events.length}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Статистика по типам */}
+            <div className="bg-white dark:bg-dark-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-dark-600">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                По типам событий
+              </h3>
+              <div className="space-y-2">
+                {Object.entries(
+                  events.reduce((acc, event) => {
+                    const type = getEventTypeLabel(event);
+                    acc[type] = (acc[type] || 0) + 1;
+                    return acc;
+                  }, {} as Record<string, number>)
+                )
+                  .sort(([, a], [, b]) => b - a)
+                  .slice(0, 5)
+                  .map(([type, count]) => (
+                    <div key={type} className="flex justify-between items-center">
+                      <span className="text-gray-600 dark:text-gray-400 text-sm truncate">
+                        {type}:
+                      </span>
+                      <span className="font-semibold text-primary-600 dark:text-primary-400">
+                        {count}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+
+            {/* Быстрые действия */}
+            <div className="bg-white dark:bg-dark-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-dark-600">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                Быстрые действия
+              </h3>
+              <div className="space-y-3">
+                <button
+                  onClick={() => navigate('/admin/events/new')}
+                  className="w-full flex items-center gap-2 px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors"
+                >
+                  <Plus className="h-4 w-4" />
+                  Создать событие
+                </button>
+                
+                <button
+                  onClick={exportEvents}
+                  className="w-full flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+                >
+                  <Filter className="h-4 w-4" />
+                  Экспорт в CSV
+                </button>
+                
+                <button
+                  onClick={() => window.location.reload()}
+                  className="w-full flex items-center gap-2 px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                >
+                  <Loader2 className="h-4 w-4" />
+                  Обновить
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -719,8 +1089,97 @@ const AdminEvents = () => {
           onRefresh={fetchEvents}
         />
       )}
+
+      {/* Floating Action Button для быстрого создания (на мобильных) */}
+      <div className="fixed bottom-6 right-6 md:hidden">
+        <Link
+          to="/admin/events/new"
+          className="flex items-center justify-center w-14 h-14 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-110"
+        >
+          <Plus className="h-6 w-6" />
+        </Link>
+      </div>
+
+      {/* Debug информация (только в dev режиме) */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="fixed bottom-6 left-6 bg-black/80 text-white p-4 rounded-lg text-xs max-w-xs">
+          <div className="font-semibold mb-2">Debug Info:</div>
+          <div>Total Events: {events.length}</div>
+          <div>Filtered Events: {filteredEvents.length}</div>
+          <div>Selected Events: {selectedEvents.length}</div>
+          <div>Status Filter: {statusFilter}</div>
+          <div>Sort By: {sortBy}</div>
+          <div>Search Query: "{searchQuery}"</div>
+          <div className="mt-2 text-yellow-300">
+            Sources:
+          </div>
+          <div>
+            sh_events: {events.filter(e => detectEventTableSource(e) === 'sh_events').length}
+          </div>
+          <div>
+            events: {events.filter(e => detectEventTableSource(e) === 'events').length}
+          </div>
+        </div>
+      )}
+
+      {/* Toast для уведомлений о статусе загрузки данных */}
+      {events.length > 0 && (
+        <div className="sr-only">
+          {console.log(`
+🎯 AdminEvents Statistics:
+📊 Total Events: ${events.length}
+📋 Filtered Events: ${filteredEvents.length}
+🎮 Active Events: ${events.filter(e => e.status === 'active').length}
+📝 Draft Events: ${events.filter(e => e.status === 'draft').length}
+📜 Past Events: ${events.filter(e => e.status === 'past').length}
+🆕 From sh_events: ${events.filter(e => detectEventTableSource(e) === 'sh_events').length}
+🔄 From events: ${events.filter(e => detectEventTableSource(e) === 'events').length}
+          `)}
+        </div>
+      )}
     </div>
   );
 };
 
 export default AdminEvents;
+
+/* 
+🎉 ПОЛНЫЙ ОБНОВЛЕННЫЙ ФАЙЛ AdminEvents.tsx ГОТОВ!
+
+✅ Основные возможности:
+- Поддержка новой таблицы sh_events с fallback на events
+- Автоматическое определение источника данных
+- Интеллектуальный маппинг полей между схемами
+- Расширенная типизация для новых полей
+- Логирование и отладка источников данных
+- Валидация и обработка ошибок
+- Экспорт событий в CSV
+- Периодическое обновление счетчиков
+- Улучшенный UI с индикаторами и статистикой
+
+🔧 Ключевые функции:
+1. fetchEvents() - загружает из sh_events с fallback
+2. handleBulkDelete() - удаляет из правильной таблицы
+3. transformShEventToEvent() - преобразует данные
+4. getEventField() - универсальный доступ к полям
+5. detectEventTableSource() - определяет источник
+6. updateRegistrationCounts() - обновляет счетчики
+7. exportEvents() - экспорт в CSV
+
+🎯 Особенности UI:
+- Адаптивные карточки событий
+- Фильтрация и сортировка
+- Массовые операции
+- Статистические блоки
+- Debug информация в dev режиме
+- Floating кнопка для мобильных
+- Улучшенные индикаторы статуса
+
+📱 Совместимость:
+- Работает с обеими схемами данных
+- Автоматический fallback
+- Прозрачный маппинг полей
+- Сохранение всех существующих функций
+
+🚀 Готов к использованию!
+*/
