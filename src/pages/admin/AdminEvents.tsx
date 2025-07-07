@@ -690,7 +690,7 @@ onst updateRegistrationCounts = async () => {
       if (events.length > 0) {
         updateRegistrationCounts();
       }
-    }, 30000);
+    }, 120000);
 
     return () => clearInterval(interval);
   }, [events.length]);
