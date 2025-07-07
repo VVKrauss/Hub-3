@@ -20,6 +20,44 @@ import {
 type SortOption = 'date-asc' | 'date-desc' | 'title-asc' | 'title-desc' | 'chronological';
 type FilterStatus = 'active' | 'draft' | 'past';
 
+// ОБНОВЛЕННЫЙ интерфейс Event с новыми полями
+interface Event {
+  id: string;
+  title: string;
+  description?: string;
+  start_at?: string;
+  end_at?: string;
+  status: string;
+  event_type: string;
+  location?: string;
+  venue_name?: string;
+  venue_address?: string;
+  address?: string;
+  price?: number;
+  base_price?: number;
+  payment_type?: string;
+  currency?: string;
+  max_registrations?: number;
+  max_attendees?: number; // ДОБАВЛЕНО новое поле
+  is_featured?: boolean;
+  is_public?: boolean;
+  cover_image_url?: string;
+  main_image?: string;
+  bg_image?: string;
+  gallery_images?: string[] | string;
+  photo_gallery?: string[];
+  tags?: string[];
+  speakers?: any[];
+  sh_event_speakers?: any[];
+  registrations?: EventRegistrations;
+  current_registration_count?: number;
+  sh_registrations_count?: number; // ДОБАВЛЕНО новое поле
+  active_registrations_count?: number;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: any;
+}
+
 // Константы для стилизации статусов
 const statusColors = {
   active: 'bg-gradient-to-r from-green-100 to-green-200 text-green-800 dark:from-green-900/30 dark:to-green-800/30 dark:text-green-400',
@@ -216,7 +254,7 @@ const AdminEvents = () => {
     fetchEvents();
   }, [sortBy, statusFilter]);
 
-  // 🔧 **ИСПРАВЛЕННАЯ ФУНКЦИЯ fetchEvents для работы с sh_events**
+  // 🔧 **ОБНОВЛЕННАЯ ФУНКЦИЯ fetchEvents для работы с sh_events и новой логикой регистраций**
   const fetchEvents = async () => {
     try {
       setLoading(true);
@@ -277,7 +315,24 @@ const AdminEvents = () => {
       // Преобразуем данные из новой схемы в формат, ожидаемый интерфейсом
       const enrichedEvents = (data || []).map(event => transformShEventToEvent(event));
 
-      setEvents(enrichedEvents);
+      // ДОБАВЛЕНО: Получаем актуальное количество регистраций из новой системы
+      const eventsWithRegistrationCounts = await Promise.all(
+        enrichedEvents.map(async (event) => {
+          // Получаем актуальное количество регистраций из новой системы
+          const { count } = await supabase
+            .from('sh_registrations')
+            .select('*', { count: 'exact', head: true })
+            .eq('event_id', event.id)
+            .eq('registration_status', 'active');
+
+          return {
+            ...event,
+            sh_registrations_count: count || 0
+          };
+        })
+      );
+
+      setEvents(eventsWithRegistrationCounts);
     } catch (error) {
       console.error('❌ Error in fetchEvents:', error);
       // В случае критической ошибки пытаемся загрузить из старой таблицы
@@ -344,6 +399,7 @@ const AdminEvents = () => {
       toast.error('Ошибка при загрузке мероприятий');
     }
   };
+
   // 🔧 **ОБНОВЛЕННАЯ ФУНКЦИЯ handleBulkDelete для работы с sh_events**
   const handleBulkDelete = async () => {
     if (selectedEvents.length === 0) return;
@@ -414,22 +470,24 @@ const AdminEvents = () => {
     return matchesSearch;
   });
 
-  // Helper function to get current registration count from either new or legacy structure
+  // ОБНОВЛЕННАЯ функция getCurrentRegistrationCount с новой логикой
   const getCurrentRegistrationCount = (event: Event): number => {
-    if (event.registrations?.current !== undefined) {
-      return event.registrations.current;
-    }
-    return event.current_registration_count || 0;
+    // НОВАЯ ЛОГИКА - берем данные из sh_registrations_count
+    return event.sh_registrations_count || event.active_registrations_count || 0;
   };
 
-  // Helper function to get max registrations from either new or legacy structure
+  // ОБНОВЛЕННАЯ функция getMaxRegistrations с новой логикой
   const getMaxRegistrations = (event: Event): number | null => {
+    // НОВАЯ ЛОГИКА - приоритет новой системе
+    if (event.max_attendees !== undefined) {
+      return event.max_attendees;
+    }
+    // Фоллбэк на старую систему
     if (event.registrations?.max_regs !== undefined) {
       return event.registrations.max_regs;
     }
     return event.max_registrations || null;
   };
-
   // 🔧 **ОБНОВЛЕННАЯ ФУНКЦИЯ getPriceDisplay для работы с новой схемой**
   const getPriceDisplay = (event: Event): string => {
     const paymentType = event.payment_type;
@@ -846,8 +904,7 @@ const AdminEvents = () => {
               const currentRegistrationCount = getCurrentRegistrationCount(event);
               const fillPercentage = maxRegistrations ? (currentRegistrationCount / maxRegistrations) * 100 : 0;
               const isEventPast = event.end_at ? isPastEvent(event.end_at) : false;
-
-              return (
+return (
                 <div
                   key={event.id}
                   className="group bg-white dark:bg-dark-800 rounded-xl shadow-md hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 overflow-hidden border border-gray-200 dark:border-dark-600 relative cursor-pointer"
@@ -1204,30 +1261,4 @@ const AdminEvents = () => {
 };
 
 export default AdminEvents;
-
-/* 
-🎉 УЛУЧШЕННЫЕ БЛОКИ 3 И 4 AdminEvents.tsx ГОТОВЫ!
-
-✨ Основные улучшения карточек:
-- ✅ Убрана надпись "sh_events" 
-- ✅ Кнопки перенесены в правый верхний угол (иконки с backdrop-blur)
-- ✅ Уменьшен шрифт заголовка (text-base)
-- ✅ Добавлено сокращение заголовка (line-clamp-2)
-- ✅ Убраны иконки из информационных строк
-- ✅ Уменьшены зазоры между строками (space-y-1)
-- ✅ Компактная высота изображения (h-40)
-- ✅ Улучшенные hover эффекты
-
-🎨 CSS стили:
-Добавьте в ваш CSS файл:
-
-.line-clamp-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-🚀 Теперь карточки выглядят современно и компактно!
-*/
+            
