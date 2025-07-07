@@ -24,19 +24,7 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   'webinar': 'Вебинар',
   'training': 'Тренинг',
   'other': 'Другое',
-  // Legacy значения
-  'Lecture': 'Лекция',
-  'Workshop': 'Мастер-класс',
-  'Conference': 'Конференция',
-  'Seminar': 'Семинар',
-  'Discussion': 'Дискуссия',
-  'Festival': 'Фестиваль',
-  'Concert': 'Концерт',
-  'Standup': 'Стенд-ап',
-  'Excursion': 'Экскурсия',
-  'Quiz': 'Квиз',
-  'Swap': 'Своп',
-  'Other': 'Другое'
+ 
 };
 
 // ФУНКЦИИ ДЛЯ ПРАВИЛЬНОГО ОТОБРАЖЕНИЯ ДАННЫХ
