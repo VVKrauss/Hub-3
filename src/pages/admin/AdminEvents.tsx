@@ -593,7 +593,7 @@ const AdminEvents = () => {
   
 
   // Функция для обновления счетчиков регистраций
-сonst updateRegistrationCounts = async () => { 
+  const updateRegistrationCounts = async () => { 
     if (events.length === 0) return;
     
     console.log('🔄 Updating registration counts for', events.length, 'events...');
@@ -1225,7 +1225,7 @@ const AdminEvents = () => {
 📝 Draft Events: ${events.filter(e => e.status === 'draft').length}
 📜 Past Events: ${events.filter(e => e.status === 'past').length}
 🆕 From sh_events: ${events.filter(e => detectEventTableSource(e) === 'sh_events').length}
-🔄 From events: ${events.filter(e => detectEventTableSource(e) === 'events').length}
+🔄 From events: {events.filter(e => detectEventTableSource(e) === 'events').length}
 🖼️ With Images: ${events.filter(e => getEventImage(e)).length}
           `)}
         </div>
