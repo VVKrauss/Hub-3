@@ -593,7 +593,7 @@ const AdminEvents = () => {
   
 
   // Функция для обновления счетчиков регистраций
-сonst updateRegistrationCounts = async () => {
+сonst updateRegistrationCounts = async () => { 
     if (events.length === 0) return;
     
     console.log('🔄 Updating registration counts for', events.length, 'events...');
