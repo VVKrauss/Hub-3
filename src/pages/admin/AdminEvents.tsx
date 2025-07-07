@@ -844,10 +844,6 @@ const AdminEvents = () => {
             
    {/* карточки мероприятий     */}
 
-
-// Улучшенные карточки мероприятий для AdminEvents.tsx
-// Замените секцию карточек событий (около строки 1700 в части 3):
-
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredEvents.map(event => {
               const { line1, line2 } = formatEventTitle(event.title);
