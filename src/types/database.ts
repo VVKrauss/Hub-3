@@ -4,7 +4,7 @@
 
 // Основные enum типы из БД
 
-export type ShEventType = 
+type ShEventType = 
   | 'lecture' 
   | 'workshop' 
   | 'conference'
@@ -19,19 +19,19 @@ export type ShEventType =
   | 'movie_discussion'
   | 'conversation_club'
   | 'other';
-export type ShEventStatus = 'draft' | 'active' | 'past' | 'cancelled';
-export type ShAgeCategory = '0+' | '6+' | '12+' | '16+' | '18+';
-export type ShPaymentType = 'free' | 'paid' | 'donation';
-export type ShUserRole = 'admin' | 'moderator' | 'member' | 'guest';
-export type ShUserStatus = 'active' | 'inactive' | 'banned' | 'pending';
-export type ShRegistrationStatus = 'active' | 'cancelled' | 'waitlist';
-export type ShPaymentStatus = 'pending' | 'confirmed' | 'failed' | 'refunded';
-export type ShRegistrationType = 'user' | 'admin' | 'import';
-export type ShSpeakerStatus = 'pending' | 'active' | 'inactive';
-export type ShBookingType = 'event' | 'rental' | 'meeting' | 'other';
-export type ShBookingStatus = 'confirmed' | 'pending' | 'cancelled';
-export type ShAuthProvider = 'email' | 'google' | 'facebook' | 'github';
-export type ShSocialPlatform = 'website' | 'linkedin' | 'twitter' | 'instagram' | 'facebook' | 'youtube' | 'github';
+type ShEventStatus = 'draft' | 'active' | 'past' | 'cancelled';
+type ShAgeCategory = '0+' | '6+' | '12+' | '16+' | '18+';
+type ShPaymentType = 'free' | 'paid' | 'donation';
+type ShUserRole = 'admin' | 'moderator' | 'member' | 'guest';
+type ShUserStatus = 'active' | 'inactive' | 'banned' | 'pending';
+type ShRegistrationStatus = 'active' | 'cancelled' | 'waitlist';
+type ShPaymentStatus = 'pending' | 'confirmed' | 'failed' | 'refunded';
+type ShRegistrationType = 'user' | 'admin' | 'import';
+type ShSpeakerStatus = 'pending' | 'active' | 'inactive';
+type ShBookingType = 'event' | 'rental' | 'meeting' | 'other';
+type ShBookingStatus = 'confirmed' | 'pending' | 'cancelled';
+type ShAuthProvider = 'email' | 'google' | 'facebook' | 'github';
+type ShSocialPlatform = 'website' | 'linkedin' | 'twitter' | 'instagram' | 'facebook' | 'youtube' | 'github';
 
 // Главные таблицы
 export interface ShEvent {
@@ -80,7 +80,7 @@ export interface ShEvent {
   published_at?: string;
 }
 
-export interface ShUser {
+interface ShUser {
   id: string;
   email?: string;
   name: string;
@@ -140,7 +140,7 @@ export interface ShSpeakerSocialLink {
   created_at: string;
 }
 
-export interface ShRegistration {
+interface ShRegistration {
   id: string;
   external_registration_id?: string;
   event_id: string;
@@ -171,7 +171,7 @@ export interface ShRegistration {
   updated_at: string;
 }
 
-export interface ShRegistrationTicket {
+interface ShRegistrationTicket {
   id: string;
   registration_id: string;
   ticket_type_id?: string;
@@ -185,7 +185,7 @@ export interface ShRegistrationTicket {
   created_at: string;
 }
 
-export interface ShEventTicketType {
+interface ShEventTicketType {
   id: string;
   event_id: string;
   name: string;
@@ -212,7 +212,7 @@ export interface ShEventSpeaker {
   updated_at: string;
 }
 
-export interface ShEventSchedule {
+interface ShEventSchedule {
   id: string;
   event_id: string;
   title: string;
@@ -226,7 +226,7 @@ export interface ShEventSchedule {
   created_at: string;
 }
 
-export interface ShSpaceBooking {
+interface ShSpaceBooking {
   id: string;
   start_at: string;
   end_at: string;
@@ -262,7 +262,7 @@ export interface ShSpaceBooking {
 }
 
 // Настройки сайта
-export interface ShSiteSettings {
+interface ShSiteSettings {
   id: string;
   site_title?: string;
   site_description?: string;
@@ -288,7 +288,7 @@ export interface ShSiteSettings {
 }
 
 // Пользовательские связи и сессии
-export interface ShUserConnection {
+interface ShUserConnection {
   id: string;
   user_id: string;
   connected_user_id: string;
@@ -296,7 +296,7 @@ export interface ShUserConnection {
   created_at: string;
 }
 
-export interface ShUserSession {
+interface ShUserSession {
   id: string;
   user_id: string;
   ip_address?: string;
@@ -330,7 +330,7 @@ export interface SpeakerWithSocials extends ShSpeaker {
   events?: (ShEventSpeaker & { event: ShEvent })[];
 }
 
-export interface RegistrationWithTickets extends ShRegistration {
+interface RegistrationWithTickets extends ShRegistration {
   tickets?: ShRegistrationTicket[];
   event?: ShEvent;
   user?: ShUser;
@@ -351,7 +351,7 @@ export interface PaginatedResponse<T> extends ApiResponse<T[]> {
 }
 
 // Фильтры и параметры поиска
-export interface EventFilters {
+interface EventFilters {
   status?: ShEventStatus[];
   event_type?: ShEventType[];
   age_category?: ShAgeCategory[];
@@ -363,7 +363,7 @@ export interface EventFilters {
   search?: string;
 }
 
-export interface UserFilters {
+interface UserFilters {
   role?: ShUserRole[];
   status?: ShUserStatus[];
   search?: string;
@@ -371,7 +371,7 @@ export interface UserFilters {
   registration_date_to?: string;
 }
 
-export interface BookingFilters {
+interface BookingFilters {
   booking_type?: ShBookingType[];
   booking_status?: ShBookingStatus[];
   date_from?: string;
@@ -380,14 +380,14 @@ export interface BookingFilters {
   search?: string;
 }
 
-export interface SpeakerFilters {
+interface SpeakerFilters {
   status?: ShSpeakerStatus[];
   is_featured?: boolean;
   field_of_expertise?: string;
   search?: string;
 }
 
-export interface RegistrationFilters {
+interface RegistrationFilters {
   event_id?: string;
   registration_status?: ShRegistrationStatus[];
   payment_status?: ShPaymentStatus[];
@@ -398,7 +398,7 @@ export interface RegistrationFilters {
 }
 
 // Константы для использования в приложении
-export const EVENT_STATUS_LABELS: Record<ShEventStatus, string> = {
+const EVENT_STATUS_LABELS: Record<ShEventStatus, string> = {
   draft: 'Черновик',
   active: 'Активное',
   past: 'Прошедшее', 
@@ -406,7 +406,7 @@ export const EVENT_STATUS_LABELS: Record<ShEventStatus, string> = {
 };
 
 // Обновить лейблы:
-export const EVENT_TYPE_LABELS: Record<ShEventType, string> = {
+const EVENT_TYPE_LABELS: Record<ShEventType, string> = {
   lecture: 'Лекция',
   workshop: 'Мастер-класс',
   conference: 'Конференция',
@@ -423,13 +423,13 @@ export const EVENT_TYPE_LABELS: Record<ShEventType, string> = {
   other: 'Другое'
 };
 
-export const PAYMENT_TYPE_LABELS: Record<ShPaymentType, string> = {
+const PAYMENT_TYPE_LABELS: Record<ShPaymentType, string> = {
   free: 'Бесплатно',
   paid: 'Платно',
   donation: 'Донейшн'
 };
 
-export const AGE_CATEGORY_LABELS: Record<ShAgeCategory, string> = {
+const AGE_CATEGORY_LABELS: Record<ShAgeCategory, string> = {
   '0+': '0+',
   '6+': '6+', 
   '12+': '12+',
@@ -438,32 +438,32 @@ export const AGE_CATEGORY_LABELS: Record<ShAgeCategory, string> = {
 };
 
 // Утилиты для работы со статусами
-export const getEventStatusFromDate = (startDate: string): ShEventStatus => {
+const getEventStatusFromDate = (startDate: string): ShEventStatus => {
   const now = new Date();
   const eventDate = new Date(startDate);
   
   return eventDate < now ? 'past' : 'active';
 };
 
-export const isEventActive = (event: ShEvent): boolean => {
+const isEventActive = (event: ShEvent): boolean => {
   return event.status === 'active' && event.is_public;
 };
 
-export const isEventUpcoming = (event: ShEvent): boolean => {
+const isEventUpcoming = (event: ShEvent): boolean => {
   const now = new Date();
   const eventDate = new Date(event.start_at);
   
   return eventDate > now && event.status === 'active';
 };
 
-export const isEventPast = (event: ShEvent): boolean => {
+const isEventPast = (event: ShEvent): boolean => {
   const now = new Date();
   const eventDate = new Date(event.start_at);
   
   return eventDate < now;
 };
 
-export const getEventDisplayStatus = (event: ShEvent): string => {
+const getEventDisplayStatus = (event: ShEvent): string => {
   if (isEventPast(event) && event.status === 'active') {
     return 'Завершено';
   }

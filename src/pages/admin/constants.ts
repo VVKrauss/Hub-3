@@ -1,7 +1,7 @@
 // src/pages/admin/constants.ts - ОБНОВЛЕННАЯ ВЕРСИЯ С РУССКИМИ ЛЕЙБЛАМИ
 // Дополнения к существующим константам для правильного отображения
 
-export interface Speaker {
+interface Speaker {
   id: string;
   name: string;
   field_of_expertise: string;
@@ -9,7 +9,7 @@ export interface Speaker {
   active: boolean;
 }
 
-export interface FestivalProgramItem {
+interface FestivalProgramItem {
   title: string;
   description: string;
   image_url: string;
@@ -41,12 +41,12 @@ export interface EventRegistrations {
 }
 
 // ОСНОВНЫЕ ТИПЫ (унифицированные)
-export type EventType = 'lecture' | 'workshop' | 'discussion' | 'conference' | 'seminar' | 'festival' | 'concert' | 'standup' | 'excursion' | 'quiz' | 'swap' | 'other';
-export type PaymentType = 'free' | 'paid' | 'donation';
-export type EventStatus = 'draft' | 'active' | 'past' | 'cancelled';
-export type AgeCategory = '0+' | '6+' | '12+' | '16+' | '18+';
-export type Currency = 'RSD' | 'EUR' | 'USD' | 'RUB';
-export type Language = 'sr' | 'en' | 'ru';
+type EventType = 'lecture' | 'workshop' | 'discussion' | 'conference' | 'seminar' | 'festival' | 'concert' | 'standup' | 'excursion' | 'quiz' | 'swap' | 'other';
+type PaymentType = 'free' | 'paid' | 'donation';
+type EventStatus = 'draft' | 'active' | 'past' | 'cancelled';
+type AgeCategory = '0+' | '6+' | '12+' | '16+' | '18+';
+type Currency = 'RSD' | 'EUR' | 'USD' | 'RUB';
+type Language = 'sr' | 'en' | 'ru';
 
 export type Event = {
   id: string;
@@ -86,7 +86,7 @@ export type Event = {
 };
 
 // МАССИВЫ ЗНАЧЕНИЙ ДЛЯ ВЫПАДАЮЩИХ СПИСКОВ
-export const eventTypes: EventType[] = [
+const eventTypes: EventType[] = [
   'lecture',
   'workshop',
   'discussion',
@@ -101,19 +101,19 @@ export const eventTypes: EventType[] = [
   'other'
 ];
 
-export const paymentTypes: PaymentType[] = [
+const paymentTypes: PaymentType[] = [
   'free',
   'paid', 
   'donation'
 ];
 
-export const languages: Language[] = [
+const languages: Language[] = [
   'sr',  // Serbian
   'en',  // English
   'ru'   // Russian
 ];
 
-export const ageCategories: AgeCategory[] = [
+const ageCategories: AgeCategory[] = [
   '0+',
   '6+',
   '12+', 
@@ -121,14 +121,14 @@ export const ageCategories: AgeCategory[] = [
   '18+'
 ];
 
-export const currencies: Currency[] = [
+const currencies: Currency[] = [
   'RSD',
   'EUR',
   'USD',
   'RUB'
 ];
 
-export const statuses: EventStatus[] = [
+const statuses: EventStatus[] = [
   'draft',
   'active',
   'past',
@@ -163,7 +163,7 @@ export const LANGUAGE_LABELS: Record<Language, string> = {
   'ru': 'Русский'
 };
 
-export const AGE_CATEGORY_LABELS: Record<AgeCategory, string> = {
+const AGE_CATEGORY_LABELS: Record<AgeCategory, string> = {
   '0+': '0+',
   '6+': '6+',
   '12+': '12+',
@@ -171,14 +171,14 @@ export const AGE_CATEGORY_LABELS: Record<AgeCategory, string> = {
   '18+': '18+'
 };
 
-export const CURRENCY_LABELS: Record<Currency, string> = {
+const CURRENCY_LABELS: Record<Currency, string> = {
   'RSD': 'RSD (Динар)',
   'EUR': 'EUR (Евро)',
   'USD': 'USD (Доллар)',
   'RUB': 'RUB (Рубль)'
 };
 
-export const STATUS_LABELS: Record<EventStatus, string> = {
+const STATUS_LABELS: Record<EventStatus, string> = {
   'draft': 'Черновик',
   'active': 'Активное',
   'past': 'Прошедшее',
@@ -186,7 +186,7 @@ export const STATUS_LABELS: Record<EventStatus, string> = {
 };
 
 // РАСШИРЕННЫЕ ЛЕЙБЛЫ ДЛЯ СОВМЕСТИМОСТИ С LEGACY ДАННЫМИ
-export const EXTENDED_EVENT_TYPE_LABELS: Record<string, string> = {
+const EXTENDED_EVENT_TYPE_LABELS: Record<string, string> = {
   // Основные значения
   ...EVENT_TYPE_LABELS,
   
@@ -223,7 +223,7 @@ export const EXTENDED_EVENT_TYPE_LABELS: Record<string, string> = {
   'Presentation': 'Презентация'
 };
 
-export const EXTENDED_LANGUAGE_LABELS: Record<string, string> = {
+const EXTENDED_LANGUAGE_LABELS: Record<string, string> = {
   // Основные значения
   ...LANGUAGE_LABELS,
   
@@ -266,7 +266,7 @@ export const EXTENDED_LANGUAGE_LABELS: Record<string, string> = {
   'Montenegrin': 'Crnogorski'
 };
 
-export const EXTENDED_PAYMENT_TYPE_LABELS: Record<string, string> = {
+const EXTENDED_PAYMENT_TYPE_LABELS: Record<string, string> = {
   // Основные значения
   ...PAYMENT_TYPE_LABELS,
   
@@ -285,20 +285,20 @@ export const EXTENDED_PAYMENT_TYPE_LABELS: Record<string, string> = {
 };
 
 // ФУНКЦИИ-УТИЛИТЫ ДЛЯ ИСПОЛЬЗОВАНИЯ В КОМПОНЕНТАХ
-export const getEventTypeDisplayLabel = (eventType: string): string => {
+const getEventTypeDisplayLabel = (eventType: string): string => {
   return EXTENDED_EVENT_TYPE_LABELS[eventType] || EVENT_TYPE_LABELS[eventType as keyof typeof EVENT_TYPE_LABELS] || eventType;
 };
 
-export const getLanguageDisplayLabel = (language: string): string => {
+const getLanguageDisplayLabel = (language: string): string => {
   return EXTENDED_LANGUAGE_LABELS[language] || LANGUAGE_LABELS[language as keyof typeof LANGUAGE_LABELS] || language;
 };
 
-export const getPaymentTypeDisplayLabel = (paymentType: string): string => {
+const getPaymentTypeDisplayLabel = (paymentType: string): string => {
   return EXTENDED_PAYMENT_TYPE_LABELS[paymentType] || PAYMENT_TYPE_LABELS[paymentType as keyof typeof PAYMENT_TYPE_LABELS] || paymentType;
 };
 
 // ФУНКЦИЯ ДЛЯ ПОЛУЧЕНИЯ ЦЕНЫ С ПРАВИЛЬНЫМ ФОРМАТИРОВАНИЕМ
-export const formatEventPrice = (event: any): string => {
+const formatEventPrice = (event: any): string => {
   // Проверяем payment_type
   if (event.payment_type === 'free') {
     return 'Бесплатно';
@@ -346,32 +346,32 @@ export const formatEventPrice = (event: any): string => {
 };
 
 // ГОТОВЫЕ МАССИВЫ ДЛЯ SELECT-ОВ В АДМИНКЕ
-export const eventTypeOptions = eventTypes.map(type => ({
+const eventTypeOptions = eventTypes.map(type => ({
   value: type,
   label: EVENT_TYPE_LABELS[type]
 }));
 
-export const paymentTypeOptions = paymentTypes.map(type => ({
+const paymentTypeOptions = paymentTypes.map(type => ({
   value: type,
   label: PAYMENT_TYPE_LABELS[type]
 }));
 
-export const languageOptions = languages.map(lang => ({
+const languageOptions = languages.map(lang => ({
   value: lang,
   label: LANGUAGE_LABELS[lang]
 }));
 
-export const currencyOptions = currencies.map(curr => ({
+const currencyOptions = currencies.map(curr => ({
   value: curr,
   label: CURRENCY_LABELS[curr]
 }));
 
-export const ageCategoryOptions = ageCategories.map(cat => ({
+const ageCategoryOptions = ageCategories.map(cat => ({
   value: cat,
   label: AGE_CATEGORY_LABELS[cat]
 }));
 
-export const statusOptions = statuses.map(status => ({
+const statusOptions = statuses.map(status => ({
   value: status,
   label: STATUS_LABELS[status]
 }));

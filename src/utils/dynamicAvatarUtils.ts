@@ -2,7 +2,7 @@
 
 import { supabase } from '../lib/supabase';
 
-export const BASE_AVATAR_URL = 'https://jfvinriqydjtwsmayxix.supabase.co/storage/v1/object/public/images/avatars/';
+const BASE_AVATAR_URL = 'https://jfvinriqydjtwsmayxix.supabase.co/storage/v1/object/public/images/avatars/';
 
 type AvatarFile = {
   name: string;
@@ -13,7 +13,7 @@ type AvatarFile = {
 /**
  * Получить список всех доступных аватарок из Supabase Storage
  */
-export const getAvailableAvatars = async (): Promise<AvatarFile[]> => {
+const getAvailableAvatars = async (): Promise<AvatarFile[]> => {
   try {
     const { data, error } = await supabase.storage
       .from('images')
@@ -75,7 +75,7 @@ export const getRandomAvatarUrl = async (): Promise<string> => {
 /**
  * Проверить, является ли URL валидным аватаром из нашей коллекции
  */
-export const isValidAvatarUrl = (url: string): boolean => {
+const isValidAvatarUrl = (url: string): boolean => {
   if (!url.startsWith(BASE_AVATAR_URL)) return false;
   
   const fileName = url.replace(BASE_AVATAR_URL, '');
@@ -87,7 +87,7 @@ export const isValidAvatarUrl = (url: string): boolean => {
 /**
  * Получить имя файла аватара из полного URL
  */
-export const getAvatarFileName = (url: string): string | null => {
+const getAvatarFileName = (url: string): string | null => {
   if (!url.startsWith(BASE_AVATAR_URL)) return null;
   
   const fileName = url.replace(BASE_AVATAR_URL, '');
@@ -97,7 +97,7 @@ export const getAvatarFileName = (url: string): string | null => {
 /**
  * Поиск аватаров по названию/номеру
  */
-export const searchAvatars = async (query: string): Promise<AvatarFile[]> => {
+const searchAvatars = async (query: string): Promise<AvatarFile[]> => {
   try {
     const allAvatars = await getAvailableAvatars();
     
@@ -165,7 +165,7 @@ class AvatarCache {
   }
 }
 
-export const avatarCache = AvatarCache.getInstance();
+const avatarCache = AvatarCache.getInstance();
 
 /**
  * Получить кэшированный список аватаров
@@ -184,7 +184,7 @@ export const invalidateAvatarCache = (): void => {
 /**
  * Получить статистику по аватарам
  */
-export const getAvatarStats = async () => {
+const getAvatarStats = async () => {
   try {
     const avatars = await getCachedAvatars();
     
@@ -213,7 +213,7 @@ export const getAvatarStats = async () => {
 /**
  * Проверить доступность аватара по URL
  */
-export const checkAvatarAvailability = async (url: string): Promise<boolean> => {
+const checkAvatarAvailability = async (url: string): Promise<boolean> => {
   try {
     const response = await fetch(url, { method: 'HEAD' });
     return response.ok;
@@ -225,7 +225,7 @@ export const checkAvatarAvailability = async (url: string): Promise<boolean> => 
 /**
  * Получить информацию об аватаре
  */
-export const getAvatarInfo = async (url: string) => {
+const getAvatarInfo = async (url: string) => {
   try {
     const fileName = getAvatarFileName(url);
     if (!fileName) return null;

@@ -49,7 +49,7 @@ export const sendTelegramNotification = async (chatId: string, message: string):
  * @param showToast Whether to show success/error toasts
  * @param targetChatId The target Telegram chat ID to send the message to
  */
-export const sendTelegramNotificationWithFeedback = async (
+const sendTelegramNotificationWithFeedback = async (
   message: string, 
   showToast = false,
   targetChatId: string

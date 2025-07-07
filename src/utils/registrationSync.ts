@@ -52,7 +52,7 @@ export const syncUserRegistration = async (
 /**
  * Находит пользователя по email из таблицы profiles
  */
-export const findUserByEmail = async (email: string): Promise<string | null> => {
+const findUserByEmail = async (email: string): Promise<string | null> => {
   try {
     // Пытаемся найти пользователя в таблице profiles
     const { data: profileData, error: profileError } = await supabase
@@ -100,7 +100,7 @@ export const findUserByEmail = async (email: string): Promise<string | null> => 
 /**
  * Альтернативный способ поиска пользователя через email в auth metadata
  */
-export const findUserByEmailAlternative = async (email: string): Promise<string | null> => {
+const findUserByEmailAlternative = async (email: string): Promise<string | null> => {
   try {
     // Ищем в таблице profiles где email может быть сохранен отдельно
     const { data, error } = await supabase
@@ -124,7 +124,7 @@ export const findUserByEmailAlternative = async (email: string): Promise<string 
 /**
  * Синхронизирует все регистрации события с пользователями
  */
-export const syncEventRegistrations = async (eventId: string): Promise<void> => {
+const syncEventRegistrations = async (eventId: string): Promise<void> => {
   try {
     // Получаем данные события
     const { data: eventData, error: eventError } = await supabase
@@ -180,7 +180,7 @@ export const syncEventRegistrations = async (eventId: string): Promise<void> => 
 /**
  * Функция для ручной синхронизации всех событий (для миграции данных)
  */
-export const syncAllRegistrations = async (): Promise<void> => {
+const syncAllRegistrations = async (): Promise<void> => {
   try {
     console.log('Starting full registration sync...');
     
@@ -224,7 +224,7 @@ export const syncAllRegistrations = async (): Promise<void> => {
 /**
  * Функция для синхронизации конкретной регистрации по email и событию
  */
-export const syncRegistrationByEmail = async (
+const syncRegistrationByEmail = async (
   email: string,
   eventId: string,
   registrationId: string
@@ -277,7 +277,7 @@ export const syncRegistrationByEmail = async (
 /**
  * Удаляет регистрацию пользователя
  */
-export const removeUserRegistration = async (
+const removeUserRegistration = async (
   userId: string,
   eventId: string,
   registrationId: string

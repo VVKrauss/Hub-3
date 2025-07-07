@@ -368,7 +368,7 @@ export const updateSiteSettings = async (settings: any): Promise<ApiResponse<any
 };
 
 // Обновление навигации
-export const updateNavigation = async (navigationItems: any[], navigationStyle?: any): Promise<ApiResponse<any>> => {
+const updateNavigation = async (navigationItems: any[], navigationStyle?: any): Promise<ApiResponse<any>> => {
   try {
     const updates: any = {
       navigation_items: navigationItems,
@@ -410,7 +410,7 @@ export const getOrCreateSiteSettings = async (): Promise<ApiResponse<any>> => {
 };
 
 // Получение настроек конкретной страницы
-export const getPageSettings = async (page: string): Promise<ApiResponse<any>> => {
+const getPageSettings = async (page: string): Promise<ApiResponse<any>> => {
   try {
     const siteSettings = await getSiteSettings();
     
