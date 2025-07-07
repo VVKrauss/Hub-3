@@ -557,19 +557,22 @@ const AdminEvents = () => {
   };
 
   // Функция для получения количества регистраций с учетом новой схемы
-  const getRegistrationCount = async (eventId: string): Promise<number> => {
+ const getRegistrationCount = async (eventId: string): Promise<number> => {
     try {
       // Сначала пытаемся получить из новой таблицы sh_registrations
+      // ✅ ИСПРАВЛЕНО: используем 'active' вместо 'confirmed'
       const { data: shRegistrations, error: shError } = await supabase
         .from('sh_registrations')
         .select('id', { count: 'exact' })
         .eq('event_id', eventId)
-        .eq('registration_status', 'confirmed');
+        .eq('registration_status', 'active'); // ✅ ИСПРАВЛЕНО: active вместо confirmed
 
-      if (!shError && shRegistrations) {
+      if (!shError && shRegistrations !== null) {
+        console.log(`📊 Registration count for event ${eventId}: ${shRegistrations.length} (from sh_registrations)`);
         return shRegistrations.length;
       }
 
+      console.log('🔄 Fallback: Getting registration count from old events table...');
       // Fallback на старую логику
       const { data: event } = await supabase
         .from('events')
@@ -587,6 +590,7 @@ const AdminEvents = () => {
       return 0;
     }
   };
+  
 
   // Функция для обновления счетчиков регистраций
   const updateRegistrationCounts = async () => {
