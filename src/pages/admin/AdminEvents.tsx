@@ -20,6 +20,44 @@ import {
 type SortOption = 'date-asc' | 'date-desc' | 'title-asc' | 'title-desc' | 'chronological';
 type FilterStatus = 'active' | 'draft' | 'past';
 
+// ОБНОВЛЕННЫЙ интерфейс Event с новыми полями
+interface Event {
+  id: string;
+  title: string;
+  description?: string;
+  start_at?: string;
+  end_at?: string;
+  status: string;
+  event_type: string;
+  location?: string;
+  venue_name?: string;
+  venue_address?: string;
+  address?: string;
+  price?: number;
+  base_price?: number;
+  payment_type?: string;
+  currency?: string;
+  max_registrations?: number;
+  max_attendees?: number; // ДОБАВЛЕНО новое поле
+  is_featured?: boolean;
+  is_public?: boolean;
+  cover_image_url?: string;
+  main_image?: string;
+  bg_image?: string;
+  gallery_images?: string[] | string;
+  photo_gallery?: string[];
+  tags?: string[];
+  speakers?: any[];
+  sh_event_speakers?: any[];
+  registrations?: EventRegistrations;
+  current_registration_count?: number;
+  sh_registrations_count?: number; // ДОБАВЛЕНО новое поле
+  active_registrations_count?: number;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: any;
+}
+
 // Константы для стилизации статусов
 const statusColors = {
   active: 'bg-gradient-to-r from-green-100 to-green-200 text-green-800 dark:from-green-900/30 dark:to-green-800/30 dark:text-green-400',
@@ -216,7 +254,7 @@ const AdminEvents = () => {
     fetchEvents();
   }, [sortBy, statusFilter]);
 
-  // 🔧 **ИСПРАВЛЕННАЯ ФУНКЦИЯ fetchEvents для работы с sh_events**
+  // 🔧 **ОБНОВЛЕННАЯ ФУНКЦИЯ fetchEvents для работы с sh_events и новой логикой регистраций**
   const fetchEvents = async () => {
     try {
       setLoading(true);
@@ -277,7 +315,24 @@ const AdminEvents = () => {
       // Преобразуем данные из новой схемы в формат, ожидаемый интерфейсом
       const enrichedEvents = (data || []).map(event => transformShEventToEvent(event));
 
-      setEvents(enrichedEvents);
+      // ДОБАВЛЕНО: Получаем актуальное количество регистраций из новой системы
+      const eventsWithRegistrationCounts = await Promise.all(
+        enrichedEvents.map(async (event) => {
+          // Получаем актуальное количество регистраций из новой системы
+          const { count } = await supabase
+            .from('sh_registrations')
+            .select('*', { count: 'exact', head: true })
+            .eq('event_id', event.id)
+            .eq('registration_status', 'active');
+
+          return {
+            ...event,
+            sh_registrations_count: count || 0
+          };
+        })
+      );
+
+      setEvents(eventsWithRegistrationCounts);
     } catch (error) {
       console.error('❌ Error in fetchEvents:', error);
       // В случае критической ошибки пытаемся загрузить из старой таблицы
@@ -344,6 +399,7 @@ const AdminEvents = () => {
       toast.error('Ошибка при загрузке мероприятий');
     }
   };
+
   // 🔧 **ОБНОВЛЕННАЯ ФУНКЦИЯ handleBulkDelete для работы с sh_events**
   const handleBulkDelete = async () => {
     if (selectedEvents.length === 0) return;
@@ -414,22 +470,24 @@ const AdminEvents = () => {
     return matchesSearch;
   });
 
-  // Helper function to get current registration count from either new or legacy structure
+  // ОБНОВЛЕННАЯ функция getCurrentRegistrationCount с новой логикой
   const getCurrentRegistrationCount = (event: Event): number => {
-    if (event.registrations?.current !== undefined) {
-      return event.registrations.current;
-    }
-    return event.current_registration_count || 0;
+    // НОВАЯ ЛОГИКА - берем данные из sh_registrations_count
+    return event.sh_registrations_count || event.active_registrations_count || 0;
   };
 
-  // Helper function to get max registrations from either new or legacy structure
+  // ОБНОВЛЕННАЯ функция getMaxRegistrations с новой логикой
   const getMaxRegistrations = (event: Event): number | null => {
+    // НОВАЯ ЛОГИКА - приоритет новой системе
+    if (event.max_attendees !== undefined) {
+      return event.max_attendees;
+    }
+    // Фоллбэк на старую систему
     if (event.registrations?.max_regs !== undefined) {
       return event.registrations.max_regs;
     }
     return event.max_registrations || null;
   };
-
   // 🔧 **ОБНОВЛЕННАЯ ФУНКЦИЯ getPriceDisplay для работы с новой схемой**
   const getPriceDisplay = (event: Event): string => {
     const paymentType = event.payment_type;
@@ -846,361 +904,3 @@ const AdminEvents = () => {
               const currentRegistrationCount = getCurrentRegistrationCount(event);
               const fillPercentage = maxRegistrations ? (currentRegistrationCount / maxRegistrations) * 100 : 0;
               const isEventPast = event.end_at ? isPastEvent(event.end_at) : false;
-
-              return (
-                <div
-                  key={event.id}
-                  className="group bg-white dark:bg-dark-800 rounded-xl shadow-md hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 overflow-hidden border border-gray-200 dark:border-dark-600 relative cursor-pointer"
-                  onClick={() => {
-                    setSelectedEvent(event);
-                    setShowDetailsModal(true);
-                  }}
-                >
-                  {/* Checkbox для выбора */}
-                  <div className="absolute top-3 left-3 z-20">
-                    <input
-                      type="checkbox"
-                      checked={selectedEvents.includes(event.id)}
-                      onChange={(e) => toggleEventSelection(event.id, e)}
-                      className="w-4 h-4 text-primary-600 bg-white border-2 border-gray-300 rounded focus:ring-primary-500 dark:focus:ring-primary-600 dark:ring-offset-gray-800 focus:ring-2"
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </div>
-
-                  {/* Кнопки действий в правом верхнем углу */}
-                  <div className="absolute top-3 right-3 z-20 flex items-center gap-1">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedEvent(event);
-                        setShowDetailsModal(true);
-                      }}
-                      className="w-8 h-8 bg-white/90 dark:bg-dark-700/90 backdrop-blur-sm hover:bg-white dark:hover:bg-dark-600 text-gray-600 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 rounded-lg transition-all duration-200 flex items-center justify-center shadow-sm"
-                      title="Просмотр"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </button>
-                    
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/admin/events/${event.id}/edit`);
-                      }}
-                      className="w-8 h-8 bg-white/90 dark:bg-dark-700/90 backdrop-blur-sm hover:bg-primary-50 dark:hover:bg-primary-900/40 text-gray-600 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 rounded-lg transition-all duration-200 flex items-center justify-center shadow-sm"
-                      title="Редактировать"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </button>
-                  </div>
-
-                  {/* Изображение мероприятия */}
-                  <div className="relative h-40 bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-900/20 dark:to-primary-800/20 flex items-center justify-center overflow-hidden">
-                    {getEventImage(event) ? (
-                      <img 
-                        src={getEventImage(event)!} 
-                        alt={event.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                        onError={(e) => {
-                          const target = e.currentTarget as HTMLImageElement;
-                          target.style.display = 'none';
-                          const parentDiv = target.parentElement;
-                          if (parentDiv && !parentDiv.querySelector('.fallback-icon')) {
-                            const icon = document.createElement('div');
-                            icon.className = 'fallback-icon w-12 h-12 text-primary-400 dark:text-primary-500 flex items-center justify-center';
-                            icon.innerHTML = '<svg class="w-12 h-12" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>';
-                            parentDiv.appendChild(icon);
-                          }
-                        }}
-                      />
-                    ) : (
-                      <Calendar className="w-12 h-12 text-primary-400 dark:text-primary-500" />
-                    )}
-                    
-                    {/* Статус мероприятия */}
-                    <div className="absolute bottom-2 left-2">
-                      <span className={`px-2 py-1 rounded-md text-xs font-medium ${
-                        isEventPast 
-                          ? statusColors.past
-                          : statusColors[event.status as keyof typeof statusColors] || statusColors.active
-                      }`}>
-                        {getEventStatus(event)}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Контент карточки */}
-                  <div className="p-4">
-                    {/* Заголовок с ограничением в 2 строки */}
-                    <div className="mb-3">
-                      <h3 className="text-base font-semibold text-gray-900 dark:text-white line-clamp-2 leading-tight group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
-                        {event.title}
-                      </h3>
-                    </div>
-                    
-                    {/* Компактная информация без иконок */}
-                    <div className="space-y-1 mb-3 text-sm">
-                      <div className="text-gray-600 dark:text-gray-300 truncate">
-                        <span className="font-medium">{formatEventDateTime(event)}</span>
-                      </div>
-                      
-                      {getEventLocation(event) !== 'Место не указано' && (
-                        <div className="text-gray-600 dark:text-gray-300 truncate">
-                          {getEventLocation(event)}
-                        </div>
-                      )}
-                      
-                      {/* Информация о регистрациях */}
-                      {shouldShowRegistrations(event) && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-gray-600 dark:text-gray-300">
-                            {hasRegistrationSystem(event) ?
-                              `${currentRegistrationCount}${maxRegistrations ? `/${maxRegistrations}` : ''}` :
-                              'Без регистрации'
-                            }
-                          </span>
-                          <span className="text-sm font-semibold text-primary-600 dark:text-primary-400">
-                            {getPriceDisplay(event)}
-                          </span>
-                        </div>
-                      )}
-                      
-                      {/* Прогресс-бар для заполненности */}
-                      {maxRegistrations && maxRegistrations > 0 && (
-                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-2">
-                          <div 
-                            className="bg-gradient-to-r from-primary-500 to-primary-600 h-1.5 rounded-full transition-all duration-300"
-                            style={{ width: `${Math.min(fillPercentage, 100)}%` }}
-                          ></div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Нижняя секция с типом и индикаторами */}
-                    <div className="flex items-center justify-between">
-                      <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                        {getEventTypeLabel(event)}
-                      </span>
-                      
-                      {/* Компактные индикаторы */}
-                      <div className="flex items-center gap-1">
-                        {event.is_featured && (
-                          <span className="text-yellow-500" title="Рекомендуем">
-                            ⭐
-                          </span>
-                        )}
-                        
-                        {!event.is_public && (
-                          <span className="text-red-500" title="Приватное">
-                            🔒
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Теги (если есть) */}
-                    {(event.tags && event.tags.length > 0) && (
-                      <div className="mt-3 flex flex-wrap gap-1">
-                        {event.tags.slice(0, 2).map((tag, index) => (
-                          <span 
-                            key={index}
-                            className="inline-block px-2 py-0.5 text-xs rounded-md bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400"
-                          >
-                            #{tag}
-                          </span>
-                        ))}
-                        {event.tags.length > 2 && (
-                          <span className="inline-block px-2 py-0.5 text-xs rounded-md bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
-                            +{event.tags.length - 2}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Дополнительная информация и статистика */}
-        {!loading && filteredEvents.length > 0 && (
-          <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* ✅ ИСПРАВЛЕННАЯ статистика по статусам */}
-            <div className="bg-white dark:bg-dark-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-dark-600">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                Статистика событий
-              </h3>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600 dark:text-gray-400">Активные:</span>
-                  <span className="font-semibold text-green-600 dark:text-green-400">
-                    {events.filter(e => e.status === 'active').length}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600 dark:text-gray-400">Черновики:</span>
-                  <span className="font-semibold text-yellow-600 dark:text-yellow-400">
-                    {events.filter(e => e.status === 'draft').length}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600 dark:text-gray-400">Прошедшие:</span>
-                  <span className="font-semibold text-gray-600 dark:text-gray-400">
-                    {events.filter(e => e.status === 'past').length}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center border-t pt-3">
-                  <span className="text-gray-900 dark:text-white font-medium">Всего:</span>
-                  <span className="font-bold text-primary-600 dark:text-primary-400">
-                    {events.length}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Статистика по типам */}
-            <div className="bg-white dark:bg-dark-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-dark-600">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                По типам событий
-              </h3>
-              <div className="space-y-2">
-                {Object.entries(
-                  events.reduce((acc, event) => {
-                    const type = getEventTypeLabel(event);
-                    acc[type] = (acc[type] || 0) + 1;
-                    return acc;
-                  }, {} as Record<string, number>)
-                )
-                  .sort(([, a], [, b]) => b - a)
-                  .slice(0, 5)
-                  .map(([type, count]) => (
-                    <div key={type} className="flex justify-between items-center">
-                      <span className="text-gray-600 dark:text-gray-400 text-sm truncate">
-                        {type}:
-                      </span>
-                      <span className="font-semibold text-primary-600 dark:text-primary-400">
-                        {count}
-                      </span>
-                    </div>
-                  ))}
-              </div>
-            </div>
-
-            {/* Быстрые действия */}
-            <div className="bg-white dark:bg-dark-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-dark-600">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                Быстрые действия
-              </h3>
-              <div className="space-y-3">
-                <button
-                  onClick={() => navigate('/admin/events/new')}
-                  className="w-full flex items-center gap-2 px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors"
-                >
-                  <Plus className="h-4 w-4" />
-                  Создать событие
-                </button>
-                
-                <button
-                  onClick={exportEvents}
-                  className="w-full flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
-                >
-                  <Filter className="h-4 w-4" />
-                  Экспорт в CSV
-                </button>
-                
-                <button
-                  onClick={() => window.location.reload()}
-                  className="w-full flex items-center gap-2 px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors"
-                >
-                  <Loader2 className="h-4 w-4" />
-                  Обновить
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Модальное окно деталей события */}
-      {showDetailsModal && selectedEvent && (
-        <EventDetailsModal
-          event={selectedEvent}
-          isOpen={showDetailsModal}
-          onClose={() => {
-            setShowDetailsModal(false);
-            setSelectedEvent(null);
-          }}
-          onEdit={(eventId) => {
-            setShowDetailsModal(false);
-            setSelectedEvent(null);
-            navigate(`/admin/events/${eventId}/edit`);
-          }}
-          onRefresh={fetchEvents}
-        />
-      )}
-
-      {/* Floating Action Button для быстрого создания (на мобильных) */}
-      <div className="fixed bottom-6 right-6 md:hidden">
-        <Link
-          to="/admin/events/new"
-          className="flex items-center justify-center w-14 h-14 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-110"
-        >
-          <Plus className="h-6 w-6" />
-        </Link>
-      </div>
-
-      {/* Debug информация (только в dev режиме) */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="fixed bottom-6 left-6 bg-black/80 text-white p-4 rounded-lg text-xs max-w-xs">
-          <div className="font-semibold mb-2">Debug Info:</div>
-          <div>Total Events: {events.length}</div>
-          <div>Filtered Events: {filteredEvents.length}</div>
-          <div>Selected Events: {selectedEvents.length}</div>
-          <div>Status Filter: {statusFilter}</div>
-          <div>Sort By: {sortBy}</div>
-          <div>Search Query: "{searchQuery}"</div>
-          <div className="mt-2 text-yellow-300">
-            Sources:
-          </div>
-          <div>
-            sh_events: {events.filter(e => detectEventTableSource(e) === 'sh_events').length}
-          </div>
-          <div>
-            events: {events.filter(e => detectEventTableSource(e) === 'events').length}
-          </div>
-          <div className="mt-2 text-green-300">
-            Status Distribution:
-          </div>
-          <div>
-            Active: {events.filter(e => e.status === 'active').length}
-          </div>
-          <div>
-            Draft: {events.filter(e => e.status === 'draft').length}
-          </div>
-          <div>
-            Past: {events.filter(e => e.status === 'past').length}
-          </div>
-        </div>
-      )}
-
-      {/* Toast для уведомлений о статусе загрузки данных */}
-      {events.length > 0 && (
-        <div className="sr-only">
-          {console.log(`
-🎯 AdminEvents Statistics (IMPROVED):
-📊 Total Events: ${events.length}
-📋 Filtered Events: ${filteredEvents.length}
-🎮 Active Events: ${events.filter(e => e.status === 'active').length}
-📝 Draft Events: ${events.filter(e => e.status === 'draft').length}
-📜 Past Events: ${events.filter(e => e.status === 'past').length}
-🆕 From sh_events: ${events.filter(e => detectEventTableSource(e) === 'sh_events').length}
-🔄 From events: ${events.filter(e => detectEventTableSource(e) === 'events').length}
-🖼️ With Images: ${events.filter(e => getEventImage(e)).length}
-          `)}
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default AdminEvents;
