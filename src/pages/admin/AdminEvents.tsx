@@ -601,7 +601,7 @@ const AdminEvents = () => {
     const updatedEvents = await Promise.all(
       events.map(async (event) => {
         try {
-          const count = await getRegistrationCount(event.id);
+          const count = await getRegistrationCount(event.id);    
           return {
             ...event,
             current_registration_count: count,
