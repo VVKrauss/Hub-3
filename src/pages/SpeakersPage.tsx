@@ -658,8 +658,10 @@ const HorizontalFilters: React.FC<HorizontalFiltersProps> = ({
           </div>
         </div>
       </div>
-      // src/pages/SpeakersPage.tsx - Часть 3 (строки 2001-3000)
 
+      
+      {/* // src/pages/SpeakersPage.tsx - Часть 3 (строки 2001-3000)
+ */}
       {mobileFiltersOpen && (
         <>
           <div 
