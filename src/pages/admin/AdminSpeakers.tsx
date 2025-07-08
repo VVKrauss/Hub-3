@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { Plus, Search, Edit, Eye, User, Trash2, X, Star, Globe, Linkedin, Twitter, Instagram, Facebook, Youtube, Github } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import CreateSpeakerModal from '../../components/admin/CreateSpeakerModal';
+import SocialLinksManager from '../../components/admin/SocialLinksManager';
 import { getSupabaseImageUrl } from '../../utils/imageUtils';
 
 // Типы для новой БД
@@ -459,6 +460,22 @@ const AdminSpeakers = () => {
                       className="form-input"
                       rows={3}
                       placeholder="Внутренние заметки (не отображаются публично)"
+                    />
+                  </div>
+
+                  {/* Социальные ссылки */}
+                  <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+                    <SocialLinksManager
+                      speakerId={selectedSpeaker.id}
+                      initialLinks={selectedSpeaker.sh_speaker_social_links || []}
+                      onUpdate={(updatedLinks) => {
+                        setSelectedSpeaker({
+                          ...selectedSpeaker,
+                          sh_speaker_social_links: updatedLinks
+                        });
+                        // Обновляем список спикеров
+                        fetchSpeakers();
+                      }}
                     />
                   </div>
 
