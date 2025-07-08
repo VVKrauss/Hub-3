@@ -181,29 +181,19 @@ interface SocialLinksProps {
 
 const SocialLinks: React.FC<SocialLinksProps> = ({ socialLinks, maxLinks = 4, size = 'md' }) => {
   const iconSizes = {
-    sm: 'h-3 w-3',
-    md: 'h-4 w-4', 
-    lg: 'h-5 w-5'
+    sm: 'h-4 w-4',
+    md: 'h-5 w-5', 
+    lg: 'h-6 w-6'
   };
 
   const iconSize = iconSizes[size];
 
-  // Добавляем отладочную информацию
-  console.log('SocialLinks received:', { socialLinks, count: socialLinks?.length });
-
   if (!socialLinks || socialLinks.length === 0) {
-    return (
-      <div className="text-xs text-gray-400">
-        Нет социальных ссылок
-      </div>
-    );
+    return null;
   }
 
   const visibleLinks = socialLinks
-    .filter(link => {
-      console.log('Filtering link:', { platform: link.platform, isPublic: link.is_public, url: link.url });
-      return link.is_public && link.url; // Проверяем что URL не пустой
-    })
+    .filter(link => link.is_public && link.url)
     .sort((a, b) => {
       if (a.is_primary && !b.is_primary) return -1;
       if (!a.is_primary && b.is_primary) return 1;
@@ -211,14 +201,8 @@ const SocialLinks: React.FC<SocialLinksProps> = ({ socialLinks, maxLinks = 4, si
     })
     .slice(0, maxLinks);
 
-  console.log('Visible links after filtering:', visibleLinks);
-
   if (visibleLinks.length === 0) {
-    return (
-      <div className="text-xs text-gray-400">
-        Нет публичных ссылок
-      </div>
-    );
+    return null;
   }
 
   return (
@@ -229,7 +213,7 @@ const SocialLinks: React.FC<SocialLinksProps> = ({ socialLinks, maxLinks = 4, si
           href={social.url}
           target="_blank"
           rel="noopener noreferrer"
-          className={`transition-colors ${getSocialColor(social.platform)}`}
+          className={`p-2 rounded-full bg-black/50 backdrop-blur-sm transition-all hover:bg-black/70 ${getSocialColor(social.platform)}`}
           title={social.display_name || social.platform}
           onClick={(e) => e.stopPropagation()}
         >
@@ -425,15 +409,14 @@ const SpeakersHeroSlider: React.FC<SpeakersHeroSliderProps> = ({
                       </p>
                     )}
                     
-                    {speaker.sh_speaker_social_links && speaker.sh_speaker_social_links.length > 0 && (
-                      <div className="flex flex-wrap items-center gap-4 md:gap-6 text-base md:text-lg">
-                        <SocialLinks 
-                          socialLinks={speaker.sh_speaker_social_links} 
-                          maxLinks={4}
-                          size="lg"
-                        />
-                      </div>
-                    )}
+                    {/* УБРАНО: Отладочная информация из слайдера */}
+                    <div className="flex flex-wrap items-center gap-4 md:gap-6 text-base md:text-lg">
+                      <SocialLinks 
+                        socialLinks={speaker.sh_speaker_social_links || []} 
+                        maxLinks={4}
+                        size="lg"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -791,7 +774,7 @@ const SpeakerCard: React.FC<SpeakerCardProps> = ({ speaker, viewMode }) => {
       >
         <div className="bg-white dark:bg-dark-800 rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 hover:scale-[1.01]">
           <div className="flex gap-4 p-6">
-            <div className="w-20 h-20 md:w-24 md:h-24 flex-shrink-0 overflow-hidden rounded-xl">
+            <div className="w-20 h-20 md:w-24 md:h-24 flex-shrink-0 overflow-hidden rounded-xl relative">
               {speaker.avatar_url ? (
                 <img
                   src={getSpeakerImage(speaker)}
@@ -801,6 +784,19 @@ const SpeakerCard: React.FC<SpeakerCardProps> = ({ speaker, viewMode }) => {
               ) : (
                 <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-900/30 dark:to-primary-800/30">
                   <User className="w-8 h-8 md:w-10 md:h-10 text-primary-400" />
+                </div>
+              )}
+
+              {/* ДОБАВЛЕНО: Социальные ссылки в нижней части изображения для list view */}
+              {speaker.sh_speaker_social_links && speaker.sh_speaker_social_links.length > 0 && (
+                <div className="absolute bottom-1 left-1 right-1">
+                  <div className="flex items-center justify-center">
+                    <SocialLinks 
+                      socialLinks={speaker.sh_speaker_social_links} 
+                      maxLinks={3}
+                      size="sm"
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -832,24 +828,12 @@ const SpeakerCard: React.FC<SpeakerCardProps> = ({ speaker, viewMode }) => {
                     </p>
                   )}
 
-                  {/* ИСПРАВЛЕНО: Всегда показываем SocialLinks для отладки */}
-                  <div className="mb-3">
-                    <SocialLinks 
-                      socialLinks={speaker.sh_speaker_social_links || []} 
-                      maxLinks={4}
-                      size="sm"
-                    />
-                    {/* Отладочная информация */}
-                    <span className="text-xs text-gray-400 ml-2">
-                      ({speaker.sh_speaker_social_links?.length || 0} социальных ссылок)
-                    </span>
+                  {/* УБРАНО: Отладочная информация */}
+                  
+                  {/* ДОБАВЛЕНО: Кнопка избранного для list view */}
+                  <div className="flex-shrink-0 ml-4">
+                    <FavoriteButton speakerId={speaker.id} />
                   </div>
-                </div>
-
-                {/* ДОБАВЛЕНО: Кнопка избранного для list view */}
-                <div className="flex-shrink-0 ml-4">
-                  <FavoriteButton speakerId={speaker.id} />
-                </div>
               </div>
             </div>
           </div>
@@ -890,6 +874,19 @@ const SpeakerCard: React.FC<SpeakerCardProps> = ({ speaker, viewMode }) => {
               </span>
             </div>
           )}
+
+          {/* ДОБАВЛЕНО: Социальные ссылки в нижней части изображения */}
+          {speaker.sh_speaker_social_links && speaker.sh_speaker_social_links.length > 0 && (
+            <div className="absolute bottom-3 left-3 right-3">
+              <div className="flex items-center justify-center">
+                <SocialLinks 
+                  socialLinks={speaker.sh_speaker_social_links} 
+                  maxLinks={4}
+                  size="sm"
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="p-4 md:p-6 flex flex-col h-full">
@@ -913,19 +910,6 @@ const SpeakerCard: React.FC<SpeakerCardProps> = ({ speaker, viewMode }) => {
             <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
               <User className="h-4 w-4 mr-1" />
               Спикер
-            </div>
-            
-            {/* ИСПРАВЛЕНО: Всегда показываем компонент SocialLinks для отладки */}
-            <div className="flex items-center gap-2">
-              <SocialLinks 
-                socialLinks={speaker.sh_speaker_social_links || []} 
-                maxLinks={3}
-                size="sm"
-              />
-              {/* Отладочная информация */}
-              <span className="text-xs text-gray-400 ml-2">
-                ({speaker.sh_speaker_social_links?.length || 0})
-              </span>
             </div>
           </div>
         </div>
@@ -1026,13 +1010,6 @@ const SpeakersPage: React.FC = () => {
       }
 
       if (data) {
-        // Добавляем отладочную информацию
-        console.log('Loaded speakers with social links:', data.map(speaker => ({
-          name: speaker.name,
-          socialLinksCount: speaker.sh_speaker_social_links?.length || 0,
-          socialLinks: speaker.sh_speaker_social_links
-        })));
-
         const processedData = initialRandomSort ? shuffleArray(data) : data;
         setAllSpeakers(processedData);
         setInitialRandomSort(false);
