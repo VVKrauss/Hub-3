@@ -188,18 +188,38 @@ const SocialLinks: React.FC<SocialLinksProps> = ({ socialLinks, maxLinks = 4, si
 
   const iconSize = iconSizes[size];
 
+  // Добавляем отладочную информацию
+  console.log('SocialLinks received:', { socialLinks, count: socialLinks?.length });
+
   if (!socialLinks || socialLinks.length === 0) {
-    return null;
+    return (
+      <div className="text-xs text-gray-400">
+        Нет социальных ссылок
+      </div>
+    );
   }
 
   const visibleLinks = socialLinks
-    .filter(link => link.is_public)
+    .filter(link => {
+      console.log('Filtering link:', { platform: link.platform, isPublic: link.is_public, url: link.url });
+      return link.is_public && link.url; // Проверяем что URL не пустой
+    })
     .sort((a, b) => {
       if (a.is_primary && !b.is_primary) return -1;
       if (!a.is_primary && b.is_primary) return 1;
       return (a.display_order || 0) - (b.display_order || 0);
     })
     .slice(0, maxLinks);
+
+  console.log('Visible links after filtering:', visibleLinks);
+
+  if (visibleLinks.length === 0) {
+    return (
+      <div className="text-xs text-gray-400">
+        Нет публичных ссылок
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-2">
@@ -812,13 +832,18 @@ const SpeakerCard: React.FC<SpeakerCardProps> = ({ speaker, viewMode }) => {
                     </p>
                   )}
 
-                  {speaker.sh_speaker_social_links && speaker.sh_speaker_social_links.length > 0 && (
+                  {/* ИСПРАВЛЕНО: Всегда показываем SocialLinks для отладки */}
+                  <div className="mb-3">
                     <SocialLinks 
-                      socialLinks={speaker.sh_speaker_social_links} 
+                      socialLinks={speaker.sh_speaker_social_links || []} 
                       maxLinks={4}
                       size="sm"
                     />
-                  )}
+                    {/* Отладочная информация */}
+                    <span className="text-xs text-gray-400 ml-2">
+                      ({speaker.sh_speaker_social_links?.length || 0} социальных ссылок)
+                    </span>
+                  </div>
                 </div>
 
                 {/* ДОБАВЛЕНО: Кнопка избранного для list view */}
@@ -890,14 +915,18 @@ const SpeakerCard: React.FC<SpeakerCardProps> = ({ speaker, viewMode }) => {
               Спикер
             </div>
             
-            {/* ДОБАВЛЕНО: Социальные ссылки только если есть */}
-            {speaker.sh_speaker_social_links && speaker.sh_speaker_social_links.length > 0 && (
+            {/* ИСПРАВЛЕНО: Всегда показываем компонент SocialLinks для отладки */}
+            <div className="flex items-center gap-2">
               <SocialLinks 
-                socialLinks={speaker.sh_speaker_social_links} 
+                socialLinks={speaker.sh_speaker_social_links || []} 
                 maxLinks={3}
                 size="sm"
               />
-            )}
+              {/* Отладочная информация */}
+              <span className="text-xs text-gray-400 ml-2">
+                ({speaker.sh_speaker_social_links?.length || 0})
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -977,13 +1006,15 @@ const SpeakersPage: React.FC = () => {
           *,
           sh_speaker_social_links (
             id,
+            speaker_id,
             platform,
             url,
             display_name,
             description,
             is_public,
             is_primary,
-            display_order
+            display_order,
+            created_at
           )
         `)
         .order('created_at', { ascending: false });
@@ -995,6 +1026,13 @@ const SpeakersPage: React.FC = () => {
       }
 
       if (data) {
+        // Добавляем отладочную информацию
+        console.log('Loaded speakers with social links:', data.map(speaker => ({
+          name: speaker.name,
+          socialLinksCount: speaker.sh_speaker_social_links?.length || 0,
+          socialLinks: speaker.sh_speaker_social_links
+        })));
+
         const processedData = initialRandomSort ? shuffleArray(data) : data;
         setAllSpeakers(processedData);
         setInitialRandomSort(false);
