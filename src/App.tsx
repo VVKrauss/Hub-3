@@ -1,3 +1,4 @@
+// src/App.tsx - ПОЛНЫЙ ФАЙЛ с добавленным роутом миграции спикеров
 import { Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import HomePage from './pages/HomePage';
@@ -15,6 +16,7 @@ import AdminHomeHeader from './pages/admin/AdminHomeHeader';
 import AdminEvents from './pages/admin/AdminEvents';
 import CreateEditEventPage from './pages/admin/CreateEditEventPage';
 import AdminSpeakers from './pages/admin/AdminSpeakers';
+import AdminSpeakersMigration from './pages/admin/AdminSpeakersMigration'; // НОВЫЙ ИМПОРТ
 import AdminRent from './pages/admin/AdminRent';
 import AdminCoworking from './pages/admin/AdminCoworking';
 import AdminAbout from './pages/admin/AdminAbout';
@@ -50,9 +52,6 @@ function App() {
         {/* Auth routes */}
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
-
-        <Route path="/admin/speakers-migration" element={<AdminSpeakersMigration />} />
-
         
         {/* Protected public routes */}
         <Route path="/profile" element={
@@ -72,6 +71,7 @@ function App() {
           <Route path="events/new" element={<CreateEditEventPage />} />
           <Route path="events/:id/edit" element={<CreateEditEventPage />} />
           <Route path="speakers" element={<AdminSpeakers />} />
+          <Route path="speakers-migration" element={<AdminSpeakersMigration />} /> {/* НОВЫЙ РОУТ */}
           <Route path="rent" element={<AdminRent />} />
           <Route path="coworking" element={<AdminCoworking />} />
           <Route path="about" element={<AdminAbout />} />
@@ -89,9 +89,4 @@ function App() {
   );
 }
 
-export default App;    
-
-
-
-
-
+export default App;
