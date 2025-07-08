@@ -199,97 +199,99 @@ const EventDetailsPage = () => {
 
   return (
     <Layout>
-      {/* НОВОЕ: Полноширинное изображение */}
-      {images.length > 0 && (
-        <div className="relative h-96 lg:h-[500px] overflow-hidden">
-          <img
-            src={images[0]}
-            alt={event.title}
-            className="w-full h-full object-cover"
-            onClick={() => openGallery(0)}
-          />
-          
-          {/* Градиент для текста */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
-          
-          {/* Навигация и действия */}
-          <div className="absolute top-4 left-4 right-4 flex justify-between items-start">
-            <button
-              onClick={() => navigate('/events')}
-              className="bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white p-2 rounded-lg transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            
-            <div className="flex items-center gap-2">
-              {user && (
-                <FavoriteButton
-                  eventId={event.id}
-                  isFavorite={isFavoriteEvent(event.id)}
-                  onToggle={() => toggleFavoriteEvent(event.id)}
-                  loading={favLoading}
-                  className="bg-white/20 backdrop-blur-sm hover:bg-white/30"
-                />
-              )}
-              
-              {images.length > 1 && (
-                <button
-                  onClick={() => openGallery(0)}
-                  className="bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white px-3 py-2 rounded-lg transition-colors text-sm"
-                >
-                  {images.length} фото
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Заголовок на изображении */}
-          <div className="absolute bottom-8 left-4 right-4">
-            <div className="max-w-4xl">
-              <h1 className="text-3xl lg:text-5xl font-bold text-white mb-4 leading-tight">
-                {event.title}
-              </h1>
-              {event.short_description && (
-                <p className="text-lg text-white/90 max-w-2xl">
-                  {event.short_description}
-                </p>
-              )}
-            </div>
-          </div>
+      {/* Кнопка назад */}
+      <div className="bg-white dark:bg-dark-800 border-b border-gray-200 dark:border-dark-700">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <button
+            onClick={() => navigate('/events')}
+            className="inline-flex items-center text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            К списку мероприятий
+          </button>
         </div>
-      )}
+      </div>
 
       {/* Основной контент */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Кнопка назад (если нет изображения) */}
-        {images.length === 0 && (
-          <div className="mb-6">
-            <button
-              onClick={() => navigate('/events')}
-              className="inline-flex items-center text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              К списку мероприятий
-            </button>
-          </div>
-        )}
+      <div className="min-h-screen bg-gray-50 dark:bg-dark-900">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* ОБНОВЛЕННОЕ: Изображение в контейнере */}
+          {images.length > 0 && (
+            <div className="relative w-full h-[400px] overflow-hidden rounded-xl shadow-2xl mb-8">
+              <img
+                src={images[0]}
+                alt={event.title}
+                className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-300"
+                onClick={() => openGallery(0)}
+              />
+              
+              {/* Градиент для элементов управления */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/20" />
+              
+              {/* Действия в правом верхнем углу */}
+              <div className="absolute top-4 right-4 flex items-center gap-2">
+                {user && (
+                  <FavoriteButton
+                    eventId={event.id}
+                    isFavorite={isFavoriteEvent(event.id)}
+                    onToggle={() => toggleFavoriteEvent(event.id)}
+                    loading={favLoading}
+                    className="bg-white/20 backdrop-blur-sm hover:bg-white/30"
+                  />
+                )}
+                
+                {images.length > 1 && (
+                  <button
+                    onClick={() => openGallery(0)}
+                    className="bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white px-3 py-2 rounded-lg transition-colors text-sm font-medium"
+                  >
+                    {images.length} фото
+                  </button>
+                )}
+              </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Основная информация */}
-          <div className="lg:col-span-2 space-y-8">
-            {/* Заголовок (если нет изображения) */}
-            {images.length === 0 && (
-              <div className="bg-white dark:bg-dark-800 rounded-xl shadow-lg p-8">
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+              {/* Заголовок поверх изображения */}
+              <div className="absolute bottom-6 left-6 right-6">
+                <h1 className="text-3xl lg:text-4xl font-bold text-white mb-3 leading-tight drop-shadow-lg">
                   {event.title}
                 </h1>
                 {event.short_description && (
-                  <p className="text-lg text-gray-600 dark:text-gray-300">
+                  <p className="text-lg text-white/95 max-w-2xl drop-shadow-md">
                     {event.short_description}
                   </p>
                 )}
               </div>
-            )}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Основная информация */}
+            <div className="lg:col-span-2 space-y-8">
+              {/* Заголовок (если нет изображения) */}
+              {images.length === 0 && (
+                <div className="bg-white dark:bg-dark-800 rounded-xl shadow-lg p-8">
+                  <div className="flex items-start justify-between mb-6">
+                    <div className="flex-1">
+                      <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+                        {event.title}
+                      </h1>
+                      {event.short_description && (
+                        <p className="text-lg text-gray-600 dark:text-gray-300">
+                          {event.short_description}
+                        </p>
+                      )}
+                    </div>
+                    {user && (
+                      <FavoriteButton
+                        eventId={event.id}
+                        isFavorite={isFavoriteEvent(event.id)}
+                        onToggle={() => toggleFavoriteEvent(event.id)}
+                        loading={favLoading}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
 
             {/* НОВЫЙ: Единый блок информации */}
             <div className="bg-white dark:bg-dark-800 rounded-xl shadow-lg p-8">
@@ -599,7 +601,7 @@ const EventDetailsPage = () => {
 
       {/* Галерея изображений */}
       {showGallery && images.length > 0 && (
-        <div className="relative w-full h-[400px] overflow-hidden rounded-xl shadow-2xl mb-8">
+        <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center">
           <div className="relative w-full h-full flex items-center justify-center">
             <button
               onClick={closeGallery}
