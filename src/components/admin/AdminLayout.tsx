@@ -21,7 +21,8 @@ import {
   ChevronLeft,
   ChevronRight,
   TrendingUp,
-  QrCode
+  QrCode,
+  ArrowRight
 } from 'lucide-react';
 
 import { toast } from 'react-hot-toast';
