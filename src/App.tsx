@@ -50,6 +50,9 @@ function App() {
         {/* Auth routes */}
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+        <Route path="/admin/speakers-migration" element={<AdminSpeakersMigration />} />
+
         
         {/* Protected public routes */}
         <Route path="/profile" element={
