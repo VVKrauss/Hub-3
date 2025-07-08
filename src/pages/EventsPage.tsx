@@ -525,7 +525,7 @@ const EventsPage = () => {
           legacyQuery = legacyQuery.eq('status', 'active');
         }
 
-        const { data: legacyEvents, error: legacyError } = await legacyQuery;
+        const { data: legacyEvents, error: legacyError } = await legacyQuery; 
         
         if (legacyError) throw legacyError;
         
