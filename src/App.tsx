@@ -1,4 +1,4 @@
-// src/App.tsx - ПОЛНЫЙ ФАЙЛ с добавленным роутом миграции спикеров
+// src/App.tsx - ПОЛНЫЙ ФАЙЛ с роутами миграции и управления пользователями
 import { Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import HomePage from './pages/HomePage';
@@ -16,7 +16,8 @@ import AdminHomeHeader from './pages/admin/AdminHomeHeader';
 import AdminEvents from './pages/admin/AdminEvents';
 import CreateEditEventPage from './pages/admin/CreateEditEventPage';
 import AdminSpeakers from './pages/admin/AdminSpeakers';
-import AdminSpeakersMigration from './pages/admin/AdminSpeakersMigration'; // НОВЫЙ ИМПОРТ
+import AdminSpeakersMigration from './pages/admin/AdminSpeakersMigration';
+import AdminUsersManagement from './pages/admin/AdminUsersManagement'; // НОВЫЙ ИМПОРТ
 import AdminRent from './pages/admin/AdminRent';
 import AdminCoworking from './pages/admin/AdminCoworking';
 import AdminAbout from './pages/admin/AdminAbout';
@@ -71,13 +72,14 @@ function App() {
           <Route path="events/new" element={<CreateEditEventPage />} />
           <Route path="events/:id/edit" element={<CreateEditEventPage />} />
           <Route path="speakers" element={<AdminSpeakers />} />
-          <Route path="speakers-migration" element={<AdminSpeakersMigration />} /> {/* НОВЫЙ РОУТ */}
+          <Route path="speakers-migration" element={<AdminSpeakersMigration />} />
+          <Route path="users" element={<AdminUsersManagement />} /> {/* НОВЫЙ РОУТ */}
           <Route path="rent" element={<AdminRent />} />
           <Route path="coworking" element={<AdminCoworking />} />
           <Route path="about" element={<AdminAbout />} />
           <Route path="navigation" element={<AdminNavigation />} />
           <Route path="export" element={<AdminExport />} />
-          <Route path="calendar" element={<AdminCalendarPage />} /> 
+          <Route path="calendar" element={<AdminCalendarPage />} />
           <Route path="event-statistics" element={<AdminEventStatistics />} />
           <Route path="attendance" element={<AdminAttendance />} />
         </Route>
