@@ -89,15 +89,23 @@ const AdminSpeakers = () => {
     if (!selectedSpeaker) return;
 
     try {
+      // Исключаем social links из данных для обновления - они обрабатываются отдельно
+      const { sh_speaker_social_links, ...speakerData } = editForm;
+      
+      console.log('Сохраняем данные спикера:', speakerData);
+      
       const { error } = await supabase
         .from('sh_speakers')
         .update({
-          ...editForm,
+          ...speakerData,
           updated_at: new Date().toISOString()
         })
         .eq('id', selectedSpeaker.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Ошибка при обновлении спикера:', error);
+        throw error;
+      }
 
       toast.success('Спикер обновлен');
       fetchSpeakers();
