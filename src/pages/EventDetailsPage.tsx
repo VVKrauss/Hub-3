@@ -397,81 +397,176 @@ const EventDetailsPage = () => {
               </div>
 
               {/* Информация о спикерах */}
-              {event.speakers && event.speakers.length > 0 && (
+              {((event.speakers && event.speakers.length > 0) || (event.sh_event_speakers && event.sh_event_speakers.length > 0)) && (
                 <div className="bg-white dark:bg-dark-800 rounded-xl shadow-lg p-8">
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
                     Спикеры
                   </h2>
                   <div className="space-y-6">
-                    {event.speakers.map((speakerData, index) => {
-                      const speaker = speakerData.speaker || speakerData;
-                      return (
-                        <div key={index} className="flex items-start space-x-4 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
-                          <div className="flex-shrink-0">
-                            {speaker.avatar_url ? (
-                              <img
-                                src={getSupabaseImageUrl(speaker.avatar_url)}
-                                alt={speaker.name}
-                                className="w-16 h-16 rounded-full object-cover"
-                              />
-                            ) : (
-                              <div className="w-16 h-16 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center">
-                                <User className="w-8 h-8 text-gray-400" />
-                              </div>
-                            )}
-                          </div>
-                          
-                          <div className="flex-1">
-                            <div className="flex items-start justify-between">
-                              <div>
-                                <h3 className="font-semibold text-gray-900 dark:text-white">
-                                  {speaker.name}
-                                </h3>
-                                {speaker.field_of_expertise && (
-                                  <p className="text-primary-600 dark:text-primary-400 text-sm mb-2">
-                                    {speaker.field_of_expertise}
-                                  </p>
-                                )}
-                                {(speakerData.bio_override || speaker.bio) && (
-                                  <p className="text-gray-600 dark:text-gray-400 text-sm">
-                                    {speakerData.bio_override || speaker.bio}
-                                  </p>
-                                )}
-                              </div>
-                              
-                              <Link
-                                to={`/speakers/${speaker.slug || speaker.id}`}
-                                className="text-primary-600 hover:text-primary-700 text-sm flex items-center gap-1"
-                              >
-                                Подробнее
-                                <ExternalLink className="w-3 h-3" />
-                              </Link>
+                    {/* Обрабатываем спикеров из новой структуры sh_event_speakers */}
+                    {event.sh_event_speakers && event.sh_event_speakers.length > 0 && (
+                      event.sh_event_speakers.map((eventSpeaker, index) => {
+                        const speaker = eventSpeaker.speaker;
+                        if (!speaker) return null;
+                        
+                        return (
+                          <div key={index} className="flex items-start space-x-4 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
+                            <div className="flex-shrink-0">
+                              {speaker.avatar_url ? (
+                                <img
+                                  src={getSupabaseImageUrl(speaker.avatar_url)}
+                                  alt={speaker.name}
+                                  className="w-16 h-16 rounded-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-16 h-16 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center">
+                                  <User className="w-8 h-8 text-gray-400" />
+                                </div>
+                              )}
                             </div>
                             
-                            {/* Социальные ссылки спикера */}
-                            {speaker.social_links && speaker.social_links.length > 0 && (
-                              <div className="flex items-center gap-2 mt-3">
-                                {speaker.social_links
-                                  .filter(link => link.is_public)
-                                  .slice(0, 4)
-                                  .map((social, socialIndex) => (
-                                    <a
-                                      key={socialIndex}
-                                      href={social.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="p-1.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full transition-colors"
-                                      title={social.display_name || social.platform}
-                                    >
-                                      {getSocialIcon(social.platform)}
-                                    </a>
-                                  ))}
+                            <div className="flex-1">
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <h3 className="font-semibold text-gray-900 dark:text-white">
+                                    {speaker.name}
+                                  </h3>
+                                  
+                                  {/* Роль спикера в мероприятии */}
+                                  {eventSpeaker.role && (
+                                    <p className="text-primary-600 dark:text-primary-400 text-sm font-medium mb-1">
+                                      {eventSpeaker.role}
+                                    </p>
+                                  )}
+                                  
+                                  {/* Специализация */}
+                                  {speaker.field_of_expertise && (
+                                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-2">
+                                      {speaker.field_of_expertise}
+                                    </p>
+                                  )}
+                                  
+                                  {/* Биография - приоритет переопределенной для события */}
+                                  {(eventSpeaker.bio_override || speaker.bio) && (
+                                    <p className="text-gray-600 dark:text-gray-400 text-sm">
+                                      {eventSpeaker.bio_override || speaker.bio}
+                                    </p>
+                                  )}
+                                </div>
+                                
+                                <Link
+                                  to={`/speakers/${speaker.slug || speaker.id}`}
+                                  className="text-primary-600 hover:text-primary-700 text-sm flex items-center gap-1 flex-shrink-0"
+                                >
+                                  Подробнее
+                                  <ExternalLink className="w-3 h-3" />
+                                </Link>
                               </div>
-                            )}
+                              
+                              {/* Социальные ссылки спикера */}
+                              {speaker.sh_speaker_social_links && speaker.sh_speaker_social_links.length > 0 && (
+                                <div className="flex items-center gap-2 mt-3">
+                                  {speaker.sh_speaker_social_links
+                                    .filter(link => link.is_public)
+                                    .sort((a, b) => {
+                                      if (a.is_primary && !b.is_primary) return -1;
+                                      if (!a.is_primary && b.is_primary) return 1;
+                                      return (a.display_order || 0) - (b.display_order || 0);
+                                    })
+                                    .slice(0, 4)
+                                    .map((social, socialIndex) => (
+                                      <a
+                                        key={socialIndex}
+                                        href={social.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="p-1.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full transition-colors"
+                                        title={social.display_name || social.platform}
+                                      >
+                                        {getSocialIcon(social.platform)}
+                                      </a>
+                                    ))}
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })
+                    )}
+                    
+                    {/* Обрабатываем спикеров из старой структуры speakers (fallback) */}
+                    {(!event.sh_event_speakers || event.sh_event_speakers.length === 0) && 
+                     event.speakers && event.speakers.length > 0 && (
+                      event.speakers.map((speakerData, index) => {
+                        const speaker = speakerData.speaker || speakerData;
+                        return (
+                          <div key={index} className="flex items-start space-x-4 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
+                            <div className="flex-shrink-0">
+                              {speaker.avatar_url ? (
+                                <img
+                                  src={getSupabaseImageUrl(speaker.avatar_url)}
+                                  alt={speaker.name}
+                                  className="w-16 h-16 rounded-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-16 h-16 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center">
+                                  <User className="w-8 h-8 text-gray-400" />
+                                </div>
+                              )}
+                            </div>
+                            
+                            <div className="flex-1">
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <h3 className="font-semibold text-gray-900 dark:text-white">
+                                    {speaker.name}
+                                  </h3>
+                                  {speaker.field_of_expertise && (
+                                    <p className="text-primary-600 dark:text-primary-400 text-sm mb-2">
+                                      {speaker.field_of_expertise}
+                                    </p>
+                                  )}
+                                  {(speakerData.bio_override || speaker.bio) && (
+                                    <p className="text-gray-600 dark:text-gray-400 text-sm">
+                                      {speakerData.bio_override || speaker.bio}
+                                    </p>
+                                  )}
+                                </div>
+                                
+                                <Link
+                                  to={`/speakers/${speaker.slug || speaker.id}`}
+                                  className="text-primary-600 hover:text-primary-700 text-sm flex items-center gap-1"
+                                >
+                                  Подробнее
+                                  <ExternalLink className="w-3 h-3" />
+                                </Link>
+                              </div>
+                              
+                              {/* Социальные ссылки спикера из старой структуры */}
+                              {speaker.social_links && speaker.social_links.length > 0 && (
+                                <div className="flex items-center gap-2 mt-3">
+                                  {speaker.social_links
+                                    .filter(link => link.is_public)
+                                    .slice(0, 4)
+                                    .map((social, socialIndex) => (
+                                      <a
+                                        key={socialIndex}
+                                        href={social.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="p-1.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full transition-colors"
+                                        title={social.display_name || social.platform}
+                                      >
+                                        {getSocialIcon(social.platform)}
+                                      </a>
+                                    ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
               )}
