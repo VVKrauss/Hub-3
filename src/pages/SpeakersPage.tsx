@@ -1241,4 +1241,4 @@ const SpeakersPage: React.FC = () => {
   );
 };
 
-export default SpeakersPage;
+export default SpeakersPage; 
