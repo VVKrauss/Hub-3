@@ -25,12 +25,47 @@ const AdminUsersManagement: React.FC = () => {
 
   const fetchCurrentUserRole = async () => {
     try {
-      const { data, error } = await supabase.rpc('get_current_user_role');
-      if (!error && data) {
-        setCurrentUserRole(data);
+      // Получаем текущего пользователя через Supabase Auth
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError) {
+        console.error('Error getting current user:', userError);
+        setCurrentUserRole('user');
+        return;
+      }
+
+      if (!user) {
+        console.log('No authenticated user found');
+        setCurrentUserRole('user');
+        return;
+      }
+
+      console.log('Current authenticated user:', user.email);
+
+      // Временное решение: хардкод для краuss@inbox.ru
+      if (user.email === 'krauss@inbox.ru') {
+        console.log('Setting super_admin role for krauss@inbox.ru');
+        setCurrentUserRole('super_admin');
+        return;
+      }
+
+      // Для других пользователей проверяем роль в базе через user_roles view
+      const { data: userRoles, error: roleError } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      if (!roleError && userRoles) {
+        console.log('User role from user_roles view:', userRoles.role);
+        setCurrentUserRole(userRoles.role || 'user');
+      } else {
+        console.log('Could not fetch role, defaulting to user');
+        setCurrentUserRole('user');
       }
     } catch (error) {
       console.error('Error fetching current user role:', error);
+      setCurrentUserRole('user');
     }
   };
 
