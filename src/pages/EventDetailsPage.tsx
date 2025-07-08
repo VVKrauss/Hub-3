@@ -599,7 +599,7 @@ const EventDetailsPage = () => {
 
       {/* Галерея изображений */}
       {showGallery && images.length > 0 && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center">
+        <div className="relative w-full h-[400px] overflow-hidden rounded-xl shadow-2xl mb-8">
           <div className="relative w-full h-full flex items-center justify-center">
             <button
               onClick={closeGallery}
