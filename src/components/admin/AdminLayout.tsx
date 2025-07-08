@@ -64,7 +64,8 @@ const AdminLayout = () => {
     { to: '/admin/navigation', icon: Menu, label: 'Навигация', shortLabel: 'Навиг.' },
     { to: '/admin/calendar', icon: Calendar, label: 'Календарь', shortLabel: 'Календ.' },
     { to: '/admin/event-statistics', icon: TrendingUp, label: 'Статистика мероприятий', shortLabel: 'Стат. мер.' },
-    { to: '/admin/export', icon: Download, label: 'Экспорт данных', shortLabel: 'Экспорт' }
+    { to: '/admin/export', icon: Download, label: 'Экспорт данных', shortLabel: 'Экспорт' },
+    { to: '/admin/speakers-migration', icon: ArrowRight, label: 'Миграция спикеров' }
   ];
 
   const handleSignOut = async () => {
