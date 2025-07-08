@@ -77,7 +77,7 @@ function App() {
           <Route path="about" element={<AdminAbout />} />
           <Route path="navigation" element={<AdminNavigation />} />
           <Route path="export" element={<AdminExport />} />
-          <Route path="calendar" element={<AdminCalendarPage />} />
+          <Route path="calendar" element={<AdminCalendarPage />} /> 
           <Route path="event-statistics" element={<AdminEventStatistics />} />
           <Route path="attendance" element={<AdminAttendance />} />
         </Route>
