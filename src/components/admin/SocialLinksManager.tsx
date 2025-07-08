@@ -138,37 +138,55 @@ const SocialLinksManager: React.FC<SocialLinksManagerProps> = ({
   const saveChanges = async () => {
     try {
       setLoading(true);
+      console.log('Начинаем сохранение социальных ссылок...', { speakerId, links });
 
       // Фильтруем ссылки с валидными URL
       const validLinks = links.filter(link => link.url.trim());
+      console.log('Валидные ссылки:', validLinks);
 
-      // Удаляем все существующие ссылки
+      // Сначала удаляем все существующие ссылки для этого спикера
+      console.log('Удаляем существующие ссылки...');
       const { error: deleteError } = await supabase
         .from('sh_speaker_social_links')
         .delete()
         .eq('speaker_id', speakerId);
 
-      if (deleteError) throw deleteError;
+      if (deleteError) {
+        console.error('Ошибка при удалении:', deleteError);
+        throw deleteError;
+      }
+      console.log('Существующие ссылки удалены');
 
       // Создаем новые ссылки, если есть
       if (validLinks.length > 0) {
-        const linksData = validLinks.map((link, index) => ({
-          speaker_id: speakerId,
-          platform: link.platform,
-          url: link.url.trim(),
-          display_name: link.display_name?.trim() || null,
-          description: link.description?.trim() || null,
-          is_public: link.is_public,
-          is_primary: link.is_primary,
-          display_order: index,
-          created_at: new Date().toISOString()
-        }));
+        const linksData = validLinks.map((link, index) => {
+          const linkData = {
+            speaker_id: speakerId,
+            platform: link.platform,
+            url: link.url.trim(),
+            display_name: link.display_name?.trim() || null,
+            description: link.description?.trim() || null,
+            is_public: link.is_public,
+            is_primary: link.is_primary,
+            display_order: index,
+            created_at: new Date().toISOString()
+          };
+          console.log('Подготовленная ссылка:', linkData);
+          return linkData;
+        });
 
-        const { error: insertError } = await supabase
+        console.log('Создаем новые ссылки...', linksData);
+        const { data: insertedData, error: insertError } = await supabase
           .from('sh_speaker_social_links')
-          .insert(linksData);
+          .insert(linksData)
+          .select();
 
-        if (insertError) throw insertError;
+        if (insertError) {
+          console.error('Ошибка при создании:', insertError);
+          throw insertError;
+        }
+        
+        console.log('Ссылки созданы:', insertedData);
       }
 
       toast.success('Социальные ссылки обновлены');
@@ -178,9 +196,11 @@ const SocialLinksManager: React.FC<SocialLinksManagerProps> = ({
       if (onUpdate) {
         onUpdate(validLinks);
       }
+      
+      console.log('Сохранение завершено успешно');
     } catch (error) {
       console.error('Error saving social links:', error);
-      toast.error('Ошибка при сохранении ссылок');
+      toast.error('Ошибка при сохранении ссылок: ' + (error instanceof Error ? error.message : 'Неизвестная ошибка'));
     } finally {
       setLoading(false);
     }
