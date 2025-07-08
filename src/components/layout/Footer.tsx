@@ -23,7 +23,7 @@ interface NavItem {
   visible: boolean;
 }
 
-export function Footer() {
+function Footer() {
   const [footerSettings, setFooterSettings] = useState<FooterSettings>({
     email: '',
     phone: '',

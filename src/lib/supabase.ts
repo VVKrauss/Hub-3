@@ -13,7 +13,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // СОЗДАЕМ ЕДИНСТВЕННЫЙ ЭКЗЕМПЛЯР
 let supabaseInstance: ReturnType<typeof createClient> | null = null;
 
-export const getSupabase = () => {
+const getSupabase = () => {
   if (!supabaseInstance) {
     console.log('🔗 Creating single Supabase client instance...');
     supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
@@ -74,7 +74,7 @@ export const createPaginatedResponse = <T>(
 };
 
 // Дополнительные утилиты которые могут понадобиться
-export const handleSupabaseError = (error: any) => {
+const handleSupabaseError = (error: any) => {
   if (error?.code === 'PGRST116') {
     return 'Запись не найдена';
   }
@@ -88,7 +88,7 @@ export const handleSupabaseError = (error: any) => {
 };
 
 // Функция для безопасного выполнения запросов
-export const safeSupabaseCall = async <T>(
+const safeSupabaseCall = async <T>(
   operation: () => Promise<any>,
   defaultValue: T | null = null
 ): Promise<ApiResponse<T>> => {
@@ -108,7 +108,7 @@ export const safeSupabaseCall = async <T>(
 };
 
 // Функция для пагинированных запросов
-export const safePaginatedCall = async <T>(
+const safePaginatedCall = async <T>(
   operation: () => Promise<any>,
   page: number = 1,
   pageSize: number = 10
@@ -128,7 +128,6 @@ export const safePaginatedCall = async <T>(
   }
 };
 
-// Экспорт типов базы данных (если есть)
-export type { Database } from '../types/database';
+// Экспорт типов базы данных (если есть);
 
 console.log('✅ Supabase module loaded with single client instance');

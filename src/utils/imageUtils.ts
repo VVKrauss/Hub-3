@@ -27,7 +27,7 @@ export const getSupabaseImageUrl = (path: string): string => {
  * @param fallbackImage Optional fallback image URL
  * @returns The complete public URL or fallback
  */
-export const getImageUrlWithFallback = (path: string, fallbackImage?: string): string => {
+const getImageUrlWithFallback = (path: string, fallbackImage?: string): string => {
   if (!path) {
     return fallbackImage || 'https://via.placeholder.com/400x300?text=No+Image';
   }

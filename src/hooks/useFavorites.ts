@@ -155,7 +155,7 @@ export const useFavoriteEvents = (userId?: string) => {
   };
 };
 
-export const useFavoriteEventTypes = (userId?: string) => {
+const useFavoriteEventTypes = (userId?: string) => {
   const [favoriteEventTypes, setFavoriteEventTypes] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 

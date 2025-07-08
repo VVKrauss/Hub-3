@@ -187,7 +187,7 @@ export const getEventById = async (eventId: string): Promise<ApiResponse<EventWi
 
 // src/api/events.ts - БЫСТРОЕ ИСПРАВЛЕНИЕ
 
-export const getEvents = async (filters = {}, page = 1, limit = 12) => {
+const getEvents = async (filters = {}, page = 1, limit = 12) => {
   try {
     let query = supabase
       .from('sh_events')

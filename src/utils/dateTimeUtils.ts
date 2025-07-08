@@ -3,7 +3,7 @@ import { ru } from 'date-fns/locale';
 import { formatInTimeZone, utcToZonedTime, zonedTimeToUtc } from 'date-fns-tz';
 
 // Define Belgrade timezone constant
-export const BELGRADE_TIMEZONE = 'Europe/Belgrade';
+const BELGRADE_TIMEZONE = 'Europe/Belgrade';
 
 /**
  * Formats a timestamp string to HH:MM format
@@ -141,7 +141,7 @@ export const isPastEvent = (eventDate: string, timezone: string = BELGRADE_TIMEZ
  * @param date Date object or ISO string
  * @returns Date object in Belgrade timezone
  */
-export const convertToBedradeTimezone = (date: Date | string): Date => {
+const convertToBedradeTimezone = (date: Date | string): Date => {
   try {
     const dateObj = typeof date === 'string' ? parseISO(date) : date;
     if (isNaN(dateObj.getTime())) {
@@ -159,7 +159,7 @@ export const convertToBedradeTimezone = (date: Date | string): Date => {
  * @param date Date object or ISO string
  * @returns Date object in UTC
  */
-export const convertFromBelgradeToUTC = (date: Date | string): Date => {
+const convertFromBelgradeToUTC = (date: Date | string): Date => {
   try {
     const dateObj = typeof date === 'string' ? parseISO(date) : date;
     if (isNaN(dateObj.getTime())) {
@@ -181,7 +181,7 @@ export const convertFromBelgradeToUTC = (date: Date | string): Date => {
  * @param minutes Minutes
  * @returns Date object in Belgrade timezone
  */
-export const createBelgradeDate = (
+const createBelgradeDate = (
   year: number,
   month: number,
   day: number,
@@ -206,7 +206,7 @@ export const createBelgradeDate = (
  * @param dateString Date string in ISO format
  * @returns Combined date and time in Belgrade timezone
  */
-export const parseTimeWithBelgradeTimezone = (timeString: string, dateString: string): Date => {
+const parseTimeWithBelgradeTimezone = (timeString: string, dateString: string): Date => {
   try {
     if (!timeString || !dateString) {
       throw new Error('Time string and date string are required');
@@ -239,7 +239,7 @@ export const parseTimeWithBelgradeTimezone = (timeString: string, dateString: st
  * @param timeString Time string to validate
  * @returns Boolean indicating if the time string is valid
  */
-export const isValidTimeFormat = (timeString: string): boolean => {
+const isValidTimeFormat = (timeString: string): boolean => {
   if (!timeString) return false;
   const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
   return timeRegex.test(timeString);
@@ -251,7 +251,7 @@ export const isValidTimeFormat = (timeString: string): boolean => {
  * @param time Time string in HH:MM format
  * @returns ISO string in UTC for database storage
  */
-export const formatDateTimeForDatabase = (date: Date | string, time: string): string => {
+const formatDateTimeForDatabase = (date: Date | string, time: string): string => {
   try {
     if (!date || !time) {
       throw new Error('Date and time are required');
@@ -306,7 +306,7 @@ export const isValidDateString = (dateString: string | null | undefined): boolea
  * @param timezone Optional timezone (defaults to Belgrade)
  * @returns Formatted time range string
  */
-export const formatTimeRangeSafe = (
+const formatTimeRangeSafe = (
   startTime?: string | null, 
   endTime?: string | null, 
   timezone: string = BELGRADE_TIMEZONE

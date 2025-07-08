@@ -10,7 +10,7 @@ import type {
 } from '../types/database';
 
 // Фильтры для поиска спикеров
-export interface SpeakerFilters {
+interface SpeakerFilters {
   status?: ('active' | 'inactive' | 'pending')[];
   is_featured?: boolean;
   field_of_expertise?: string;
@@ -76,7 +76,7 @@ export const getSpeaker = async (
 };
 
 // Получение списка спикеров с фильтрацией и пагинацией
-export const getSpeakers = async (
+const getSpeakers = async (
   filters: SpeakerFilters = {},
   page: number = 1,
   limit: number = 12
@@ -153,7 +153,7 @@ export const getSpeakers = async (
 };
 
 // Остальные функции из оригинального файла...
-export const createSpeaker = async (
+const createSpeaker = async (
   speakerData: Omit<ShSpeaker, 'id' | 'created_at' | 'updated_at'>
 ): Promise<ApiResponse<ShSpeaker>> => {
   try {
@@ -170,7 +170,7 @@ export const createSpeaker = async (
   }
 };
 
-export const updateSpeaker = async (
+const updateSpeaker = async (
   speakerId: string,
   updates: Partial<Omit<ShSpeaker, 'id' | 'created_at'>>
 ): Promise<ApiResponse<ShSpeaker>> => {
@@ -189,7 +189,7 @@ export const updateSpeaker = async (
   }
 };
 
-export const deleteSpeaker = async (speakerId: string): Promise<ApiResponse<boolean>> => {
+const deleteSpeaker = async (speakerId: string): Promise<ApiResponse<boolean>> => {
   try {
     const { error } = await supabase
       .from('sh_speakers')
