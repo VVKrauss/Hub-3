@@ -507,7 +507,7 @@ const CreateSpeakerModal = ({ isOpen, onClose, onSuccess }: CreateSpeakerModalPr
               </div>
             )}
           </div>
-        )}
+        )} 
 
         {/* Form Actions */}
         <div className="flex justify-end gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
