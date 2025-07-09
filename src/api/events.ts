@@ -111,61 +111,12 @@ const getEventTicketTypes = async (eventId: string) => {
   }
 };
 
-// 🔍 ФУНКЦИЯ ДЛЯ ОТЛАДКИ - поможет понять проблему с событием
-export const debugEventById = async (eventId: string) => {
-  try {
-    console.log('🔍 Debug: Checking event with ID:', eventId);
-
-    // Проверяем существование события без фильтров
-    const { data: event, error, count } = await supabase
-      .from('sh_events')
-      .select('*')
-      .eq('id', eventId);
-
-    console.log('🔍 Raw query result:', { data: event, error, count });
-
-    if (error) {
-      console.log('❌ Error occurred:', error);
-      return;
-    }
-
-    if (!event || event.length === 0) {
-      console.log('❌ No event found with this ID');
-      return;
-    }
-
-    const foundEvent = event[0];
-    console.log('✅ Event found:', {
-      id: foundEvent.id,
-      title: foundEvent.title,
-      status: foundEvent.status,
-      is_public: foundEvent.is_public,
-      created_at: foundEvent.created_at
-    });
-
-    // Проверяем, соответствует ли событие публичным фильтрам
-    const isPublic = foundEvent.is_public;
-    const isActiveOrPast = ['active', 'past'].includes(foundEvent.status);
-
-    console.log('🔍 Filter check:', {
-      is_public: isPublic,
-      status_active_or_past: isActiveOrPast,
-      would_be_visible: isPublic && isActiveOrPast
-    });
-
-    return foundEvent;
-
-  } catch (error) {
-    console.error('🔍 Debug error:', error);
-  }
-};
-
-// ✅ ИСПРАВЛЕННАЯ функция getEventById
+// Get single event by ID with all details
 export const getEventById = async (eventId: string): Promise<ApiResponse<EventWithDetails>> => {
   try {
     console.log('Fetching event by ID:', eventId);
 
-    // ✅ ИСПРАВЛЕНО: Сначала пробуем найти событие без ограничений
+    // Get the event without restrictive filters
     let { data: event, error } = await supabase
       .from('sh_events')
       .select('*')
@@ -183,24 +134,16 @@ export const getEventById = async (eventId: string): Promise<ApiResponse<EventWi
       throw new Error('Мероприятие не найдено');
     }
 
-    console.log('Event found:', event.title, 'Status:', event.status, 'Public:', event.is_public);
-
-    // ✅ ПРОВЕРЯЕМ: если событие приватное или в черновике, показываем только авторизованным пользователям
-    // Для публичного доступа проверяем статус и публичность
-    const isPublicAccess = !event.is_public || !['active', 'past'].includes(event.status);
-    if (isPublicAccess) {
-      // Здесь можно добавить проверку авторизации для приватных событий
-      console.warn('Event is not public or not in active/past status');
-      // Пока что возвращаем ошибку для непубличных событий
-      if (!event.is_public) {
-        throw new Error('Мероприятие недоступно для публичного просмотра');
-      }
-      if (!['active', 'past', 'draft'].includes(event.status)) {
-        throw new Error('Мероприятие отменено или недоступно');
-      }
+    // Check accessibility for public viewing
+    if (!event.is_public) {
+      throw new Error('Мероприятие недоступно для публичного просмотра');
     }
 
-    // ✅ ОТДЕЛЬНО загружаем спикеров события
+    if (!['active', 'past', 'draft'].includes(event.status)) {
+      throw new Error('Мероприятие отменено или недоступно');
+    }
+
+    // Load event speakers separately
     const { data: eventSpeakers, error: speakersError } = await supabase
       .from('sh_event_speakers')
       .select('id, role, display_order, speaker_id, bio_override')
@@ -211,19 +154,19 @@ export const getEventById = async (eventId: string): Promise<ApiResponse<EventWi
       console.warn('Error loading event speakers:', speakersError);
     }
 
-    // Обогащаем спикеров полными данными
+    // Enrich speakers with full data
     const speakersWithData = await enrichEventSpeakers(eventSpeakers || []);
     
-    // Получаем счетчик регистраций
+    // Get registration count
     const registrationsCount = await getRegistrationCounts(event.id);
 
-    // Получаем расписание
+    // Get schedule
     const schedule = await getEventSchedule(event.id);
 
-    // Получаем типы билетов
+    // Get ticket types
     const ticketTypes = await getEventTicketTypes(event.id);
 
-    // Вычисляем доступные места
+    // Calculate available spots
     const availableSpots = event.max_attendees 
       ? Math.max(0, event.max_attendees - registrationsCount)
       : null;
@@ -231,14 +174,12 @@ export const getEventById = async (eventId: string): Promise<ApiResponse<EventWi
     const eventWithDetails: EventWithDetails = {
       ...event,
       sh_event_speakers: speakersWithData,
-      speakers: speakersWithData, // Алиас для обратной совместимости
+      speakers: speakersWithData,
       schedule,
       ticket_types: ticketTypes,
       registrations_count: registrationsCount,
       available_spots: availableSpots
     };
-
-    console.log(`Event ${eventId} loaded successfully with ${speakersWithData.length} speakers`);
 
     return createApiResponse(eventWithDetails);
   } catch (error) {
@@ -250,14 +191,13 @@ export const getEventById = async (eventId: string): Promise<ApiResponse<EventWi
 // Get events with filters and pagination
 export const getEvents = async (filters = {}, page = 1, limit = 12) => {
   try {
-    // ✅ ИСПРАВЛЕНО: Убираем проблемный JOIN для основного списка событий
     let query = supabase
       .from('sh_events')
       .select('*')
       .eq('is_public', true)
       .in('status', ['active', 'past']);
 
-    // Применяем фильтры
+    // Apply filters
     if (filters.search?.trim()) {
       query = query.ilike('title', `%${filters.search}%`);
     }
@@ -302,14 +242,14 @@ export const getEvents = async (filters = {}, page = 1, limit = 12) => {
   }
 };
 
-// ✅ ИСПРАВЛЕННАЯ функция getEventsBySpeaker
+// Get events by speaker
 export const getEventsBySpeaker = async (
   speakerId: string
 ): Promise<ApiResponse<EventWithDetails[]>> => {
   try {
     console.log('Fetching events for speaker:', speakerId);
 
-    // ✅ ИСПРАВЛЕНО: Сначала получаем связи спикера с событиями
+    // Get speaker event links
     const { data: eventSpeakerLinks, error: linksError } = await supabase
       .from('sh_event_speakers')
       .select('event_id')
@@ -323,7 +263,7 @@ export const getEventsBySpeaker = async (
 
     const eventIds = eventSpeakerLinks.map(link => link.event_id);
 
-    // ✅ ОТДЕЛЬНО получаем события
+    // Get events separately
     const { data: events, error: eventsError } = await supabase
       .from('sh_events')
       .select('*')
@@ -334,11 +274,11 @@ export const getEventsBySpeaker = async (
 
     if (eventsError) throw eventsError;
 
-    // Обогащаем каждое событие данными спикеров и счетчиками
+    // Enrich each event with details
     const eventsWithDetails = await Promise.all(
       (events || []).map(async (event) => {
         try {
-          // Получаем спикеров события
+          // Get event speakers
           const { data: eventSpeakers } = await supabase
             .from('sh_event_speakers')
             .select('id, role, display_order, speaker_id, bio_override')
@@ -347,7 +287,7 @@ export const getEventsBySpeaker = async (
 
           const speakersWithData = await enrichEventSpeakers(eventSpeakers || []);
           
-          // Получаем счетчик регистраций
+          // Get registration count
           const registrationsCount = await getRegistrationCounts(event.id);
 
           const availableSpots = event.max_attendees 
@@ -377,8 +317,6 @@ export const getEventsBySpeaker = async (
         }
       })
     );
-
-    console.log(`Found ${eventsWithDetails.length} events for speaker ${speakerId}`);
 
     return createApiResponse(eventsWithDetails);
   } catch (error) {
