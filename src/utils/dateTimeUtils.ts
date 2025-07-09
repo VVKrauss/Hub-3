@@ -325,3 +325,54 @@ const formatTimeRangeSafe = (
     return '';
   }
 };
+
+
+/**
+ * Formats a date for HTML datetime-local input
+ * @param dateString ISO date string
+ * @returns Formatted date string for datetime-local input (YYYY-MM-DDTHH:mm)
+ */
+export const formatDateTimeForInput = (dateString: string): string => {
+  if (!dateString) return '';
+  
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) {
+      console.warn('formatDateTimeForInput: Invalid date string:', dateString);
+      return '';
+    }
+    
+    // Получаем локальную дату и время
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  } catch (error) {
+    console.error('formatDateTimeForInput: Error formatting date:', dateString, error);
+    return '';
+  }
+};
+
+/**
+ * Formats a date for display in Russian format
+ * @param dateString ISO date string
+ * @returns Formatted date string for display (DD.MM.YYYY HH:mm)
+ */
+export const formatDateTimeForDisplay = (dateString: string): string => {
+  if (!dateString) return '';
+  
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) {
+      return 'Некорректная дата';
+    }
+    
+    return format(date, 'dd.MM.yyyy HH:mm');
+  } catch (error) {
+    console.error('formatDateTimeForDisplay: Error formatting date:', dateString, error);
+    return 'Ошибка форматирования';
+  }
+};
