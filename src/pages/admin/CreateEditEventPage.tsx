@@ -532,4 +532,249 @@ const CreateEditEventPage: React.FC = () => {
       </div>
     );
   }
-  
+  // Часть 3: Обработка сохранения и удаления
+
+  // Функция сохранения события
+  const handleSubmit = useCallback(async () => {
+    if (!validateForm()) return;
+
+    try {
+      setSaving(true);
+
+      // Финальная проверка уникальности slug
+      if (!await checkSlugUniqueness(event.slug, id)) {
+        toast.error('URL уже используется другим мероприятием');
+        return;
+      }
+
+      // Подготовка данных для сохранения
+      const eventData = {
+        ...event,
+        // Медиафайлы
+        cover_image_url: mediaData.coverImage.croppedUrl || null,
+        cover_image_original_url: mediaData.coverImage.originalUrl || null,
+        gallery_images: mediaData.galleryImages.map(img => img.url),
+        
+        // Очистка полей в зависимости от типа локации
+        venue_name: event.location_type === 'physical' ? event.venue_name : null,
+        venue_address: event.location_type === 'physical' ? event.venue_address : null,
+        online_meeting_url: event.location_type !== 'physical' ? event.online_meeting_url : null,
+        online_platform: event.location_type !== 'physical' ? event.online_platform : null,
+        
+        // Очистка полей оплаты
+        base_price: event.payment_type === 'paid' ? event.base_price : null,
+        price_description: event.payment_type === 'paid' ? event.price_description : null,
+        
+        // Очистка полей регистрации
+        max_attendees: event.registration_enabled ? event.max_attendees : null,
+        attendee_limit_per_registration: event.registration_enabled ? event.attendee_limit_per_registration : 5,
+        
+        // Преобразование массивов в подходящий формат
+        tags: event.tags || [],
+        meta_keywords: event.meta_keywords || [],
+        
+        // Установка времени обновления
+        updated_at: new Date().toISOString(),
+        
+        // Удаляем поля, которые не должны попасть в БД
+        speakers: undefined,
+        festival_program: undefined,
+        hide_speakers_gallery: undefined,
+        photo_gallery: undefined
+      };
+
+      if (id) {
+        // Обновление существующего события
+        const { error } = await supabase
+          .from('sh_events')
+          .update(eventData)
+          .eq('id', id);
+
+        if (error) throw error;
+        
+        // Обновляем связи со спикерами
+        await updateEventSpeakers(id, event.speakers || []);
+        
+        // Обновляем программу фестиваля (если есть)
+        if (event.event_type === 'festival' && event.festival_program) {
+          await updateFestivalProgram(id, event.festival_program);
+        }
+        
+        toast.success('Мероприятие успешно обновлено');
+      } else {
+        // Создание нового события
+        const { data: newEvent, error } = await supabase
+          .from('sh_events')
+          .insert([eventData])
+          .select()
+          .single();
+
+        if (error) throw error;
+        
+        // Добавляем связи со спикерами
+        if (event.speakers && event.speakers.length > 0) {
+          await updateEventSpeakers(newEvent.id, event.speakers);
+        }
+        
+        // Добавляем программу фестиваля (если есть)
+        if (event.event_type === 'festival' && event.festival_program) {
+          await updateFestivalProgram(newEvent.id, event.festival_program);
+        }
+        
+        toast.success('Мероприятие успешно создано');
+        
+        // Перенаправляем на страницу редактирования
+        navigate(`/admin/events/${newEvent.id}/edit`);
+      }
+
+    } catch (error) {
+      console.error('Error saving event:', error);
+      toast.error('Ошибка при сохранении мероприятия');
+    } finally {
+      setSaving(false);
+    }
+  }, [event, mediaData, id, validateForm, navigate]);
+
+  // Обновление связей со спикерами
+  const updateEventSpeakers = useCallback(async (eventId: string, speakerIds: string[]) => {
+    try {
+      // Удаляем существующие связи
+      const { error: deleteError } = await supabase
+        .from('sh_event_speakers')
+        .delete()
+        .eq('event_id', eventId);
+
+      if (deleteError) throw deleteError;
+
+      // Добавляем новые связи
+      if (speakerIds.length > 0) {
+        const speakerData = speakerIds.map((speakerId, index) => ({
+          event_id: eventId,
+          speaker_id: speakerId,
+          role: 'speaker',
+          display_order: index + 1
+        }));
+
+        const { error: insertError } = await supabase
+          .from('sh_event_speakers')
+          .insert(speakerData);
+
+        if (insertError) throw insertError;
+      }
+    } catch (error) {
+      console.error('Error updating event speakers:', error);
+      throw error;
+    }
+  }, []);
+
+  // Обновление программы фестиваля
+  const updateFestivalProgram = useCallback(async (eventId: string, program: FestivalProgramItem[]) => {
+    try {
+      // Удаляем существующую программу
+      const { error: deleteError } = await supabase
+        .from('sh_event_schedule')
+        .delete()
+        .eq('event_id', eventId);
+
+      if (deleteError) throw deleteError;
+
+      // Добавляем новую программу
+      if (program.length > 0) {
+        const scheduleData = program.map((item, index) => ({
+          event_id: eventId,
+          title: item.title,
+          description: item.description,
+          start_time: item.start_time,
+          end_time: item.end_time,
+          date: event.start_at.split('T')[0], // Используем дату события
+          speaker_id: item.lecturer_id || null,
+          display_order: index + 1
+        }));
+
+        const { error: insertError } = await supabase
+          .from('sh_event_schedule')
+          .insert(scheduleData);
+
+        if (insertError) throw insertError;
+      }
+    } catch (error) {
+      console.error('Error updating festival program:', error);
+      throw error;
+    }
+  }, [event.start_at]);
+
+  // Удаление события
+  const handleDelete = useCallback(async () => {
+    if (!id) return;
+
+    try {
+      setLoading(true);
+      
+      // Удаляем связанные данные
+      await Promise.all([
+        supabase.from('sh_event_speakers').delete().eq('event_id', id),
+        supabase.from('sh_event_schedule').delete().eq('event_id', id),
+        supabase.from('sh_registrations').delete().eq('event_id', id)
+      ]);
+
+      // Удаляем само событие
+      const { error } = await supabase
+        .from('sh_events')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast.success('Мероприятие удалено');
+      navigate('/admin/events');
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      toast.error('Ошибка при удалении мероприятия');
+    } finally {
+      setLoading(false);
+      setShowDeleteConfirm(false);
+    }
+  }, [id, navigate]);
+
+  // Конфигурация табов
+  const tabs = [
+    { id: 'basic', label: 'Основное', icon: Info },
+    { id: 'details', label: 'Детали', icon: Calendar },
+    { id: 'location', label: 'Место', icon: MapPin },
+    { id: 'media', label: 'Медиафайлы', icon: Image },
+    { id: 'registration', label: 'Регистрация', icon: Users },
+    ...(event.event_type === 'festival' ? [{ id: 'program', label: 'Программа', icon: Clock }] : []),
+    { id: 'seo', label: 'SEO', icon: Globe }
+  ];
+
+  // Компонент для подтверждения удаления
+  const DeleteConfirmModal = () => (
+    showDeleteConfirm && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white dark:bg-dark-800 rounded-lg p-6 max-w-md w-full mx-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            Подтверждение удаления
+          </h3>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
+            Вы уверены, что хотите удалить мероприятие "{event.title}"? 
+            Это действие нельзя отменить.
+          </p>
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => setShowDeleteConfirm(false)}
+              className="px-4 py-2 border border-gray-300 dark:border-dark-600 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors"
+            >
+              Отмена
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={loading}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+            >
+              {loading ? 'Удаление...' : 'Удалить'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  );
