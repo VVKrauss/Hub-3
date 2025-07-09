@@ -61,7 +61,7 @@ export {
 // Хуки для работы с медиафайлами (если потребуются в будущем)
 // export { useMediaUpload } from './useMediaUpload'; 
 // export { useImageCropper } from './useImageCropper';
-// export { useDragAndDrop } from './useDragAndDrop';
+// export { useDragAndDrop } from './useDragAndDrop'; 
 
 // Экспорт для быстрого доступа к основным функциям
 export const MediaUtils = {
