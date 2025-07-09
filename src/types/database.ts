@@ -1,6 +1,6 @@
 // src/types/database.ts
 // Типы для новой структуры БД с префиксом sh_ 
-// ФИНАЛЬНАЯ ВЕРСИЯ с исправленными статусами
+// ФИНАЛЬНАЯ ВЕРСИЯ с исправленными статусами и поддержкой медиафайлов
 
 // Основные enum типы из БД
 
@@ -54,8 +54,12 @@ export interface ShEvent {
   venue_coordinates?: any; // PostGIS point
   online_meeting_url?: string;
   online_platform?: string;
-  cover_image_url?: string;
-  gallery_images?: string[];
+  
+  // ПОЛЯ ДЛЯ МЕДИАФАЙЛОВ
+  cover_image_url?: string;              // Кадрированное фоновое изображение (3:1)
+  cover_image_original_url?: string;     // Оригинальное фоновое изображение
+  gallery_images?: string[];             // Массив URL изображений галереи
+  
   video_url?: string;
   payment_type: ShPaymentType;
   base_price?: number;
@@ -323,6 +327,11 @@ export interface EventWithDetails extends ShEvent {
   sh_event_speakers?: (ShEventSpeaker & { speaker: ShSpeaker })[];
   sh_event_schedule?: ShEventSchedule[];
   sh_event_ticket_types?: ShEventTicketType[];
+  // Поля для медиафайлов (из view sh_events_with_media)
+  display_cover_image?: string;
+  media_count?: number;
+  has_cover_image?: boolean;
+  has_gallery_images?: boolean;
 }
 
 export interface SpeakerWithSocials extends ShSpeaker {
@@ -469,3 +478,262 @@ const getEventDisplayStatus = (event: ShEvent): string => {
   }
   return EVENT_STATUS_LABELS[event.status];
 };
+
+// ==============================
+// ДОПОЛНИТЕЛЬНЫЕ ТИПЫ И УТИЛИТЫ ДЛЯ МЕДИАФАЙЛОВ
+// ==============================
+
+// Интерфейс для работы с медиафайлами события
+export interface EventMediaFields {
+  cover_image_url?: string;
+  cover_image_original_url?: string;
+  gallery_images?: string[];
+}
+
+// Расширенный интерфейс события с медиафайлами
+export interface EventWithMedia extends ShEvent {
+  // Вычисляемые поля из view sh_events_with_media
+  display_cover_image?: string;
+  media_count?: number;
+  has_cover_image?: boolean;
+  has_gallery_images?: boolean;
+}
+
+// Интерфейс для обновления медиафайлов события
+export interface EventMediaUpdatePayload {
+  cover_image_url?: string | null;
+  cover_image_original_url?: string | null;
+  gallery_images?: string[] | null;
+}
+
+// Интерфейс для создания события с медиафайлами
+export interface CreateEventWithMediaPayload extends Omit<ShEvent, 'id' | 'created_at' | 'updated_at'> {
+  // Медиафайлы опциональны при создании
+  cover_image_url?: string;
+  cover_image_original_url?: string;
+  gallery_images?: string[];
+}
+
+// Утилиты для работы с медиафайлами (без строгой валидации)
+export const EventMediaUtils = {
+  /**
+   * Получает URL фонового изображения с fallback
+   */
+  getCoverImageUrl: (event: ShEvent, preferOriginal: boolean = false): string | null => {
+    if (preferOriginal && event.cover_image_original_url) {
+      return event.cover_image_original_url;
+    }
+    return event.cover_image_url || event.cover_image_original_url || null;
+  },
+
+  /**
+   * Получает массив URL изображений галереи
+   */
+  getGalleryImageUrls: (event: ShEvent): string[] => {
+    return event.gallery_images || [];
+  },
+
+  /**
+   * Проверяет наличие медиафайлов
+   */
+  hasMedia: (event: ShEvent): boolean => {
+    return !!(event.cover_image_url || event.cover_image_original_url || event.gallery_images?.length);
+  },
+
+  /**
+   * Подсчитывает количество медиафайлов
+   */
+  getMediaCount: (event: ShEvent): number => {
+    let count = 0;
+    if (event.cover_image_url || event.cover_image_original_url) count++;
+    if (event.gallery_images?.length) count += event.gallery_images.length;
+    return count;
+  },
+
+  /**
+   * Проверяет, выглядит ли строка как URL изображения (мягкая валидация)
+   */
+  looksLikeImageUrl: (url: string): boolean => {
+    if (!url || url.trim() === '') return false;
+    
+    // Проверяем, что это похоже на URL
+    const looksLikeUrl = url.includes('://') || url.startsWith('/') || url.startsWith('data:');
+    
+    return looksLikeUrl;
+  },
+
+  /**
+   * Очищает URL от лишних пробелов и валидирует базово
+   */
+  cleanImageUrl: (url: string | null | undefined): string | null => {
+    if (!url) return null;
+    
+    const cleaned = url.trim();
+    if (cleaned === '') return null;
+    
+    return cleaned;
+  },
+
+  /**
+   * Создает объект для обновления медиафайлов
+   */
+  createMediaUpdatePayload: (
+    coverImageUrl?: string,
+    coverImageOriginalUrl?: string,
+    galleryImages?: string[]
+  ): EventMediaUpdatePayload => ({
+    cover_image_url: EventMediaUtils.cleanImageUrl(coverImageUrl),
+    cover_image_original_url: EventMediaUtils.cleanImageUrl(coverImageOriginalUrl),
+    gallery_images: galleryImages?.filter(url => EventMediaUtils.cleanImageUrl(url)) || null
+  }),
+
+  /**
+   * Подготавливает данные события для сохранения
+   */
+  prepareEventForSave: (event: Partial<ShEvent>): Partial<ShEvent> => {
+    return {
+      ...event,
+      cover_image_url: EventMediaUtils.cleanImageUrl(event.cover_image_url),
+      cover_image_original_url: EventMediaUtils.cleanImageUrl(event.cover_image_original_url),
+      gallery_images: event.gallery_images?.filter(url => 
+        EventMediaUtils.cleanImageUrl(url)
+      ) || []
+    };
+  }
+};
+
+// Константы для медиафайлов
+export const EVENT_MEDIA_CONSTRAINTS = {
+  MAX_GALLERY_IMAGES: 50,
+  MAX_FILE_SIZE: 7 * 1024 * 1024, // 7MB
+  MIN_IMAGE_SIZE: { width: 200, height: 200 },
+  COVER_IMAGE_RATIO: 3, // 3:1
+  COVER_IMAGE_SIZE: { width: 1500, height: 500 },
+  SUPPORTED_FORMATS: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'],
+  STORAGE_PATHS: {
+    COVER: 'events/{eventId}/cover/',
+    GALLERY: 'events/{eventId}/gallery/'
+  }
+} as const;
+
+// Типы для валидации медиафайлов (мягкая валидация)
+export interface MediaValidationResult {
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+export interface MediaValidationOptions {
+  validateCoverImage?: boolean;
+  validateGalleryImages?: boolean;
+  maxGalleryImages?: number;
+  requiredCoverImage?: boolean;
+  strictValidation?: boolean; // Для включения строгой валидации в будущем
+}
+
+// Функция мягкой валидации медиафайлов события
+export const validateEventMedia = (
+  event: Partial<ShEvent>,
+  options: MediaValidationOptions = {}
+): MediaValidationResult => {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  const {
+    validateCoverImage = true,
+    validateGalleryImages = true,
+    maxGalleryImages = EVENT_MEDIA_CONSTRAINTS.MAX_GALLERY_IMAGES,
+    requiredCoverImage = false,
+    strictValidation = false
+  } = options;
+
+  // Валидация фонового изображения
+  if (validateCoverImage) {
+    if (requiredCoverImage && !event.cover_image_url && !event.cover_image_original_url) {
+      errors.push('Фоновое изображение обязательно');
+    }
+
+    if (event.cover_image_url && strictValidation) {
+      if (!EventMediaUtils.looksLikeImageUrl(event.cover_image_url)) {
+        errors.push('Некорректный URL фонового изображения');
+      }
+    }
+
+    if (event.cover_image_original_url && strictValidation) {
+      if (!EventMediaUtils.looksLikeImageUrl(event.cover_image_original_url)) {
+        errors.push('Некорректный URL оригинального изображения');
+      }
+    }
+  }
+
+  // Валидация галереи
+  if (validateGalleryImages && event.gallery_images) {
+    if (event.gallery_images.length > maxGalleryImages) {
+      errors.push(`Превышен лимит изображений в галерее (максимум ${maxGalleryImages})`);
+    }
+
+    if (strictValidation) {
+      const invalidUrls = event.gallery_images.filter(url => 
+        !EventMediaUtils.looksLikeImageUrl(url)
+      );
+      if (invalidUrls.length > 0) {
+        warnings.push(`Подозрительные URL в галерее: ${invalidUrls.length} изображений`);
+      }
+    }
+
+    if (event.gallery_images.length === 0) {
+      warnings.push('Галерея пустая');
+    }
+  }
+
+  // Общие предупреждения
+  if (!EventMediaUtils.hasMedia(event as ShEvent)) {
+    warnings.push('Мероприятие не содержит изображений');
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+    warnings
+  };
+};
+
+// Enum для типов медиафайлов
+export enum EventMediaType {
+  COVER_IMAGE = 'cover_image',
+  COVER_IMAGE_ORIGINAL = 'cover_image_original',
+  GALLERY_IMAGE = 'gallery_image'
+}
+
+// Интерфейс для работы с медиафайлами в API
+export interface EventMediaApiResponse {
+  success: boolean;
+  data?: {
+    cover_image_url?: string;
+    cover_image_original_url?: string;
+    gallery_images?: string[];
+  };
+  error?: string;
+  media_count?: number;
+}
+
+// Интерфейс для загрузки медиафайлов
+export interface EventMediaUploadRequest {
+  event_id: string;
+  media_type: EventMediaType;
+  file_data: string | ArrayBuffer; // Base64 или binary data
+  file_name: string;
+  file_size: number;
+  mime_type: string;
+  replace_existing?: boolean;
+}
+
+// Ответ на загрузку медиафайла
+export interface EventMediaUploadResponse {
+  success: boolean;
+  url?: string;
+  original_url?: string; // для cover image
+  error?: string;
+  file_path?: string;
+  file_size?: number;
+}

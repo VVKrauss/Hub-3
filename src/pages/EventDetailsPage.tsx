@@ -448,10 +448,14 @@ const EventDetailsPage = () => {
                                   
                                   {/* Биография - приоритет переопределенной для события */}
                                   {(eventSpeaker.bio_override || speaker.bio) && (
-                                    <p className="text-gray-600 dark:text-gray-400 text-sm">
-                                      {eventSpeaker.bio_override || speaker.bio}
-                                    </p>
+                                    <div 
+                                      className="text-gray-600 dark:text-gray-400 text-sm [&_a]:text-primary-600 [&_a:hover]:text-primary-700 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-gray-900 dark:[&_strong]:text-white"
+                                      dangerouslySetInnerHTML={{ 
+                                        __html: eventSpeaker.bio_override || speaker.bio 
+                                      }}
+                                    />
                                   )}
+
                                 </div>
                                 
                                 <Link
