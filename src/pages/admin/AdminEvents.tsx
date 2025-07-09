@@ -926,16 +926,29 @@ return (
 
                   {/* Кнопки действий в правом верхнем углу */}
                   <div className="absolute top-3 right-3 z-20 flex items-center gap-1">
+                    {/* ИЗМЕНЕНО: Переход на публичную страницу события */}
+                    <Link
+                      to={`/events/${event.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-8 h-8 bg-white/90 dark:bg-dark-700/90 backdrop-blur-sm hover:bg-blue-50 dark:hover:bg-blue-900/40 text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg transition-all duration-200 flex items-center justify-center shadow-sm"
+                      title="Посмотреть на сайте"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Link>
+                    
+                    {/* ДОБАВЛЕНО: Новая кнопка для просмотра деталей в модалке */}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedEvent(event);
                         setShowDetailsModal(true);
                       }}
-                      className="w-8 h-8 bg-white/90 dark:bg-dark-700/90 backdrop-blur-sm hover:bg-white dark:hover:bg-dark-600 text-gray-600 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 rounded-lg transition-all duration-200 flex items-center justify-center shadow-sm"
-                      title="Просмотр"
+                      className="w-8 h-8 bg-white/90 dark:bg-dark-700/90 backdrop-blur-sm hover:bg-green-50 dark:hover:bg-green-900/40 text-gray-600 dark:text-gray-300 hover:text-green-600 dark:hover:text-green-400 rounded-lg transition-all duration-200 flex items-center justify-center shadow-sm"
+                      title="Детали мероприятия"
                     >
-                      <Eye className="h-4 w-4" />
+                      <Users className="h-4 w-4" />
                     </button>
                     
                     <button

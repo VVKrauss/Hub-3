@@ -1,6 +1,6 @@
-// src/components/admin/AdminLayout.tsx
+// src/components/admin/AdminLayout.tsx - Обновленный с пунктом управления пользователями
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { supabase } from '../../lib/supabase'; // Используем единый экземпляр
+import { supabase } from '../../lib/supabase';
 import { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, 
@@ -21,7 +21,9 @@ import {
   ChevronLeft,
   ChevronRight,
   TrendingUp,
-  QrCode
+  QrCode,
+  Shield,      // НОВАЯ ИКОНКА для управления пользователями
+  ArrowRight   // НОВАЯ ИКОНКА для миграции
 } from 'lucide-react';
 
 import { toast } from 'react-hot-toast';
@@ -64,24 +66,25 @@ const AdminLayout = () => {
     { to: '/admin/navigation', icon: Menu, label: 'Навигация', shortLabel: 'Навиг.' },
     { to: '/admin/calendar', icon: Calendar, label: 'Календарь', shortLabel: 'Календ.' },
     { to: '/admin/event-statistics', icon: TrendingUp, label: 'Статистика мероприятий', shortLabel: 'Стат. мер.' },
+    
+    // НОВЫЕ ПУНКТЫ МЕНЮ
+    { to: '/admin/users', icon: Shield, label: 'Управление пользователями', shortLabel: 'Пользов.' },
+    { to: '/admin/speakers-migration', icon: ArrowRight, label: 'Миграция спикеров', shortLabel: 'Миграция' },
+    
+    // Служебные разделы
     { to: '/admin/export', icon: Download, label: 'Экспорт данных', shortLabel: 'Экспорт' }
   ];
 
-  const handleSignOut = async () => {
+  const handleLogout = async () => {
     try {
-      await supabase.auth.signOut();
-      navigate('/');
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      
       toast.success('Вы вышли из системы');
+      navigate('/');
     } catch (error) {
-      console.error('Error signing out:', error);
-      toast.error('Ошибка при выходе из системы');
-    }
-  };
-
-  const openQRScanner = () => {
-    setShowQRScanner(true);
-    if (isMobile) {
-      setIsMobileMenuOpen(false);
+      console.error('Error logging out:', error);
+      toast.error('Ошибка при выходе');
     }
   };
 
@@ -89,13 +92,33 @@ const AdminLayout = () => {
     setIsSidebarCollapsed(!isSidebarCollapsed);
   };
 
+  const openMobileMenu = () => {
+    setIsMobileMenuOpen(true);
+  };
+
   const closeMobileMenu = () => {
     setIsMobileMenuOpen(false);
   };
 
+  const openQRScanner = () => {
+    setShowQRScanner(true);
+    if (isMobile) {
+      closeMobileMenu();
+    }
+  };
+
+  const closeQRScanner = () => {
+    setShowQRScanner(false);
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-dark-900">
-      {/* Mobile overlay */}
+    <div className="min-h-screen bg-gray-50 dark:bg-dark-900 flex">
+      {/* QR Scanner Modal */}
+      {showQRScanner && (
+        <QRScanner onClose={closeQRScanner} />
+      )}
+
+      {/* Mobile menu backdrop */}
       {isMobile && isMobileMenuOpen && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 z-40"
@@ -103,51 +126,9 @@ const AdminLayout = () => {
         />
       )}
 
-      {/* Top bar for mobile */}
-      {isMobile && (
-        <div className="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-dark-800 border-b border-gray-200 dark:border-dark-700 h-14">
-          <div className="flex items-center justify-between h-full px-4">
-            <button
-              onClick={() => setIsMobileMenuOpen(true)}
-              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
-            
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-primary-500 rounded-lg flex items-center justify-center">
-                <BarChart3 className="h-5 w-5 text-white" />
-              </div>
-              <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Админ панель
-              </h1>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={openQRScanner}
-                className="p-2 rounded-lg bg-primary-500 hover:bg-primary-600 text-white"
-                title="QR Сканер"
-              >
-                <QrCode className="h-4 w-4" />
-              </button>
-              
-              <button
-                onClick={handleSignOut}
-                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700 text-red-600"
-                title="Выйти"
-              >
-                <LogOut className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Sidebar */}
       <aside className={`
-        fixed top-0 left-0 h-full bg-white dark:bg-dark-800 border-r border-gray-200 dark:border-dark-700 
-        transition-all duration-300 ease-in-out z-50 flex flex-col
+        fixed md:static top-0 left-0 z-50 h-full bg-white dark:bg-dark-800 border-r border-gray-200 dark:border-dark-700 transition-all duration-300
         ${isMobile 
           ? `${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} w-64`
           : `${isSidebarCollapsed ? 'w-16' : 'w-64'}`
@@ -226,22 +207,25 @@ const AdminLayout = () => {
                 <NavLink
                   key={item.to}
                   to={item.to}
-                  end={item.end} // Используем проп end для точного совпадения пути
+                  end={item.end}
                   onClick={isMobile ? closeMobileMenu : undefined}
                   className={({ isActive }) => `
-                    flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 group
+                    flex items-center gap-3 px-3 py-2 rounded-lg transition-colors group
                     ${isActive 
-                      ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 border-r-2 border-primary-500' 
-                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-700 hover:text-gray-900 dark:hover:text-white'
+                      ? 'bg-primary-100 dark:bg-primary-900/20 text-primary-700 dark:text-primary-400' 
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-700'
                     }
-                    ${isSidebarCollapsed && !isMobile ? 'justify-center px-2' : ''}
                   `}
-                  title={isSidebarCollapsed && !isMobile ? item.label : ''}
                 >
-                  <Icon className={`${isSidebarCollapsed && !isMobile ? 'h-6 w-6' : 'h-5 w-5'} flex-shrink-0`} />
+                  <Icon className={`h-5 w-5 flex-shrink-0 ${isSidebarCollapsed && !isMobile ? 'mx-auto' : ''}`} />
                   {(!isSidebarCollapsed || isMobile) && (
                     <span className="font-medium truncate">
-                      {isMobile ? item.shortLabel : item.label}
+                      {item.label}
+                    </span>
+                  )}
+                  {(!isSidebarCollapsed || isMobile) && item.to.includes('speakers-migration') && (
+                    <span className="ml-auto bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
+                      Новое
                     </span>
                   )}
                 </NavLink>
@@ -250,69 +234,57 @@ const AdminLayout = () => {
           </div>
         </nav>
 
-        {/* User actions */}
-        <div className="border-t border-gray-200 dark:border-dark-700 p-4">
-          {(!isSidebarCollapsed || isMobile) ? (
-            <div className="space-y-2">
-              <button
-                onClick={() => navigate('/')}
-                className="w-full flex items-center gap-3 px-3 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-700 rounded-lg transition-colors"
-              >
-                <ExternalLink className="h-4 w-4" />
-                <span className="text-sm">На сайт</span>
-              </button>
-              
-              <button
-                onClick={handleSignOut}
-                className="w-full flex items-center gap-3 px-3 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-              >
-                <LogOut className="h-4 w-4" />
-                <span className="text-sm">Выйти</span>
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <button
-                onClick={() => navigate('/')}
-                className="w-full p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-700 rounded-lg transition-colors"
-                title="На сайт"
-              >
-                <ExternalLink className="h-4 w-4 mx-auto" />
-              </button>
-              
-              <button
-                onClick={handleSignOut}
-                className="w-full p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                title="Выйти"
-              >
-                <LogOut className="h-4 w-4 mx-auto" />
-              </button>
-            </div>
-          )}
+        {/* Sidebar footer */}
+        <div className="border-t border-gray-200 dark:border-dark-700 p-2">
+          <button
+            onClick={handleLogout}
+            className={`
+              w-full flex items-center gap-3 px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors
+              ${isSidebarCollapsed && !isMobile ? 'justify-center' : ''}
+            `}
+          >
+            <LogOut className="h-5 w-5" />
+            {(!isSidebarCollapsed || isMobile) && (
+              <span className="font-medium">Выйти</span>
+            )}
+          </button>
         </div>
       </aside>
 
       {/* Main content */}
-      <main className={`
-        transition-all duration-300 ease-in-out min-h-screen
-        ${isMobile 
-          ? 'ml-0 pt-14' 
-          : `${isSidebarCollapsed ? 'ml-16' : 'ml-64'} pt-12`
-        }
-        p-3 md:p-4
-      `}>
-        <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm p-3 md:p-6 min-h-[calc(100vh-5rem)] md:min-h-[calc(100vh-4rem)]">
+      <main className="flex-1 flex flex-col min-h-screen">
+        {/* Top bar */}
+        <header className="h-12 bg-white dark:bg-dark-800 border-b border-gray-200 dark:border-dark-700 flex items-center justify-between px-4">
+          <div className="flex items-center gap-4">
+            {isMobile && (
+              <button
+                onClick={openMobileMenu}
+                className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+            )}
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              {location.pathname.replace('/admin/', '').replace('/admin', 'dashboard') || 'dashboard'}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700 relative">
+              <Bell className="h-5 w-5" />
+              <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></span>
+            </button>
+            <button className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700">
+              <Settings className="h-5 w-5" />
+            </button>
+          </div>
+        </header>
+
+        {/* Page content */}
+        <div className="flex-1 overflow-auto p-6"> 
           <Outlet />
         </div>
       </main>
-
-      {/* QR Scanner Modal */}
-      {showQRScanner && (
-        <QRScanner
-          isOpen={showQRScanner}
-          onClose={() => setShowQRScanner(false)}
-        />
-      )}
     </div>
   );
 };

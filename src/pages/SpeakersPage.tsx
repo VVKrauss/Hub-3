@@ -1,6 +1,6 @@
-// src/pages/SpeakersPage.tsx - Полный исправленный файл
+// src/pages/SpeakersPage.tsx - Часть 1 (строки 1-1000)
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Search, Filter, Grid, List, User, Users, Clock, Calendar, MapPin, ArrowRight, ChevronLeft, ChevronRight, X, ExternalLink, Globe, Linkedin, Twitter, Instagram, Facebook, Youtube, Github } from 'lucide-react';
+import { Search, Filter, Grid, List, User, Users, Clock, Calendar, MapPin, ArrowRight, ChevronLeft, ChevronRight, X, ExternalLink, Globe, Linkedin, Twitter, Instagram, Facebook, Youtube, Github, Heart } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
 import { supabase } from '../lib/supabase';
@@ -53,12 +53,54 @@ interface SpeakerFilters {
 // Константы
 const ITEMS_PER_PAGE = 12;
 const SLIDESHOW_SPEAKERS_COUNT = 5;
-const BIO_TRUNCATE_LENGTH = 200;
+const BIO_TRUNCATE_LENGTH = 110; // ИЗМЕНЕНО: было 200
 
 // Утилита для обрезки текста
 const truncateText = (text: string, maxLength: number): string => {
   if (!text || text.length <= maxLength) return text;
   return text.slice(0, maxLength).trim() + '...';
+};
+
+// ДОБАВЛЕНО: Компонент кнопки избранного
+interface FavoriteButtonProps {
+  speakerId: string;
+  className?: string;
+}
+
+const FavoriteButton: React.FC<FavoriteButtonProps> = ({ speakerId, className = '' }) => {
+  const [isFavorite, setIsFavorite] = useState(false);
+
+  useEffect(() => {
+    const favorites = JSON.parse(localStorage.getItem('favoriteSpeakers') || '[]');
+    setIsFavorite(favorites.includes(speakerId));
+  }, [speakerId]);
+
+  const toggleFavorite = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const favorites = JSON.parse(localStorage.getItem('favoriteSpeakers') || '[]');
+    let newFavorites;
+    
+    if (isFavorite) {
+      newFavorites = favorites.filter((id: string) => id !== speakerId);
+    } else {
+      newFavorites = [...favorites, speakerId];
+    }
+    
+    localStorage.setItem('favoriteSpeakers', JSON.stringify(newFavorites));
+    setIsFavorite(!isFavorite);
+  };
+
+  return (
+    <button 
+      onClick={toggleFavorite} 
+      className={`heart-button p-2 rounded-full transition-colors hover:bg-gray-100 dark:hover:bg-gray-700 ${className}`}
+      title={isFavorite ? 'Удалить из избранного' : 'Добавить в избранное'}
+    >
+      <Heart className={`h-4 w-4 transition-colors ${isFavorite ? 'fill-current text-red-500' : 'text-gray-400 hover:text-red-500'}`} />
+    </button>
+  );
 };
 
 // Утилиты для иконок социальных сетей
@@ -139,9 +181,9 @@ interface SocialLinksProps {
 
 const SocialLinks: React.FC<SocialLinksProps> = ({ socialLinks, maxLinks = 4, size = 'md' }) => {
   const iconSizes = {
-    sm: 'h-3 w-3',
-    md: 'h-4 w-4', 
-    lg: 'h-5 w-5'
+    sm: 'h-4 w-4',
+    md: 'h-5 w-5', 
+    lg: 'h-6 w-6'
   };
 
   const iconSize = iconSizes[size];
@@ -151,13 +193,17 @@ const SocialLinks: React.FC<SocialLinksProps> = ({ socialLinks, maxLinks = 4, si
   }
 
   const visibleLinks = socialLinks
-    .filter(link => link.is_public)
+    .filter(link => link.is_public && link.url)
     .sort((a, b) => {
       if (a.is_primary && !b.is_primary) return -1;
       if (!a.is_primary && b.is_primary) return 1;
       return (a.display_order || 0) - (b.display_order || 0);
     })
     .slice(0, maxLinks);
+
+  if (visibleLinks.length === 0) {
+    return null;
+  }
 
   return (
     <div className="flex items-center gap-2">
@@ -167,7 +213,7 @@ const SocialLinks: React.FC<SocialLinksProps> = ({ socialLinks, maxLinks = 4, si
           href={social.url}
           target="_blank"
           rel="noopener noreferrer"
-          className={`transition-colors ${getSocialColor(social.platform)}`}
+          className={`p-2 rounded-full bg-black/50 backdrop-blur-sm transition-all hover:bg-black/70 text-white hover:text-white`}
           title={social.display_name || social.platform}
           onClick={(e) => e.stopPropagation()}
         >
@@ -262,8 +308,9 @@ const filterSpeakers = (speakers: Speaker[], filters: SpeakerFilters): Speaker[]
     return true;
   });
 };
+// src/pages/SpeakersPage.tsx - Часть 2 (строки 1001-2000)
 
-// SpeakersSlideshow - Исправленное точно как в Events
+// Слайдер спикеров
 interface SpeakersHeroSliderProps {
   speakers: Speaker[];
   autoPlay?: boolean;
@@ -612,6 +659,9 @@ const HorizontalFilters: React.FC<HorizontalFiltersProps> = ({
         </div>
       </div>
 
+      
+      {/* // src/pages/SpeakersPage.tsx - Часть 3 (строки 2001-3000)
+ */}
       {mobileFiltersOpen && (
         <>
           <div 
@@ -729,7 +779,7 @@ const SpeakerCard: React.FC<SpeakerCardProps> = ({ speaker, viewMode }) => {
       >
         <div className="bg-white dark:bg-dark-800 rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 hover:scale-[1.01]">
           <div className="flex gap-4 p-6">
-            <div className="w-20 h-20 md:w-24 md:h-24 flex-shrink-0 overflow-hidden rounded-xl">
+            <div className="w-20 h-20 md:w-24 md:h-24 flex-shrink-0 overflow-hidden rounded-xl relative">
               {speaker.avatar_url ? (
                 <img
                   src={getSpeakerImage(speaker)}
@@ -739,6 +789,19 @@ const SpeakerCard: React.FC<SpeakerCardProps> = ({ speaker, viewMode }) => {
               ) : (
                 <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-900/30 dark:to-primary-800/30">
                   <User className="w-8 h-8 md:w-10 md:h-10 text-primary-400" />
+                </div>
+              )}
+
+              {/* Социальные ссылки в нижней части изображения для list view */}
+              {speaker.sh_speaker_social_links && speaker.sh_speaker_social_links.length > 0 && (
+                <div className="absolute bottom-1 left-1 right-1">
+                  <div className="flex items-center justify-center">
+                    <SocialLinks 
+                      socialLinks={speaker.sh_speaker_social_links} 
+                      maxLinks={3}
+                      size="sm"
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -769,14 +832,11 @@ const SpeakerCard: React.FC<SpeakerCardProps> = ({ speaker, viewMode }) => {
                       {truncateText(speaker.bio, BIO_TRUNCATE_LENGTH)}
                     </p>
                   )}
+                </div>
 
-                  {speaker.sh_speaker_social_links && speaker.sh_speaker_social_links.length > 0 && (
-                    <SocialLinks 
-                      socialLinks={speaker.sh_speaker_social_links} 
-                      maxLinks={4}
-                      size="sm"
-                    />
-                  )}
+                {/* Кнопка избранного для list view */}
+                <div className="flex-shrink-0 ml-4">
+                  <FavoriteButton speakerId={speaker.id} />
                 </div>
               </div>
             </div>
@@ -806,11 +866,29 @@ const SpeakerCard: React.FC<SpeakerCardProps> = ({ speaker, viewMode }) => {
             </div>
           )}
           
+          {/* Кнопка избранного в левом верхнем углу */}
+          <div className="absolute top-3 left-3">
+            <FavoriteButton speakerId={speaker.id} className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm" />
+          </div>
+          
           {speaker.is_featured && (
             <div className="absolute top-3 right-3">
               <span className="bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300 px-2 py-1 rounded-lg text-xs font-medium">
                 Рекомендуемый
               </span>
+            </div>
+          )}
+
+          {/* Социальные ссылки в нижней части изображения */}
+          {speaker.sh_speaker_social_links && speaker.sh_speaker_social_links.length > 0 && (
+            <div className="absolute bottom-3 left-3 right-3">
+              <div className="flex items-center justify-center">
+                <SocialLinks 
+                  socialLinks={speaker.sh_speaker_social_links} 
+                  maxLinks={4}
+                  size="sm"
+                />
+              </div>
             </div>
           )}
         </div>
@@ -837,14 +915,6 @@ const SpeakerCard: React.FC<SpeakerCardProps> = ({ speaker, viewMode }) => {
               <User className="h-4 w-4 mr-1" />
               Спикер
             </div>
-            
-            {speaker.sh_speaker_social_links && speaker.sh_speaker_social_links.length > 0 && (
-              <SocialLinks 
-                socialLinks={speaker.sh_speaker_social_links} 
-                maxLinks={3}
-                size="sm"
-              />
-            )}
           </div>
         </div>
       </div>
@@ -892,6 +962,8 @@ const ResponsiveSpeakersGrid: React.FC<{
   );
 };
 
+// src/pages/SpeakersPage.tsx - Часть 4 (строки 3001-конец файла)
+
 // Основной компонент страницы спикеров
 const SpeakersPage: React.FC = () => {
   const [allSpeakers, setAllSpeakers] = useState<Speaker[]>([]);
@@ -924,13 +996,15 @@ const SpeakersPage: React.FC = () => {
           *,
           sh_speaker_social_links (
             id,
+            speaker_id,
             platform,
             url,
             display_name,
             description,
             is_public,
             is_primary,
-            display_order
+            display_order,
+            created_at
           )
         `)
         .order('created_at', { ascending: false });
