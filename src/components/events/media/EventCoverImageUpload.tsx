@@ -29,6 +29,7 @@ import {
 
 const EventCoverImageUpload: React.FC<EventCoverImageUploadProps> = ({
   eventId,
+  eventSlug,
   initialCoverImage,
   onCoverImageChange,
   onCoverImageRemove,
@@ -123,7 +124,7 @@ const EventCoverImageUpload: React.FC<EventCoverImageUploadProps> = ({
 
   // Кадрирование изображения
   const handleCrop = useCallback(async () => {
-    if (!cropper || !selectedFile || !eventId) return;
+    if (!cropper || !selectedFile || !eventSlug) return;
 
     try {
       setCoverImage(prev => ({ ...prev, isUploading: true, uploadProgress: 0 }));
@@ -148,7 +149,7 @@ const EventCoverImageUpload: React.FC<EventCoverImageUploadProps> = ({
       // Загружаем изображения
       const { originalUrl, croppedUrl } = await uploadCoverImage(
         selectedFile,
-        eventId,
+        eventSlug,
         croppedBlob,
         (progress) => {
           setCoverImage(prev => ({ ...prev, uploadProgress: progress }));
@@ -185,7 +186,7 @@ const EventCoverImageUpload: React.FC<EventCoverImageUploadProps> = ({
       }));
       toast.error('Ошибка при загрузке изображения');
     }
-  }, [cropper, selectedFile, eventId, finalConfig, coverImage, onCoverImageChange]);
+  }, [cropper, selectedFile, eventSlug, finalConfig, coverImage, onCoverImageChange]);
 
   // Отмена кадрирования
   const cancelCrop = useCallback(() => {
