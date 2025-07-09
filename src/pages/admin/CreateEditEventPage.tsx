@@ -778,4 +778,392 @@ const CreateEditEventPage: React.FC = () => {
       </div>
     )
   );
-  
+  // Часть 4: Рендер основного интерфейса
+
+  return (
+    <div className="max-w-5xl mx-auto px-4 py-6">
+      {/* Заголовок */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate('/admin/events')}
+            className="p-2 hover:bg-gray-100 dark:hover:bg-dark-700 rounded-lg transition-colors"
+          >
+            <ArrowLeft className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+          </button>
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
+              {id ? 'Редактирование мероприятия' : 'Создание мероприятия'}
+            </h1>
+            {event.title && (
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                {event.title}
+              </p>
+            )}
+          </div>
+        </div>
+        
+        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          {id && (
+            <button
+              type="button"
+              onClick={() => setShowDeleteConfirm(true)}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center justify-center gap-2 transition-colors"
+            >
+              <Trash2 className="h-5 w-5" />
+              Удалить
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={saving || isGeneratingSlug}
+            className="px-6 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white rounded-lg flex items-center justify-center gap-2 transition-colors"
+          >
+            {saving ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Сохранение...
+              </>
+            ) : (
+              <>
+                <Save className="h-5 w-5" />
+                {id ? 'Обновить' : 'Создать'}
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Навигация по табам */}
+      <div className="border-b border-gray-200 dark:border-dark-700 mb-6">
+        <nav className="flex space-x-8 overflow-x-auto">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as ActiveTab)}
+              className={`flex items-center gap-2 px-1 py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                activeTab === tab.id
+                  ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+              }`}
+            >
+              <tab.icon className="h-4 w-4" />
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {/* Содержимое табов */}
+      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-dark-700">
+        {/* Основная информация */}
+        {activeTab === 'basic' && (
+          <div className="p-6 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Заголовок */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Заголовок мероприятия *
+                </label>
+                <input
+                  type="text"
+                  name="title"
+                  value={event.title}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white"
+                  placeholder="Введите заголовок мероприятия"
+                  required
+                />
+              </div>
+
+              {/* Slug */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  URL (slug) *
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    name="slug"
+                    value={event.slug}
+                    onChange={handleInputChange}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white ${
+                      slugError 
+                        ? 'border-red-300 dark:border-red-600' 
+                        : 'border-gray-300 dark:border-dark-600'
+                    }`}
+                    placeholder="url-dlya-meropriyatiya"
+                    pattern="^[a-z0-9-]+$"
+                    required
+                  />
+                  {isGeneratingSlug && (
+                    <div className="absolute right-3 top-2.5">
+                      <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                    </div>
+                  )}
+                </div>
+                {slugError && (
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                    {slugError}
+                  </p>
+                )}
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  URL мероприятия: /events/{event.slug}
+                </p>
+              </div>
+
+              {/* Краткое описание */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Краткое описание
+                </label>
+                <textarea
+                  name="short_description"
+                  value={event.short_description}
+                  onChange={handleInputChange}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white"
+                  placeholder="Краткое описание мероприятия для анонсов и списков"
+                />
+              </div>
+
+              {/* Тип мероприятия */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Тип мероприятия *
+                </label>
+                <select
+                  name="event_type"
+                  value={event.event_type}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white"
+                  required
+                >
+                  {EVENT_TYPES.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Статус */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Статус *
+                </label>
+                <select
+                  name="status"
+                  value={event.status}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white"
+                  required
+                >
+                  {EVENT_STATUSES.map((status) => (
+                    <option key={status.value} value={status.value}>
+                      {status.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Возрастная категория */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Возрастная категория *
+                </label>
+                <select
+                  name="age_category"
+                  value={event.age_category}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white"
+                  required
+                >
+                  {AGE_CATEGORIES.map((category) => (
+                    <option key={category.value} value={category.value}>
+                      {category.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Язык */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Язык мероприятия *
+                </label>
+                <select
+                  name="language_code"
+                  value={event.language_code}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white"
+                  required
+                >
+                  {LANGUAGES.map((lang) => (
+                    <option key={lang.value} value={lang.value}>
+                      {lang.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Теги */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Теги
+                </label>
+                <input
+                  type="text"
+                  name="tags"
+                  value={event.tags?.join(', ') || ''}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white"
+                  placeholder="тег1, тег2, тег3"
+                />
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  Разделите теги запятыми
+                </p>
+              </div>
+
+              {/* Переключатели */}
+              <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    name="is_featured"
+                    checked={event.is_featured}
+                    onChange={handleInputChange}
+                    className="rounded border-gray-300 dark:border-dark-600 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">
+                    Рекомендуемое
+                  </span>
+                </label>
+
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    name="is_public"
+                    checked={event.is_public}
+                    onChange={handleInputChange}
+                    className="rounded border-gray-300 dark:border-dark-600 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">
+                    Публичное
+                  </span>
+                </label>
+
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    name="show_attendees_count"
+                    checked={event.show_attendees_count}
+                    onChange={handleInputChange}
+                    className="rounded border-gray-300 dark:border-dark-600 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">
+                    Показывать количество участников
+                  </span>
+                </label>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Остальные табы будут в следующих частях */}
+        {/* Детали события */}
+        {activeTab === 'details' && (
+          <div className="p-6 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Дата и время начала */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Дата и время начала *
+                </label>
+                <input
+                  type="datetime-local"
+                  name="start_at"
+                  value={event.start_at ? formatDateTimeForInput(event.start_at) : ''}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white"
+                  required
+                />
+              </div>
+
+              {/* Дата и время окончания */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Дата и время окончания *
+                </label>
+                <input
+                  type="datetime-local"
+                  name="end_at"
+                  value={event.end_at ? formatDateTimeForInput(event.end_at) : ''}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white"
+                  required
+                />
+              </div>
+
+              {/* Часовой пояс */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Часовой пояс *
+                </label>
+                <select
+                  name="timezone"
+                  value={event.timezone}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white"
+                  required
+                >
+                  {TIMEZONES.map((tz) => (
+                    <option key={tz.value} value={tz.value}>
+                      {tz.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Ссылка на видео */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Ссылка на видео
+                </label>
+                <input
+                  type="url"
+                  name="video_url"
+                  value={event.video_url}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white"
+                  placeholder="https://youtube.com/watch?v=..."
+                />
+              </div>
+
+              {/* Полное описание */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Полное описание
+                </label>
+                <textarea
+                  name="description"
+                  value={event.description}
+                  onChange={handleInputChange}
+                  rows={6}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white"
+                  placeholder="Подробное описание мероприятия"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Продолжение в следующих частях... */}
+      </div>
+
+      {/* Модальное окно подтверждения удаления */}
+      <DeleteConfirmModal />
+    </div>
+  );
+};
