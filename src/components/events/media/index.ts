@@ -1,6 +1,9 @@
 // src/components/events/media/index.ts
 // Главный файл экспорта для медиа-компонентов событий
 
+// Explicit imports to avoid module resolution issues
+import { validateImageFile as _validateImageFile } from './mediaUtils';
+
 // Основные компоненты
 export { default as EventMediaSection } from './EventMediaSection';
 export { default as EventCoverImageUpload } from './EventCoverImageUpload';
@@ -41,7 +44,6 @@ export {
 
 // Утилиты для работы с медиафайлами
 export {
-  validateImageFile,
   validateMultipleFiles,
   uploadCoverImage,
   uploadGalleryImage,
@@ -58,6 +60,9 @@ export {
   getFileTypeLabel
 } from './mediaUtils';
 
+// Explicit export to ensure proper module loading
+export const validateImageFile = _validateImageFile;
+
 // Хуки для работы с медиафайлами (если потребуются в будущем)
 // export { useMediaUpload } from './useMediaUpload';
 // export { useImageCropper } from './useImageCropper';
@@ -65,7 +70,7 @@ export {
 
 // Экспорт для быстрого доступа к основным функциям
 export const MediaUtils = {
-  validateImageFile,
+  validateImageFile: _validateImageFile,
   validateMultipleFiles,
   uploadCoverImage,
   uploadGalleryImage,
