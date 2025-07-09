@@ -35,6 +35,9 @@ export const EventMediaSection: React.FC<EventMediaSectionProps> = ({
   const [videoUrl, setVideoUrl] = useState(initialMediaData.video_url || '');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   
+  const coverFileInputRef = useRef<HTMLInputElement>(null);
+  const galleryFileInputRef = useRef<HTMLInputElement>(null);
+
   // Alternative upload method - direct to public bucket
   const uploadImageAlternative = async (file: File): Promise<string> => {
     try {
