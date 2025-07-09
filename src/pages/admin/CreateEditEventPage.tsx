@@ -373,7 +373,7 @@ const CreateEditEventPage: React.FC = () => {
     
     setEvent(prev => ({
       ...prev,
-      cover_image_url: newMediaData.coverImage.croppedUrl || '',
+      cover_image_url: newMediaData.coverImage.url || '',                    // ✅ ИСПРАВЛЕНО: заменил croppedUrl на url
       cover_image_original_url: newMediaData.coverImage.originalUrl || '',
       gallery_images: newMediaData.galleryImages.map(img => img.url)
     }));
