@@ -1,3 +1,6 @@
+// src/utils/dateTimeUtils.ts
+// Полный файл с функциями для работы с датой и временем
+
 import { format, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { formatInTimeZone, utcToZonedTime, zonedTimeToUtc } from 'date-fns-tz';
@@ -141,7 +144,7 @@ export const isPastEvent = (eventDate: string, timezone: string = BELGRADE_TIMEZ
  * @param date Date object or ISO string
  * @returns Date object in Belgrade timezone
  */
-const convertToBedradeTimezone = (date: Date | string): Date => {
+const convertToBelgradeTimezone = (date: Date | string): Date => {
   try {
     const dateObj = typeof date === 'string' ? parseISO(date) : date;
     if (isNaN(dateObj.getTime())) {
@@ -326,7 +329,6 @@ const formatTimeRangeSafe = (
   }
 };
 
-
 /**
  * Formats a date for HTML datetime-local input
  * @param dateString ISO date string
@@ -375,4 +377,16 @@ export const formatDateTimeForDisplay = (dateString: string): string => {
     console.error('formatDateTimeForDisplay: Error formatting date:', dateString, error);
     return 'Ошибка форматирования';
   }
+};
+
+// Экспорт всех функций (включая приватные для использования в других утилитах)
+export {
+  BELGRADE_TIMEZONE,
+  convertToBelgradeTimezone,
+  convertFromBelgradeToUTC,
+  createBelgradeDate,
+  parseTimeWithBelgradeTimezone,
+  isValidTimeFormat,
+  formatDateTimeForDatabase,
+  formatTimeRangeSafe
 };
