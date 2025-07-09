@@ -1,4 +1,4 @@
-try {// src/pages/SpeakerProfilePage.tsx - ОБНОВЛЕННАЯ ВЕРСИЯ
+// src/pages/SpeakerProfilePage.tsx - ОБНОВЛЕННАЯ ВЕРСИЯ
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
