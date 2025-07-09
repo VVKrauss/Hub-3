@@ -36,4 +36,4 @@ export const EventMediaSection = ({ eventId, eventSlug, initialMediaData, onMedi
       </div>
     </div>
   );
-};
+};   
