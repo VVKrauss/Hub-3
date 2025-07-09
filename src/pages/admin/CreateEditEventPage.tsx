@@ -1553,6 +1553,9 @@ const CreateEditEventPage: React.FC = () => {
         </div>
       </div>
 
+
+      
+
       <DeleteConfirmModal />
     </div>
   );
