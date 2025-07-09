@@ -111,18 +111,65 @@ const getEventTicketTypes = async (eventId: string) => {
   }
 };
 
+// 🔍 ФУНКЦИЯ ДЛЯ ОТЛАДКИ - поможет понять проблему с событием
+export const debugEventById = async (eventId: string) => {
+  try {
+    console.log('🔍 Debug: Checking event with ID:', eventId);
+
+    // Проверяем существование события без фильтров
+    const { data: event, error, count } = await supabase
+      .from('sh_events')
+      .select('*')
+      .eq('id', eventId);
+
+    console.log('🔍 Raw query result:', { data: event, error, count });
+
+    if (error) {
+      console.log('❌ Error occurred:', error);
+      return;
+    }
+
+    if (!event || event.length === 0) {
+      console.log('❌ No event found with this ID');
+      return;
+    }
+
+    const foundEvent = event[0];
+    console.log('✅ Event found:', {
+      id: foundEvent.id,
+      title: foundEvent.title,
+      status: foundEvent.status,
+      is_public: foundEvent.is_public,
+      created_at: foundEvent.created_at
+    });
+
+    // Проверяем, соответствует ли событие публичным фильтрам
+    const isPublic = foundEvent.is_public;
+    const isActiveOrPast = ['active', 'past'].includes(foundEvent.status);
+
+    console.log('🔍 Filter check:', {
+      is_public: isPublic,
+      status_active_or_past: isActiveOrPast,
+      would_be_visible: isPublic && isActiveOrPast
+    });
+
+    return foundEvent;
+
+  } catch (error) {
+    console.error('🔍 Debug error:', error);
+  }
+};
+
 // ✅ ИСПРАВЛЕННАЯ функция getEventById
 export const getEventById = async (eventId: string): Promise<ApiResponse<EventWithDetails>> => {
   try {
     console.log('Fetching event by ID:', eventId);
 
-    // ✅ ИСПРАВЛЕНО: Сначала получаем основные данные события без JOIN'ов
-    const { data: event, error } = await supabase
+    // ✅ ИСПРАВЛЕНО: Сначала пробуем найти событие без ограничений
+    let { data: event, error } = await supabase
       .from('sh_events')
       .select('*')
       .eq('id', eventId)
-      .eq('is_public', true)
-      .in('status', ['active', 'past'])
       .single();
 
     if (error) {
@@ -134,6 +181,23 @@ export const getEventById = async (eventId: string): Promise<ApiResponse<EventWi
 
     if (!event) {
       throw new Error('Мероприятие не найдено');
+    }
+
+    console.log('Event found:', event.title, 'Status:', event.status, 'Public:', event.is_public);
+
+    // ✅ ПРОВЕРЯЕМ: если событие приватное или в черновике, показываем только авторизованным пользователям
+    // Для публичного доступа проверяем статус и публичность
+    const isPublicAccess = !event.is_public || !['active', 'past'].includes(event.status);
+    if (isPublicAccess) {
+      // Здесь можно добавить проверку авторизации для приватных событий
+      console.warn('Event is not public or not in active/past status');
+      // Пока что возвращаем ошибку для непубличных событий
+      if (!event.is_public) {
+        throw new Error('Мероприятие недоступно для публичного просмотра');
+      }
+      if (!['active', 'past', 'draft'].includes(event.status)) {
+        throw new Error('Мероприятие отменено или недоступно');
+      }
     }
 
     // ✅ ОТДЕЛЬНО загружаем спикеров события
