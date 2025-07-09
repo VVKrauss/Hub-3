@@ -252,3 +252,202 @@ const EventCoverImageUpload: React.FC<EventCoverImageUploadProps> = ({
             <div className="space-y-4">
               <div className="h-96 w-full relative rounded-lg overflow-hidden">
                 <Cropper
+                  src={URL.createObjectURL(selectedFile)}
+                  style={{ height: '100%', width: '100%' }}
+                  aspectRatio={3} // 3:1 ratio
+                  guides={true}
+                  viewMode={1}
+                  dragMode="move"
+                  scalable={true}
+                  cropBoxMovable={true}
+                  cropBoxResizable={true}
+                  onInitialized={(instance) => setCropper(instance)}
+                  className="max-w-full"
+                />
+              </div>
+
+              {/* Прогресс загрузки */}
+              {coverImage.isUploading && (
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Загрузка изображения...
+                    </span>
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {Math.round(coverImage.uploadProgress || 0)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-dark-700 rounded-full h-2">
+                    <div
+                      className="bg-primary-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${coverImage.uploadProgress || 0}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Кнопки действий */}
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={cancelCrop}
+                  disabled={coverImage.isUploading}
+                  className="px-4 py-2 border border-gray-300 dark:border-dark-600 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors disabled:opacity-50"
+                >
+                  Отмена
+                </button>
+                <button
+                  onClick={handleCrop}
+                  disabled={coverImage.isUploading || !eventId}
+                  className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {coverImage.isUploading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Загрузка...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="h-4 w-4" />
+                      Сохранить
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Основной блок загрузки */}
+      {coverImage.croppedUrl ? (
+        /* Превью загруженного изображения */
+        <div className="relative group">
+          <div className="relative overflow-hidden rounded-lg">
+            <img
+              src={coverImage.croppedUrl}
+              alt="Фоновое изображение мероприятия"
+              className="w-full h-48 object-cover"
+            />
+            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+            
+            {/* Кнопки действий */}
+            <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+              <button
+                onClick={openFileDialog}
+                disabled={disabled}
+                className="p-2 bg-white/90 hover:bg-white text-gray-800 rounded-full shadow-lg transition-colors disabled:opacity-50"
+                title="Заменить изображение"
+              >
+                <Edit className="h-4 w-4" />
+              </button>
+              <button
+                onClick={handleRemoveImage}
+                disabled={disabled}
+                className="p-2 bg-red-600/90 hover:bg-red-600 text-white rounded-full shadow-lg transition-colors disabled:opacity-50"
+                title="Удалить изображение"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Информация об изображении */}
+          <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+            <p>Фоновое изображение (соотношение 3:1)</p>
+            <p className="text-xs">Размер: {finalConfig.coverImageSize.width}x{finalConfig.coverImageSize.height}px</p>
+          </div>
+        </div>
+      ) : (
+        /* Зона загрузки */
+        <div
+          className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-all duration-200 ${
+            isDragging
+              ? 'border-primary-400 bg-primary-50 dark:bg-primary-900/20'
+              : 'border-gray-300 dark:border-dark-600 hover:border-gray-400 dark:hover:border-dark-500'
+          } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+          onDragOver={handleDragOver}
+          onDragEnter={handleDragEnterEvent}
+          onDragLeave={handleDragLeaveEvent}
+          onDrop={handleDropEvent}
+          onClick={openFileDialog}
+        >
+          <div className="flex flex-col items-center">
+            <div className="mb-4 p-3 bg-gray-100 dark:bg-dark-700 rounded-full">
+              <ImageIcon className="h-8 w-8 text-gray-500 dark:text-gray-400" />
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-lg font-medium text-gray-900 dark:text-white">
+                {isDragging ? 'Отпустите для загрузки' : 'Загрузите фоновое изображение'}
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Перетащите файл сюда или нажмите для выбора
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-500">
+                Соотношение сторон 3:1 • Максимум {formatFileSize(finalConfig.maxFileSize)}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-500">
+                Поддерживаемые форматы: JPEG, PNG, GIF, WebP
+              </p>
+            </div>
+
+            {!disabled && (
+              <button
+                type="button"
+                className="mt-4 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openFileDialog();
+                }}
+              >
+                Выбрать файл
+              </button>
+            )}
+          </div>
+
+          {/* Индикатор драга */}
+          {isDragging && (
+            <div className="absolute inset-0 flex items-center justify-center bg-primary-50/90 dark:bg-primary-900/30 rounded-lg">
+              <div className="text-primary-600 dark:text-primary-400 font-medium">
+                Отпустите для загрузки
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Ошибки валидации */}
+      {validationErrors.length > 0 && (
+        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-red-800 dark:text-red-200">
+                Ошибка валидации файла:
+              </p>
+              <ul className="text-sm text-red-700 dark:text-red-300 space-y-1">
+                {validationErrors.map((error, index) => (
+                  <li key={index}>• {error}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Ошибка загрузки */}
+      {coverImage.error && (
+        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+            <p className="text-sm text-red-800 dark:text-red-200">
+              {coverImage.error}
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default EventCoverImageUpload;
