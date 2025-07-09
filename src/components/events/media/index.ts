@@ -37,7 +37,7 @@ export {
   createImagePreview,
   getImageDimensions,
   generateImageId
-} from './MediaUploadTypes';
+} from './MediaUploadTypes';  
 
 // Утилиты для работы с медиафайлами
 export {
