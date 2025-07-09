@@ -1695,7 +1695,7 @@ const CreateEditEventPage: React.FC = () => {
             </button>
           </div>
         </div>
-      </div>
+   
 
       {/* Модальное окно подтверждения удаления */}
       <DeleteConfirmModal />
