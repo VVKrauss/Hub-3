@@ -18,6 +18,7 @@ import EventGalleryUpload from './EventGalleryUpload';
 
 const EventMediaSection: React.FC<EventMediaSectionProps> = ({
   eventId,
+  eventSlug,
   initialMediaData,
   onMediaDataChange,
   config = {},
@@ -153,6 +154,7 @@ const EventMediaSection: React.FC<EventMediaSectionProps> = ({
               <li>• Галерея: до {finalConfig.maxGalleryImages} изображений, минимум {finalConfig.minImageSize.width}x{finalConfig.minImageSize.height}px</li>
               <li>• Максимальный размер файла: {Math.round(finalConfig.maxFileSize / 1024 / 1024)} МБ</li>
               <li>• Поддерживаемые форматы: JPEG, PNG, GIF, WebP</li>
+              <li>• Структура хранения: /events/event_[slug]/cover/ и /events/event_[slug]/media/</li>
             </ul>
           </div>
         </div>
@@ -175,6 +177,7 @@ const EventMediaSection: React.FC<EventMediaSectionProps> = ({
         <div className="pl-7">
           <EventCoverImageUpload
             eventId={eventId}
+            eventSlug={eventSlug}
             initialCoverImage={mediaData.coverImage}
             onCoverImageChange={handleCoverImageChange}
             onCoverImageRemove={handleCoverImageRemove}
@@ -204,6 +207,7 @@ const EventMediaSection: React.FC<EventMediaSectionProps> = ({
         <div className="pl-7">
           <EventGalleryUpload
             eventId={eventId}
+            eventSlug={eventSlug}
             initialGalleryImages={mediaData.galleryImages}
             onGalleryImagesChange={handleGalleryImagesChange}
             onImageRemove={handleGalleryImageRemove}
