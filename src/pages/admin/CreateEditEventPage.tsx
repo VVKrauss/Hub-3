@@ -1,6 +1,5 @@
 // src/pages/admin/CreateEditEventPage.tsx
 // Полный файл для создания и редактирования мероприятий с поддержкой медиафайлов
-// Часть 1: Импорты и типы
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -21,15 +20,10 @@ import {
   ArrowLeft
 } from 'lucide-react';
 
-// Импорты для работы с данными
 import { supabase } from '../../lib/supabase';
 import { formatDateTimeForInput } from '../../utils/dateTimeUtils';
-
-// Импорт медиа-компонентов
 import { EventMediaSection } from '../../components/events/media';
 import type { EventMediaData } from '../../components/events/media';
-
-// Типы для событий
 import type { 
   ShEvent, 
   ShEventType, 
@@ -38,13 +32,9 @@ import type {
   ShPaymentType 
 } from '../../types/database';
 
-// Типы для табов
 type ActiveTab = 'basic' | 'details' | 'location' | 'media' | 'registration' | 'program' | 'seo';
-
-// Тип для режима локации
 type LocationType = 'physical' | 'online' | 'hybrid';
 
-// Интерфейс для элемента программы фестиваля
 interface FestivalProgramItem {
   title: string;
   description: string;
@@ -54,17 +44,14 @@ interface FestivalProgramItem {
   lecturer_id: string;
 }
 
-// Расширенный интерфейс события для формы
 interface EventFormData extends Omit<ShEvent, 'id' | 'created_at' | 'updated_at'> {
   id?: string;
-  // Дополнительные поля для совместимости
   speakers?: string[];
   festival_program?: FestivalProgramItem[];
   hide_speakers_gallery?: boolean;
   photo_gallery?: string;
 }
 
-// Конфигурация для типов событий
 const EVENT_TYPES: { value: ShEventType; label: string }[] = [
   { value: 'lecture', label: 'Лекция' },
   { value: 'workshop', label: 'Мастер-класс' },
@@ -82,7 +69,6 @@ const EVENT_TYPES: { value: ShEventType; label: string }[] = [
   { value: 'other', label: 'Другое' }
 ];
 
-// Статусы событий
 const EVENT_STATUSES: { value: ShEventStatus; label: string }[] = [
   { value: 'draft', label: 'Черновик' },
   { value: 'active', label: 'Активное' },
@@ -90,7 +76,6 @@ const EVENT_STATUSES: { value: ShEventStatus; label: string }[] = [
   { value: 'cancelled', label: 'Отменено' }
 ];
 
-// Возрастные категории
 const AGE_CATEGORIES: { value: ShAgeCategory; label: string }[] = [
   { value: '0+', label: '0+' },
   { value: '6+', label: '6+' },
@@ -99,21 +84,18 @@ const AGE_CATEGORIES: { value: ShAgeCategory; label: string }[] = [
   { value: '18+', label: '18+' }
 ];
 
-// Типы оплаты
 const PAYMENT_TYPES: { value: ShPaymentType; label: string }[] = [
   { value: 'free', label: 'Бесплатно' },
   { value: 'paid', label: 'Платно' },
   { value: 'donation', label: 'Донейшн' }
 ];
 
-// Типы локации
 const LOCATION_TYPES: { value: LocationType; label: string }[] = [
   { value: 'physical', label: 'Физическое место' },
   { value: 'online', label: 'Онлайн' },
   { value: 'hybrid', label: 'Гибридное' }
 ];
 
-// Валюты
 const CURRENCIES = [
   { value: 'RSD', label: 'RSD (Сербский динар)' },
   { value: 'EUR', label: 'EUR (Евро)' },
@@ -121,7 +103,6 @@ const CURRENCIES = [
   { value: 'RUB', label: 'RUB (Российский рубль)' }
 ];
 
-// Языки
 const LANGUAGES = [
   { value: 'sr', label: 'Сербский' },
   { value: 'ru', label: 'Русский' },
@@ -130,7 +111,6 @@ const LANGUAGES = [
   { value: 'fr', label: 'Французский' }
 ];
 
-// Часовые пояса
 const TIMEZONES = [
   { value: 'Europe/Belgrade', label: 'Белград (CET)' },
   { value: 'Europe/Moscow', label: 'Москва (MSK)' },
@@ -139,7 +119,6 @@ const TIMEZONES = [
   { value: 'UTC', label: 'UTC' }
 ];
 
-// Утилиты для работы со slug
 const generateSlug = (title: string): string => {
   const cyrillicToLatin = {
     'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e',
@@ -152,13 +131,12 @@ const generateSlug = (title: string): string => {
   return title
     .toLowerCase()
     .replace(/[а-яё]/g, (char) => cyrillicToLatin[char] || char)
-    .replace(/[^a-z0-9\s-]/g, '') // Убираем специальные символы
-    .replace(/\s+/g, '-') // Заменяем пробелы на дефисы
-    .replace(/-+/g, '-') // Убираем повторяющиеся дефисы
-    .replace(/^-|-$/g, ''); // Убираем дефисы в начале и конце
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
 };
 
-// Проверка уникальности slug
 const checkSlugUniqueness = async (slug: string, currentEventId?: string): Promise<boolean> => {
   if (!slug) return false;
   
@@ -186,7 +164,6 @@ const checkSlugUniqueness = async (slug: string, currentEventId?: string): Promi
   }
 };
 
-// Генерация уникального slug
 const generateUniqueSlug = async (title: string, currentEventId?: string): Promise<string> => {
   const baseSlug = generateSlug(title);
   if (!baseSlug) return '';
@@ -198,7 +175,6 @@ const generateUniqueSlug = async (title: string, currentEventId?: string): Promi
     slug = `${baseSlug}-${counter}`;
     counter++;
     
-    // Защита от бесконечного цикла
     if (counter > 100) {
       const timestamp = Date.now().toString().slice(-6);
       slug = `${baseSlug}-${timestamp}`;
@@ -209,20 +185,16 @@ const generateUniqueSlug = async (title: string, currentEventId?: string): Promi
   return slug;
 };
 
-// Часть 2: Основной компонент и состояние
-
 const CreateEditEventPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   
-  // Основные состояния
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>('basic');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [speakers, setSpeakers] = useState([]);
   
-  // Начальное состояние события
   const [event, setEvent] = useState<EventFormData>({
     slug: '',
     title: '',
@@ -262,28 +234,23 @@ const CreateEditEventPage: React.FC = () => {
     allow_waitlist: false,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
-    // Дополнительные поля
     speakers: [],
     festival_program: [],
     hide_speakers_gallery: false,
     photo_gallery: ''
   });
 
-  // Состояние для медиафайлов
   const [mediaData, setMediaData] = useState<EventMediaData>({
     coverImage: {},
     galleryImages: []
   });
 
-  // Состояние для генерации slug
   const [isGeneratingSlug, setIsGeneratingSlug] = useState(false);
   const [slugError, setSlugError] = useState<string>('');
 
-  // Автоматическая генерация slug при изменении заголовка
   const handleTitleChange = useCallback(async (newTitle: string) => {
     setEvent(prev => ({ ...prev, title: newTitle }));
 
-    // Генерируем slug только для новых событий или если slug пустой
     if ((!id || !event.slug) && newTitle.trim()) {
       setIsGeneratingSlug(true);
       setSlugError('');
@@ -302,13 +269,11 @@ const CreateEditEventPage: React.FC = () => {
     }
   }, [id, event.slug]);
 
-  // Обработка изменения slug вручную
   const handleSlugChange = useCallback(async (newSlug: string) => {
     setEvent(prev => ({ ...prev, slug: newSlug }));
     setSlugError('');
 
     if (newSlug.trim()) {
-      // Проверяем уникальность с задержкой
       const timeoutId = setTimeout(async () => {
         const isUnique = await checkSlugUniqueness(newSlug, id);
         if (!isUnique) {
@@ -320,7 +285,6 @@ const CreateEditEventPage: React.FC = () => {
     }
   }, [id]);
 
-  // Инициализация медиафайлов при загрузке события
   const initializeMediaData = useCallback((loadedEvent: EventFormData) => {
     const initialMediaData: EventMediaData = {
       coverImage: {
@@ -335,7 +299,6 @@ const CreateEditEventPage: React.FC = () => {
     setMediaData(initialMediaData);
   }, []);
 
-  // Загрузка события
   const loadEvent = useCallback(async (eventId: string) => {
     try {
       setLoading(true);
@@ -360,10 +323,8 @@ const CreateEditEventPage: React.FC = () => {
       if (error) throw error;
       if (!data) throw new Error('Мероприятие не найдено');
 
-      // Преобразуем данные для формы
       const formData: EventFormData = {
         ...data,
-        // Преобразуем массивы и JSON поля
         tags: data.tags || [],
         meta_keywords: data.meta_keywords || [],
         gallery_images: data.gallery_images || [],
@@ -376,8 +337,6 @@ const CreateEditEventPage: React.FC = () => {
       setEvent(formData);
       initializeMediaData(formData);
       
-      console.log('Event loaded successfully:', formData);
-      
     } catch (error) {
       console.error('Error loading event:', error);
       toast.error('Ошибка при загрузке мероприятия');
@@ -387,7 +346,6 @@ const CreateEditEventPage: React.FC = () => {
     }
   }, [initializeMediaData, navigate]);
 
-  // Загрузка спикеров
   const loadSpeakers = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -403,7 +361,6 @@ const CreateEditEventPage: React.FC = () => {
     }
   }, []);
 
-  // Эффекты для загрузки данных
   useEffect(() => {
     if (id) {
       loadEvent(id);
@@ -411,11 +368,9 @@ const CreateEditEventPage: React.FC = () => {
     loadSpeakers();
   }, [id, loadEvent, loadSpeakers]);
 
-  // Обработчик изменений медиафайлов
   const handleMediaDataChange = useCallback((newMediaData: EventMediaData) => {
     setMediaData(newMediaData);
     
-    // Обновляем основные данные события
     setEvent(prev => ({
       ...prev,
       cover_image_url: newMediaData.coverImage.croppedUrl || '',
@@ -424,7 +379,6 @@ const CreateEditEventPage: React.FC = () => {
     }));
   }, []);
 
-  // Обработчик изменений основных полей
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     
@@ -440,13 +394,11 @@ const CreateEditEventPage: React.FC = () => {
 
     let processedValue: any = value;
     
-    // Специальная обработка для разных типов полей
     if (type === 'checkbox') {
       processedValue = (e.target as HTMLInputElement).checked;
     } else if (type === 'number') {
       processedValue = value === '' ? undefined : Number(value);
     } else if (name === 'tags' || name === 'meta_keywords') {
-      // Обработка тегов (разделенных запятыми)
       processedValue = value.split(',').map(tag => tag.trim()).filter(Boolean);
     }
 
@@ -456,7 +408,6 @@ const CreateEditEventPage: React.FC = () => {
     }));
   }, [handleTitleChange, handleSlugChange]);
 
-  // Обработчик для программы фестиваля
   const handleFestivalProgramChange = useCallback((newProgram: FestivalProgramItem[]) => {
     setEvent(prev => ({
       ...prev,
@@ -464,17 +415,14 @@ const CreateEditEventPage: React.FC = () => {
     }));
   }, []);
 
-  // Валидация формы
   const validateForm = useCallback((): boolean => {
     const errors: string[] = [];
 
-    // Обязательные поля
     if (!event.title.trim()) errors.push('Заголовок обязателен');
     if (!event.slug.trim()) errors.push('URL (slug) обязателен');
     if (!event.start_at) errors.push('Дата и время начала обязательны');
     if (!event.end_at) errors.push('Дата и время окончания обязательны');
 
-    // Валидация slug
     if (event.slug && !/^[a-z0-9-]+$/.test(event.slug)) {
       errors.push('URL может содержать только строчные буквы, цифры и дефисы');
     }
@@ -483,7 +431,6 @@ const CreateEditEventPage: React.FC = () => {
       errors.push(slugError);
     }
 
-    // Валидация дат
     if (event.start_at && event.end_at) {
       const startDate = new Date(event.start_at);
       const endDate = new Date(event.end_at);
@@ -492,7 +439,6 @@ const CreateEditEventPage: React.FC = () => {
       }
     }
 
-    // Валидация локации
     if (event.location_type === 'physical' && !event.venue_name?.trim()) {
       errors.push('Для физического мероприятия требуется указать место проведения');
     }
@@ -501,17 +447,14 @@ const CreateEditEventPage: React.FC = () => {
       errors.push('Для онлайн мероприятия требуется указать ссылку на встречу');
     }
 
-    // Валидация оплаты
     if (event.payment_type === 'paid' && (!event.base_price || event.base_price <= 0)) {
       errors.push('Для платного мероприятия требуется указать цену');
     }
 
-    // Валидация медиафайлов
     if (!mediaData.coverImage.croppedUrl && !mediaData.coverImage.originalUrl) {
       errors.push('Фоновое изображение обязательно');
     }
 
-    // Валидация регистрации
     if (event.registration_enabled && event.max_attendees && event.max_attendees < 1) {
       errors.push('Максимальное количество участников должно быть больше 0');
     }
@@ -524,59 +467,33 @@ const CreateEditEventPage: React.FC = () => {
     return true;
   }, [event, mediaData, slugError]);
 
-  // Показать загрузку
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
-  }
-  // Часть 3: Обработка сохранения и удаления
-
-  // Функция сохранения события
   const handleSubmit = useCallback(async () => {
     if (!validateForm()) return;
 
     try {
       setSaving(true);
 
-      // Финальная проверка уникальности slug
       if (!await checkSlugUniqueness(event.slug, id)) {
         toast.error('URL уже используется другим мероприятием');
         return;
       }
 
-      // Подготовка данных для сохранения
       const eventData = {
         ...event,
-        // Медиафайлы
         cover_image_url: mediaData.coverImage.croppedUrl || null,
         cover_image_original_url: mediaData.coverImage.originalUrl || null,
         gallery_images: mediaData.galleryImages.map(img => img.url),
-        
-        // Очистка полей в зависимости от типа локации
         venue_name: event.location_type === 'physical' ? event.venue_name : null,
         venue_address: event.location_type === 'physical' ? event.venue_address : null,
         online_meeting_url: event.location_type !== 'physical' ? event.online_meeting_url : null,
         online_platform: event.location_type !== 'physical' ? event.online_platform : null,
-        
-        // Очистка полей оплаты
         base_price: event.payment_type === 'paid' ? event.base_price : null,
         price_description: event.payment_type === 'paid' ? event.price_description : null,
-        
-        // Очистка полей регистрации
         max_attendees: event.registration_enabled ? event.max_attendees : null,
         attendee_limit_per_registration: event.registration_enabled ? event.attendee_limit_per_registration : 5,
-        
-        // Преобразование массивов в подходящий формат
         tags: event.tags || [],
         meta_keywords: event.meta_keywords || [],
-        
-        // Установка времени обновления
         updated_at: new Date().toISOString(),
-        
-        // Удаляем поля, которые не должны попасть в БД
         speakers: undefined,
         festival_program: undefined,
         hide_speakers_gallery: undefined,
@@ -584,7 +501,6 @@ const CreateEditEventPage: React.FC = () => {
       };
 
       if (id) {
-        // Обновление существующего события
         const { error } = await supabase
           .from('sh_events')
           .update(eventData)
@@ -592,17 +508,14 @@ const CreateEditEventPage: React.FC = () => {
 
         if (error) throw error;
         
-        // Обновляем связи со спикерами
         await updateEventSpeakers(id, event.speakers || []);
         
-        // Обновляем программу фестиваля (если есть)
         if (event.event_type === 'festival' && event.festival_program) {
           await updateFestivalProgram(id, event.festival_program);
         }
         
         toast.success('Мероприятие успешно обновлено');
       } else {
-        // Создание нового события
         const { data: newEvent, error } = await supabase
           .from('sh_events')
           .insert([eventData])
@@ -611,19 +524,15 @@ const CreateEditEventPage: React.FC = () => {
 
         if (error) throw error;
         
-        // Добавляем связи со спикерами
         if (event.speakers && event.speakers.length > 0) {
           await updateEventSpeakers(newEvent.id, event.speakers);
         }
         
-        // Добавляем программу фестиваля (если есть)
         if (event.event_type === 'festival' && event.festival_program) {
           await updateFestivalProgram(newEvent.id, event.festival_program);
         }
         
         toast.success('Мероприятие успешно создано');
-        
-        // Перенаправляем на страницу редактирования
         navigate(`/admin/events/${newEvent.id}/edit`);
       }
 
@@ -635,10 +544,8 @@ const CreateEditEventPage: React.FC = () => {
     }
   }, [event, mediaData, id, validateForm, navigate]);
 
-  // Обновление связей со спикерами
   const updateEventSpeakers = useCallback(async (eventId: string, speakerIds: string[]) => {
     try {
-      // Удаляем существующие связи
       const { error: deleteError } = await supabase
         .from('sh_event_speakers')
         .delete()
@@ -646,7 +553,6 @@ const CreateEditEventPage: React.FC = () => {
 
       if (deleteError) throw deleteError;
 
-      // Добавляем новые связи
       if (speakerIds.length > 0) {
         const speakerData = speakerIds.map((speakerId, index) => ({
           event_id: eventId,
@@ -667,10 +573,8 @@ const CreateEditEventPage: React.FC = () => {
     }
   }, []);
 
-  // Обновление программы фестиваля
   const updateFestivalProgram = useCallback(async (eventId: string, program: FestivalProgramItem[]) => {
     try {
-      // Удаляем существующую программу
       const { error: deleteError } = await supabase
         .from('sh_event_schedule')
         .delete()
@@ -678,7 +582,6 @@ const CreateEditEventPage: React.FC = () => {
 
       if (deleteError) throw deleteError;
 
-      // Добавляем новую программу
       if (program.length > 0) {
         const scheduleData = program.map((item, index) => ({
           event_id: eventId,
@@ -686,7 +589,7 @@ const CreateEditEventPage: React.FC = () => {
           description: item.description,
           start_time: item.start_time,
           end_time: item.end_time,
-          date: event.start_at.split('T')[0], // Используем дату события
+          date: event.start_at.split('T')[0],
           speaker_id: item.lecturer_id || null,
           display_order: index + 1
         }));
@@ -703,21 +606,18 @@ const CreateEditEventPage: React.FC = () => {
     }
   }, [event.start_at]);
 
-  // Удаление события
   const handleDelete = useCallback(async () => {
     if (!id) return;
 
     try {
       setLoading(true);
       
-      // Удаляем связанные данные
       await Promise.all([
         supabase.from('sh_event_speakers').delete().eq('event_id', id),
         supabase.from('sh_event_schedule').delete().eq('event_id', id),
         supabase.from('sh_registrations').delete().eq('event_id', id)
       ]);
 
-      // Удаляем само событие
       const { error } = await supabase
         .from('sh_events')
         .delete()
@@ -736,7 +636,6 @@ const CreateEditEventPage: React.FC = () => {
     }
   }, [id, navigate]);
 
-  // Конфигурация табов
   const tabs = [
     { id: 'basic', label: 'Основное', icon: Info },
     { id: 'details', label: 'Детали', icon: Calendar },
@@ -747,7 +646,6 @@ const CreateEditEventPage: React.FC = () => {
     { id: 'seo', label: 'SEO', icon: Globe }
   ];
 
-  // Компонент для подтверждения удаления
   const DeleteConfirmModal = () => (
     showDeleteConfirm && (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -778,11 +676,17 @@ const CreateEditEventPage: React.FC = () => {
       </div>
     )
   );
-  // Часть 4: Рендер основного интерфейса
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6">
-      {/* Заголовок */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div className="flex items-center gap-3">
           <button
@@ -835,7 +739,6 @@ const CreateEditEventPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Навигация по табам */}
       <div className="border-b border-gray-200 dark:border-dark-700 mb-6">
         <nav className="flex space-x-8 overflow-x-auto">
           {tabs.map((tab) => (
@@ -855,13 +758,10 @@ const CreateEditEventPage: React.FC = () => {
         </nav>
       </div>
 
-      {/* Содержимое табов */}
       <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-dark-700">
-        {/* Основная информация */}
         {activeTab === 'basic' && (
           <div className="p-6 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Заголовок */}
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Заголовок мероприятия *
@@ -877,7 +777,6 @@ const CreateEditEventPage: React.FC = () => {
                 />
               </div>
 
-              {/* Slug */}
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   URL (slug) *
@@ -913,7 +812,6 @@ const CreateEditEventPage: React.FC = () => {
                 </p>
               </div>
 
-              {/* Краткое описание */}
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Краткое описание
@@ -928,7 +826,6 @@ const CreateEditEventPage: React.FC = () => {
                 />
               </div>
 
-              {/* Тип мероприятия */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Тип мероприятия *
@@ -948,7 +845,6 @@ const CreateEditEventPage: React.FC = () => {
                 </select>
               </div>
 
-              {/* Статус */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Статус *
@@ -968,7 +864,6 @@ const CreateEditEventPage: React.FC = () => {
                 </select>
               </div>
 
-              {/* Возрастная категория */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Возрастная категория *
@@ -988,7 +883,6 @@ const CreateEditEventPage: React.FC = () => {
                 </select>
               </div>
 
-              {/* Язык */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Язык мероприятия *
@@ -1008,7 +902,6 @@ const CreateEditEventPage: React.FC = () => {
                 </select>
               </div>
 
-              {/* Теги */}
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Теги
@@ -1026,7 +919,6 @@ const CreateEditEventPage: React.FC = () => {
                 </p>
               </div>
 
-              {/* Переключатели */}
               <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <label className="flex items-center gap-2">
                   <input
@@ -1071,12 +963,9 @@ const CreateEditEventPage: React.FC = () => {
           </div>
         )}
 
-        {/* Остальные табы будут в следующих частях */}
-        {/* Детали события */}
         {activeTab === 'details' && (
           <div className="p-6 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Дата и время начала */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Дата и время начала *
@@ -1091,7 +980,6 @@ const CreateEditEventPage: React.FC = () => {
                 />
               </div>
 
-              {/* Дата и время окончания */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Дата и время окончания *
@@ -1106,7 +994,6 @@ const CreateEditEventPage: React.FC = () => {
                 />
               </div>
 
-              {/* Часовой пояс */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Часовой пояс *
@@ -1126,7 +1013,6 @@ const CreateEditEventPage: React.FC = () => {
                 </select>
               </div>
 
-              {/* Ссылка на видео */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Ссылка на видео
@@ -1141,7 +1027,6 @@ const CreateEditEventPage: React.FC = () => {
                 />
               </div>
 
-              {/* Полное описание */}
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Полное описание
@@ -1159,21 +1044,9 @@ const CreateEditEventPage: React.FC = () => {
           </div>
         )}
 
-        {/* Продолжение в следующих частях... */}
-      </div>
-
-      {/* Модальное окно подтверждения удаления */}
-      <DeleteConfirmModal />
-    </div>
-  );
-};
-// Часть 5: Табы локации, медиафайлов и регистрации
-
-        {/* Место проведения */}
         {activeTab === 'location' && (
           <div className="p-6 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Тип локации */}
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Тип локации *
@@ -1193,7 +1066,6 @@ const CreateEditEventPage: React.FC = () => {
                 </select>
               </div>
 
-              {/* Физическое место */}
               {(event.location_type === 'physical' || event.location_type === 'hybrid') && (
                 <>
                   <div>
@@ -1227,7 +1099,6 @@ const CreateEditEventPage: React.FC = () => {
                 </>
               )}
 
-              {/* Онлайн встреча */}
               {(event.location_type === 'online' || event.location_type === 'hybrid') && (
                 <>
                   <div>
@@ -1264,7 +1135,6 @@ const CreateEditEventPage: React.FC = () => {
           </div>
         )}
 
-        {/* Медиафайлы */}
         {activeTab === 'media' && (
           <div className="p-6">
             <EventMediaSection
@@ -1277,11 +1147,9 @@ const CreateEditEventPage: React.FC = () => {
           </div>
         )}
 
-        {/* Регистрация */}
         {activeTab === 'registration' && (
           <div className="p-6 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Включить регистрацию */}
               <div className="md:col-span-2">
                 <label className="flex items-center gap-2">
                   <input
@@ -1299,7 +1167,6 @@ const CreateEditEventPage: React.FC = () => {
 
               {event.registration_enabled && (
                 <>
-                  {/* Максимальное количество участников */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Максимальное количество участников
@@ -1315,7 +1182,6 @@ const CreateEditEventPage: React.FC = () => {
                     />
                   </div>
 
-                  {/* Лимит на одну регистрацию */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Максимум билетов на одну регистрацию
@@ -1332,7 +1198,6 @@ const CreateEditEventPage: React.FC = () => {
                     />
                   </div>
 
-                  {/* Тип оплаты */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Тип оплаты *
@@ -1352,7 +1217,6 @@ const CreateEditEventPage: React.FC = () => {
                     </select>
                   </div>
 
-                  {/* Валюта */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Валюта *
@@ -1372,7 +1236,6 @@ const CreateEditEventPage: React.FC = () => {
                     </select>
                   </div>
 
-                  {/* Цена (только для платных) */}
                   {event.payment_type === 'paid' && (
                     <>
                       <div>
@@ -1408,7 +1271,6 @@ const CreateEditEventPage: React.FC = () => {
                     </>
                   )}
 
-                  {/* Дополнительные настройки */}
                   <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <label className="flex items-center gap-2">
                       <input
@@ -1442,7 +1304,6 @@ const CreateEditEventPage: React.FC = () => {
           </div>
         )}
 
-        {/* Программа фестиваля */}
         {activeTab === 'program' && event.event_type === 'festival' && (
           <div className="p-6 space-y-6">
             <div className="flex items-center justify-between">
@@ -1604,11 +1465,9 @@ const CreateEditEventPage: React.FC = () => {
           </div>
         )}
 
-        {/* SEO настройки */}
         {activeTab === 'seo' && (
           <div className="p-6 space-y-6">
             <div className="grid grid-cols-1 gap-6">
-              {/* Meta заголовок */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Meta заголовок
@@ -1626,7 +1485,6 @@ const CreateEditEventPage: React.FC = () => {
                 </p>
               </div>
 
-              {/* Meta описание */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Meta описание
@@ -1644,7 +1502,6 @@ const CreateEditEventPage: React.FC = () => {
                 </p>
               </div>
 
-              {/* Meta ключевые слова */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Meta ключевые слова
@@ -1665,7 +1522,6 @@ const CreateEditEventPage: React.FC = () => {
           </div>
         )}
 
-        {/* Кнопки сохранения */}
         <div className="border-t border-gray-200 dark:border-dark-700 p-6">
           <div className="flex justify-end gap-3">
             <button
@@ -1695,10 +1551,8 @@ const CreateEditEventPage: React.FC = () => {
             </button>
           </div>
         </div>
-      </div>   
-          </div>
+      </div>
 
-      {/* Модальное окно подтверждения удаления */}
       <DeleteConfirmModal />
     </div>
   );
