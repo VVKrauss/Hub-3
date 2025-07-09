@@ -288,7 +288,7 @@ const CreateEditEventPage: React.FC = () => {
   const initializeMediaData = useCallback((loadedEvent: EventFormData) => {
     const initialMediaData: EventMediaData = {
       coverImage: {
-        url: loadedEvent.cover_image_url,           // ✅ ИСПРАВЛЕНО: заменил croppedUrl на url
+        url: loadedEvent.cover_image_url,
         originalUrl: loadedEvent.cover_image_original_url
       },
       galleryImages: (loadedEvent.gallery_images || []).map((url, index) => ({
@@ -299,36 +299,38 @@ const CreateEditEventPage: React.FC = () => {
     setMediaData(initialMediaData);
   }, []);
 
+  // ✅ ИСПРАВЛЕННАЯ функция loadEvent
   const loadEvent = useCallback(async (eventId: string) => {
     try {
       setLoading(true);
       
+      // ✅ ИСПРАВЛЕНО: Используем простой запрос без join'ов
       const { data, error } = await supabase
         .from('sh_events')
-        .select(`
-          *,
-          sh_event_speakers(
-            id,
-            speaker:sh_speakers(
-              id,
-              name,
-              avatar_url,
-              field_of_expertise
-            )
-          )
-        `)
+        .select('*')  // Просто получаем основные данные события
         .eq('id', eventId)
         .single();
 
       if (error) throw error;
       if (!data) throw new Error('Мероприятие не найдено');
 
+      // ✅ ОТДЕЛЬНО загружаем спикеров события
+      const { data: eventSpeakers, error: speakersError } = await supabase
+        .from('sh_event_speakers')
+        .select('speaker_id')
+        .eq('event_id', eventId)
+        .order('display_order');
+
+      if (speakersError) {
+        console.warn('Error loading event speakers:', speakersError);
+      }
+
       const formData: EventFormData = {
         ...data,
         tags: data.tags || [],
         meta_keywords: data.meta_keywords || [],
         gallery_images: data.gallery_images || [],
-        speakers: data.sh_event_speakers?.map((es: any) => es.speaker?.id).filter(Boolean) || [],
+        speakers: eventSpeakers?.map(es => es.speaker_id).filter(Boolean) || [],
         festival_program: data.festival_program || [],
         hide_speakers_gallery: data.hide_speakers_gallery || false,
         photo_gallery: data.gallery_images?.join(',') || ''
@@ -368,33 +370,33 @@ const CreateEditEventPage: React.FC = () => {
     loadSpeakers();
   }, [id, loadEvent, loadSpeakers]);
 
- // Замените существующую функцию handleMediaDataChange на:
-const handleMediaDataChange = useCallback((newMediaData: {
-  cover_image_url?: string;
-  gallery_images?: string[];
-  video_url?: string;
-}) => {
-  // Обновляем mediaData в старом формате для совместимости
-  setMediaData({
-    coverImage: {
-      url: newMediaData.cover_image_url || '',
-      originalUrl: newMediaData.cover_image_url || ''
-    },
-    galleryImages: (newMediaData.gallery_images || []).map((url, index) => ({
-      id: `img_${index}`,
-      url
-    }))
-  });
-  
-  // Обновляем event
-  setEvent(prev => ({
-    ...prev,
-    cover_image_url: newMediaData.cover_image_url || '',
-    cover_image_original_url: newMediaData.cover_image_url || '',
-    gallery_images: newMediaData.gallery_images || [],
-    video_url: newMediaData.video_url || ''
-  }));
-}, []);
+  // ✅ ИСПРАВЛЕННАЯ функция handleMediaDataChange
+  const handleMediaDataChange = useCallback((newMediaData: {
+    cover_image_url?: string;
+    gallery_images?: string[];
+    video_url?: string;
+  }) => {
+    // Обновляем mediaData в старом формате для совместимости
+    setMediaData({
+      coverImage: {
+        url: newMediaData.cover_image_url || '',
+        originalUrl: newMediaData.cover_image_url || ''
+      },
+      galleryImages: (newMediaData.gallery_images || []).map((url, index) => ({
+        id: `img_${index}`,
+        url
+      }))
+    });
+    
+    // Обновляем event
+    setEvent(prev => ({
+      ...prev,
+      cover_image_url: newMediaData.cover_image_url || '',
+      cover_image_original_url: newMediaData.cover_image_url || '',
+      gallery_images: newMediaData.gallery_images || [],
+      video_url: newMediaData.video_url || ''
+    }));
+  }, []);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -468,7 +470,7 @@ const handleMediaDataChange = useCallback((newMediaData: {
       errors.push('Для платного мероприятия требуется указать цену');
     }
 
-    if (!mediaData.coverImage.url && !mediaData.coverImage.originalUrl) {  // ✅ ИСПРАВЛЕНО: заменил croppedUrl на url
+    if (!mediaData.coverImage.url && !mediaData.coverImage.originalUrl) {
       errors.push('Фоновое изображение обязательно');
     }
 
@@ -1265,138 +1267,6 @@ const handleMediaDataChange = useCallback((newMediaData: {
                           value={event.base_price || ''}
                           onChange={handleInputChange}
                           className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white"
-                          placeholder="0"
-                          min="0"
-                          step="0.01"
-                          required
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Описание цены
-                        </label>
-                        <input
-                          type="text"
-                          name="price_description"
-                          value={event.price_description}
-                          onChange={handleInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white"
-                          placeholder="За один билет, включает материалы..."
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        name="registration_required"
-                        checked={event.registration_required}
-                        onChange={handleInputChange}
-                        className="rounded border-gray-300 dark:border-dark-600 text-primary-600 focus:ring-primary-500"
-                      />
-                      <span className="text-sm text-gray-700 dark:text-gray-300">
-                        Регистрация обязательна
-                      </span>
-                    </label>
-
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        name="allow_waitlist"
-                        checked={event.allow_waitlist}
-                        onChange={handleInputChange}
-                        className="rounded border-gray-300 dark:border-dark-600 text-primary-600 focus:ring-primary-500"
-                      />
-                      <span className="text-sm text-gray-700 dark:text-gray-300">
-                        Разрешить лист ожидания
-                      </span>
-                    </label>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'program' && event.event_type === 'festival' && (
-          <div className="p-6 space-y-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                Программа фестиваля
-              </h3>
-              <button
-                type="button"
-                onClick={() => {
-                  const newItem: FestivalProgramItem = {
-                    title: `Пункт программы ${(event.festival_program?.length || 0) + 1}`,
-                    description: '',
-                    image_url: '',
-                    start_time: '10:00',
-                    end_time: '11:00',
-                    lecturer_id: ''
-                  };
-                  handleFestivalProgramChange([...(event.festival_program || []), newItem]);
-                }}
-                className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg flex items-center gap-2 transition-colors"
-              >
-                <Plus className="h-4 w-4" />
-                Добавить пункт
-              </button>
-            </div>
-
-            {event.festival_program && event.festival_program.length > 0 ? (
-              <div className="space-y-4">
-                {event.festival_program.map((item, index) => (
-                  <div key={index} className="border border-gray-200 dark:border-dark-600 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="font-medium text-gray-900 dark:text-white">
-                        Пункт {index + 1}
-                      </h4>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const newProgram = event.festival_program?.filter((_, i) => i !== index);
-                          handleFestivalProgramChange(newProgram || []);
-                        }}
-                        className="text-red-600 hover:text-red-700 p-1"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Название
-                        </label>
-                        <input
-                          type="text"
-                          value={item.title}
-                          onChange={(e) => {
-                            const newProgram = [...(event.festival_program || [])];
-                            newProgram[index] = { ...item, title: e.target.value };
-                            handleFestivalProgramChange(newProgram);
-                          }}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white"
-                          placeholder="Название пункта программы"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Спикер
-                        </label>
-                        <select
-                          value={item.lecturer_id}
-                          onChange={(e) => {
-                            const newProgram = [...(event.festival_program || [])];
-                            newProgram[index] = { ...item, lecturer_id: e.target.value };
-                            handleFestivalProgramChange(newProgram);
-                          }}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white"
                         >
                           <option value="">Выберите спикера</option>
                           {speakers.map((speaker: any) => (
@@ -1570,11 +1440,10 @@ const handleMediaDataChange = useCallback((newMediaData: {
         </div>
       </div>
 
-      
-
       <DeleteConfirmModal />
     </div>
   );
 };
 
 export default CreateEditEventPage;
+        
