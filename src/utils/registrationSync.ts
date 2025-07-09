@@ -34,89 +34,48 @@ export const syncUserRegistration = async (
       p_child_tickets: registration.child_tickets,
       p_total_amount: registration.total_amount,
       p_status: registration.status ? 'active' : 'cancelled',
-      p_qr_code: registration.qr_code,
       p_payment_status: paymentStatus,
-      p_registration_date: registration.created_at
+      p_qr_code: registration.qr_code || registration.id,
+      p_created_at: registration.created_at
     });
 
-    if (error) {
-      console.error('Error syncing user registration:', error);
-      throw error;
-    }
+    if (error) throw error;
   } catch (error) {
-    console.error('Failed to sync user registration:', error);
     throw error;
   }
 };
 
 /**
- * Находит пользователя по email из таблицы profiles
+ * Находит пользователя по email
  */
 const findUserByEmail = async (email: string): Promise<string | null> => {
   try {
-    // Пытаемся найти пользователя в таблице profiles
-    const { data: profileData, error: profileError } = await supabase
+    const { data, error } = await supabase
       .from('profiles')
       .select('id')
-      .ilike('email', email.toLowerCase().trim())
-      .maybeSingle();
+      .eq('email', email.toLowerCase().trim())
+      .limit(1);
 
-    if (profileError && profileError.code !== 'PGRST116') {
-      console.error('Error fetching from profiles:', profileError);
-    }
-
-    if (profileData) {
-      return profileData.id;
-    }
-
-    // Если не найден в profiles, пытаемся найти по auth.users через service role
-    // Это требует дополнительных прав, поэтому может не работать в обычном режиме
-    try {
-      const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
-      
-      if (authError) {
-        console.error('Error fetching auth users:', authError);
-        return null;
-      }
-
-      const authUser = authUsers.users.find(user => 
-        user.email?.toLowerCase().trim() === email.toLowerCase().trim()
-      );
-      
-      if (authUser) {
-        return authUser.id;
-      }
-    } catch (error) {
-      console.error('Admin API not available:', error);
-    }
-
-    return null;
+    if (error) throw error;
+    
+    return data?.[0]?.id || null;
   } catch (error) {
-    console.error('Error finding user by email:', error);
     return null;
   }
 };
 
 /**
- * Альтернативный способ поиска пользователя через email в auth metadata
+ * Альтернативный поиск пользователя по email через auth.users
  */
 const findUserByEmailAlternative = async (email: string): Promise<string | null> => {
   try {
-    // Ищем в таблице profiles где email может быть сохранен отдельно
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, name')
-      .textSearch('name', email, { type: 'websearch' })
-      .limit(1);
-
-    if (error) {
-      console.error('Error in alternative search:', error);
-      return null;
-    }
-
-    return data?.[0]?.id || null;
+    const { data, error } = await supabase.auth.admin.listUsers();
+    
+    if (error) throw error;
+    
+    const user = data.users.find(u => u.email?.toLowerCase() === email.toLowerCase().trim());
+    return user?.id || null;
   } catch (error) {
-    console.error('Error in alternative user search:', error);
     return null;
   }
 };
@@ -134,8 +93,7 @@ const syncEventRegistrations = async (eventId: string): Promise<void> => {
       .single();
 
     if (eventError) {
-      console.error('Error fetching event:', eventError);
-      return;
+      throw eventError;
     }
 
     // Получаем список регистраций
@@ -146,8 +104,6 @@ const syncEventRegistrations = async (eventId: string): Promise<void> => {
     } else if (eventData.registrations_list) {
       registrations = eventData.registrations_list;
     }
-
-    console.log(`Processing ${registrations.length} registrations for event: ${eventData.title}`);
 
     let syncedCount = 0;
     let notFoundCount = 0;
@@ -160,19 +116,14 @@ const syncEventRegistrations = async (eventId: string): Promise<void> => {
         if (userId) {
           await syncUserRegistration(userId, eventId, registration);
           syncedCount++;
-          console.log(`✓ Synced registration ${registration.id} for user ${userId}`);
         } else {
           notFoundCount++;
-          console.log(`⚠ User not found for email: ${registration.email}`);
         }
       } catch (error) {
-        console.error(`Failed to sync registration ${registration.id}:`, error);
+        // Продолжаем обработку других регистраций
       }
     }
-
-    console.log(`Event ${eventId} sync completed: ${syncedCount} synced, ${notFoundCount} not found`);
   } catch (error) {
-    console.error('Error syncing event registrations:', error);
     throw error;
   }
 };
@@ -182,8 +133,6 @@ const syncEventRegistrations = async (eventId: string): Promise<void> => {
  */
 const syncAllRegistrations = async (): Promise<void> => {
   try {
-    console.log('Starting full registration sync...');
-    
     // Получаем все события с регистрациями
     const { data: events, error } = await supabase
       .from('events')
@@ -191,32 +140,21 @@ const syncAllRegistrations = async (): Promise<void> => {
       .or('registrations.is.not.null,registrations_list.is.not.null');
 
     if (error) {
-      console.error('Error fetching events:', error);
-      return;
+      throw error;
     }
-
-    console.log(`Found ${events?.length || 0} events with registrations`);
 
     let totalSynced = 0;
     let totalErrors = 0;
 
     for (const event of events || []) {
       try {
-        console.log(`\n--- Processing event: ${event.title} ---`);
         await syncEventRegistrations(event.id);
         totalSynced++;
       } catch (error) {
-        console.error(`❌ Failed to sync event ${event.id}: ${event.title}`, error);
         totalErrors++;
       }
     }
-
-    console.log(`\n=== Sync Summary ===`);
-    console.log(`Events processed: ${totalSynced}`);
-    console.log(`Errors: ${totalErrors}`);
-    console.log(`Total events: ${events?.length || 0}`);
   } catch (error) {
-    console.error('Fatal error in syncAllRegistrations:', error);
     throw error;
   }
 };
@@ -233,7 +171,6 @@ const syncRegistrationByEmail = async (
     const userId = await findUserByEmail(email);
     
     if (!userId) {
-      console.log(`User not found for email: ${email}`);
       return false;
     }
 
@@ -245,8 +182,7 @@ const syncRegistrationByEmail = async (
       .single();
 
     if (eventError) {
-      console.error('Error fetching event:', eventError);
-      return false;
+      throw eventError;
     }
 
     let registrations: RegistrationData[] = [];
@@ -260,16 +196,13 @@ const syncRegistrationByEmail = async (
     const registration = registrations.find(reg => reg.id === registrationId);
     
     if (!registration) {
-      console.log(`Registration ${registrationId} not found in event ${eventId}`);
       return false;
     }
 
     await syncUserRegistration(userId, eventId, registration);
-    console.log(`Successfully synced registration ${registrationId} for user ${userId}`);
     
     return true;
   } catch (error) {
-    console.error('Error syncing registration by email:', error);
     return false;
   }
 };
@@ -291,13 +224,18 @@ const removeUserRegistration = async (
       .eq('registration_id', registrationId);
 
     if (error) {
-      console.error('Error removing user registration:', error);
       throw error;
     }
-
-    console.log(`Removed registration ${registrationId} for user ${userId}`);
   } catch (error) {
-    console.error('Failed to remove user registration:', error);
     throw error;
   }
+};
+
+export {
+  syncEventRegistrations,
+  syncAllRegistrations,
+  syncRegistrationByEmail,
+  removeUserRegistration,
+  findUserByEmail,
+  findUserByEmailAlternative
 };
