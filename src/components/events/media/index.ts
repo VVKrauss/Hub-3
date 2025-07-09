@@ -75,13 +75,3 @@ export const MediaUtils = {
   formatFileSize,
   getFileTypeLabel
 };
-
-// Экспорт конфигурации по умолчанию
-export const {
-  maxFileSize: DEFAULT_MAX_FILE_SIZE,
-  minImageSize: DEFAULT_MIN_IMAGE_SIZE,
-  maxGalleryImages: DEFAULT_MAX_GALLERY_IMAGES,
-  supportedFormats: DEFAULT_SUPPORTED_FORMATS,
-  coverImageSize: DEFAULT_COVER_IMAGE_SIZE,
-  compressionOptions: DEFAULT_COMPRESSION_OPTIONS
-} = DEFAULT_MEDIA_CONFIG;
