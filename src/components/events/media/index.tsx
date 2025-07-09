@@ -35,27 +35,88 @@ export const EventMediaSection: React.FC<EventMediaSectionProps> = ({
   const [videoUrl, setVideoUrl] = useState(initialMediaData.video_url || '');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   
-  const coverFileInputRef = useRef<HTMLInputElement>(null);
-  const galleryFileInputRef = useRef<HTMLInputElement>(null);
+  // Alternative upload method - direct to public bucket
+  const uploadImageAlternative = async (file: File): Promise<string> => {
+    try {
+      setIsUploading(true);
+      setUploadProgress(20);
+
+      console.log('Using alternative upload method for:', file.name);
+
+      // Try to compress image with simpler settings
+      let fileToUpload = file;
+      try {
+        fileToUpload = await compressImage(file, {
+          maxWidthOrHeight: 1200,
+          maxSizeMB: 1,
+          useWebWorker: false
+        });
+        setUploadProgress(40);
+      } catch (compressionError) {
+        console.warn('Compression failed, using original file:', compressionError);
+        fileToUpload = file;
+      }
+
+      // Generate simple filename
+      const timestamp = Date.now();
+      const randomString = Math.random().toString(36).substring(2, 8);
+      const fileExt = file.name.split('.').pop() || 'jpg';
+      const fileName = `event_${timestamp}_${randomString}.${fileExt}`;
+
+      setUploadProgress(60);
+
+      // Try upload to root of images bucket
+      const { data, error } = await supabase.storage
+        .from('images')
+        .upload(fileName, fileToUpload);
+
+      if (error) {
+        throw new Error(`Ошибка Supabase: ${error.message}`);
+      }
+
+      setUploadProgress(90);
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('images')
+        .getPublicUrl(fileName);
+
+      setUploadProgress(100);
+      return urlData.publicUrl;
+
+    } catch (error: any) {
+      console.error('Alternative upload error:', error);
+      throw error;
+    }
+  };
 
   // Upload image to Supabase storage
   const uploadImageToSupabase = async (file: File, folder: string = 'events'): Promise<string> => {
     try {
       setIsUploading(true);
-      setUploadProgress(0);
+      setUploadProgress(10);
+
+      console.log('Starting upload for file:', file.name, 'Size:', file.size);
 
       // Compress image
+      setUploadProgress(20);
       const compressedFile = await compressImage(file, {
         maxWidthOrHeight: 1920,
         maxSizeMB: 2,
         useWebWorker: true
       });
 
+      console.log('Image compressed. Original size:', file.size, 'Compressed size:', compressedFile.size);
+
       // Generate unique filename
+      setUploadProgress(30);
       const fileName = generateUniqueFilename(compressedFile, `${eventSlug}_`);
       const filePath = `${folder}/${fileName}`;
 
-      // Upload to Supabase
+      console.log('Uploading to path:', filePath);
+
+      // Upload to Supabase with progress tracking
+      setUploadProgress(40);
       const { data, error } = await supabase.storage
         .from('images')
         .upload(filePath, compressedFile, {
@@ -64,15 +125,25 @@ export const EventMediaSection: React.FC<EventMediaSectionProps> = ({
         });
 
       if (error) {
-        throw error;
+        console.error('Supabase upload error:', error);
+        throw new Error(`Ошибка загрузки в Supabase: ${error.message}`);
       }
 
+      console.log('Upload successful:', data);
+
       // Get public URL
+      setUploadProgress(80);
       const { data: urlData } = supabase.storage
         .from('images')
         .getPublicUrl(filePath);
 
+      console.log('Public URL generated:', urlData.publicUrl);
+
       setUploadProgress(100);
+      
+      // Small delay to show completion
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       return urlData.publicUrl;
 
     } catch (error: any) {
@@ -95,8 +166,28 @@ export const EventMediaSection: React.FC<EventMediaSectionProps> = ({
       return;
     }
 
+    // Check file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Файл слишком большой. Максимальный размер: 10MB');
+      return;
+    }
+
     try {
-      const imageUrl = await uploadImageToSupabase(file, 'events/covers');
+      console.log('Starting cover image upload...');
+      let imageUrl: string;
+      
+      try {
+        // Try main upload method first
+        imageUrl = await uploadImageToSupabase(file, 'events/covers');
+      } catch (mainError) {
+        console.warn('Main upload failed, trying alternative:', mainError);
+        toast.dismiss();
+        toast.loading('Пробуем альтернативный метод загрузки...');
+        
+        // Fallback to alternative method
+        imageUrl = await uploadImageAlternative(file);
+      }
+      
       setCoverImage(imageUrl);
       
       const updatedData = {
@@ -106,9 +197,18 @@ export const EventMediaSection: React.FC<EventMediaSectionProps> = ({
       };
       
       onMediaDataChange?.(updatedData);
+      toast.dismiss();
       toast.success('Обложка загружена успешно');
-    } catch (error) {
-      // Error already handled in uploadImageToSupabase
+      
+    } catch (error: any) {
+      console.error('All upload methods failed:', error);
+      toast.dismiss();
+      toast.error(`Не удалось загрузить изображение: ${error.message}`);
+    }
+
+    // Reset input
+    if (event.target) {
+      event.target.value = '';
     }
   };
 
@@ -123,14 +223,35 @@ export const EventMediaSection: React.FC<EventMediaSectionProps> = ({
       return;
     }
 
+    // Check total size
+    const totalSize = imageFiles.reduce((sum, file) => sum + file.size, 0);
+    if (totalSize > 50 * 1024 * 1024) { // 50MB total
+      toast.error('Общий размер файлов слишком большой. Максимум: 50MB');
+      return;
+    }
+
     try {
-      const uploadPromises = imageFiles.map(file => 
-        uploadImageToSupabase(file, 'events/gallery')
-      );
+      console.log(`Starting gallery upload for ${imageFiles.length} files...`);
+      const uploadedUrls: string[] = [];
       
-      const uploadedUrls = await Promise.all(uploadPromises);
+      // Upload files one by one to avoid overwhelming the server
+      for (let i = 0; i < imageFiles.length; i++) {
+        const file = imageFiles[i];
+        toast.loading(`Загружаем ${i + 1} из ${imageFiles.length}...`);
+        
+        try {
+          // Try main method first
+          const url = await uploadImageToSupabase(file, 'events/gallery');
+          uploadedUrls.push(url);
+        } catch (mainError) {
+          console.warn(`Main upload failed for file ${i + 1}, trying alternative:`, mainError);
+          // Fallback to alternative
+          const url = await uploadImageAlternative(file);
+          uploadedUrls.push(url);
+        }
+      }
+      
       const newGalleryImages = [...galleryImages, ...uploadedUrls];
-      
       setGalleryImages(newGalleryImages);
       
       const updatedData = {
@@ -140,9 +261,18 @@ export const EventMediaSection: React.FC<EventMediaSectionProps> = ({
       };
       
       onMediaDataChange?.(updatedData);
+      toast.dismiss();
       toast.success(`Загружено ${uploadedUrls.length} изображений в галерею`);
-    } catch (error) {
-      // Error already handled in uploadImageToSupabase
+      
+    } catch (error: any) {
+      console.error('Gallery upload failed:', error);
+      toast.dismiss();
+      toast.error(`Ошибка загрузки галереи: ${error.message}`);
+    }
+
+    // Reset input
+    if (event.target) {
+      event.target.value = '';
     }
   };
 
@@ -360,7 +490,7 @@ export const EventMediaSection: React.FC<EventMediaSectionProps> = ({
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
               <div className="flex-1">
                 <p className="text-sm text-blue-700 dark:text-blue-300 mb-1">
-                  Загрузка изображения...
+                  Загрузка изображения... {uploadProgress}%
                 </p>
                 <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2">
                   <div 
@@ -370,6 +500,18 @@ export const EventMediaSection: React.FC<EventMediaSectionProps> = ({
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Debug Info (remove in production) */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="bg-gray-50 dark:bg-dark-700 border rounded-lg p-3 text-xs">
+            <p className="text-gray-600 dark:text-gray-400">
+              Debug: eventId={eventId}, eventSlug={eventSlug}
+            </p>
+            <p className="text-gray-600 dark:text-gray-400">
+              Supabase URL: {import.meta.env.VITE_SUPABASE_URL || 'не установлен'}
+            </p>
           </div>
         )}
 
