@@ -86,7 +86,7 @@ export const validateMultipleFiles = async (
  */
 export const uploadCoverImage = async (
   file: File,
-  eventId: string,
+  eventSlug: string,
   croppedBlob: Blob,
   onProgress?: (progress: number) => void
 ): Promise<{ originalUrl: string; croppedUrl: string }> => {
@@ -99,8 +99,8 @@ export const uploadCoverImage = async (
     const croppedFileName = generateUniqueFilename(file, 'cover_cropped_');
     
     // Пути для хранения
-    const originalPath = getEventCoverStoragePath(eventId, originalFileName);
-    const croppedPath = getEventCoverStoragePath(eventId, croppedFileName);
+    const originalPath = getEventCoverStoragePath(eventSlug, originalFileName);
+    const croppedPath = getEventCoverStoragePath(eventSlug, croppedFileName);
 
     // Загружаем оригинал
     const { data: originalData, error: originalError } = await supabase.storage
@@ -153,7 +153,7 @@ export const uploadCoverImage = async (
  */
 export const uploadGalleryImage = async (
   file: File,
-  eventId: string,
+  eventSlug: string,
   onProgress?: (progress: number) => void
 ): Promise<string> => {
   try {
@@ -161,10 +161,10 @@ export const uploadGalleryImage = async (
     const compressedFile = await compressImage(file, DEFAULT_MEDIA_CONFIG.compressionOptions);
     
     // Генерируем уникальное имя файла
-    const fileName = generateUniqueFilename(compressedFile, 'gallery_');
+    const fileName = generateUniqueFilename(compressedFile, 'media_');
     
     // Путь для хранения
-    const filePath = getEventGalleryStoragePath(eventId, fileName);
+    const filePath = getEventGalleryStoragePath(eventSlug, fileName);
 
     // Загружаем файл
     const { data, error } = await supabase.storage
@@ -196,7 +196,7 @@ export const uploadGalleryImage = async (
  */
 export const uploadMultipleGalleryImages = async (
   files: File[],
-  eventId: string,
+  eventSlug: string,
   onProgress?: (totalProgress: number, fileIndex: number, fileProgress: number) => void
 ): Promise<{ successUrls: string[]; errors: string[] }> => {
   const successUrls: string[] = [];
@@ -206,7 +206,7 @@ export const uploadMultipleGalleryImages = async (
     const file = files[i];
     
     try {
-      const url = await uploadGalleryImage(file, eventId, (fileProgress) => {
+      const url = await uploadGalleryImage(file, eventSlug, (fileProgress) => {
         const totalProgress = ((i / files.length) * 100) + ((fileProgress / files.length));
         onProgress?.(totalProgress, i, fileProgress);
       });
