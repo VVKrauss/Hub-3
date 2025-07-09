@@ -451,7 +451,7 @@ const CreateEditEventPage: React.FC = () => {
       errors.push('Для платного мероприятия требуется указать цену');
     }
 
-    if (!mediaData.coverImage.croppedUrl && !mediaData.coverImage.originalUrl) {
+    if (!mediaData.coverImage.url && !mediaData.coverImage.originalUrl) {  // ✅ ИСПРАВЛЕНО: заменил croppedUrl на url
       errors.push('Фоновое изображение обязательно');
     }
 
