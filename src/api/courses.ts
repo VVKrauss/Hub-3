@@ -137,7 +137,6 @@ export const getCoursesByInstructor = async (instructorId: string): Promise<ApiR
 
     if (error) throw error;
 
-    console.log(`Found ${data?.length || 0} courses for instructor ${instructorId}`);
     return createApiResponse(data || []);
   } catch (error) {
     return createApiResponse(null, error);
