@@ -1,4 +1,4 @@
-// src/pages/SpeakerProfilePage.tsx - ОБНОВЛЕННАЯ ВЕРСИЯ
+try {// src/pages/SpeakerProfilePage.tsx - ОБНОВЛЕННАЯ ВЕРСИЯ
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
@@ -207,7 +207,7 @@ const SpeakerProfilePage = () => {
 
     try {
       await toggleFavoriteSpeaker(speaker.id);
-      const isNowFavorite = isFavoriteEvent(speaker.id);
+      const isNowFavorite = isFavoriteSpeaker(speaker.id);
       toast.success(isNowFavorite ? 'Добавлено в избранное' : 'Удалено из избранного');
     } catch (error) {
       toast.error('Ошибка при изменении избранного');
@@ -320,7 +320,7 @@ const SpeakerProfilePage = () => {
                   {/* Кнопка избранного */}
                   {user && (
                     <FavoriteButton
-                      isFavorite={isFavoriteEvent(speaker.id)}
+                      isFavorite={isFavoriteSpeaker(speaker.id)}
                       onToggle={handleFavoriteToggle}
                       loading={favLoading}
                     />
@@ -389,7 +389,7 @@ const SpeakerProfilePage = () => {
           )}
 
           {/* Курсы спикера */}
-          {courses.length > 0 && (
+          {(coursesLoading || courses.length > 0) && (
             <div className="bg-white dark:bg-dark-800 rounded-xl shadow-lg p-8 mb-8">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
                 Курсы
@@ -399,7 +399,7 @@ const SpeakerProfilePage = () => {
                 <div className="flex justify-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
                 </div>
-              ) : (
+              ) : courses.length > 0 ? (
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                   {courses.map((course) => (
                     <div key={course.id} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
@@ -412,8 +412,8 @@ const SpeakerProfilePage = () => {
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                            <BookOpen className="w-12 h-12 text-gray-400" />
+                          <div className="w-full h-full bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-900/20 dark:to-primary-800/20 flex items-center justify-center">
+                            <BookOpen className="w-12 h-12 text-primary-400" />
                           </div>
                         )}
                         
@@ -421,10 +421,10 @@ const SpeakerProfilePage = () => {
                         <div className="absolute top-2 left-2">
                           <span className={`px-2 py-1 text-xs font-medium rounded ${
                             course.course_type === 'online'
-                              ? 'bg-blue-100 text-blue-800'
+                              ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
                               : course.course_type === 'offline'
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-purple-100 text-purple-800'
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                              : 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'
                           }`}>
                             {course.course_type === 'online' ? 'Онлайн' :
                              course.course_type === 'offline' ? 'Очно' : 'Гибридный'}
@@ -438,10 +438,28 @@ const SpeakerProfilePage = () => {
                              course.level === 'intermediate' ? 'Средний' : 'Продвинутый'}
                           </span>
                         </div>
+
+                        {/* Рекомендуемый курс */}
+                        {course.is_featured && (
+                          <div className="absolute bottom-2 right-2">
+                            <span className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 px-2 py-1 text-xs font-medium rounded flex items-center">
+                              ⭐ Топ
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       {/* Информация о курсе */}
                       <div className="p-4">
+                        {/* Категория */}
+                        {course.category && (
+                          <div className="mb-2">
+                            <span className="text-primary-600 dark:text-primary-400 text-xs font-medium">
+                              {course.category}
+                            </span>
+                          </div>
+                        )}
+
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 line-clamp-2">
                           {course.title}
                         </h3>
@@ -453,7 +471,7 @@ const SpeakerProfilePage = () => {
                         )}
 
                         {/* Детали курса */}
-                        <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 mb-3">
+                        <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400 mb-3">
                           {course.duration_hours && (
                             <span className="flex items-center">
                               <Clock className="w-4 h-4 mr-1" />
@@ -465,6 +483,13 @@ const SpeakerProfilePage = () => {
                             <span className="flex items-center">
                               <Users className="w-4 h-4 mr-1" />
                               {course.current_students}/{course.max_students}
+                            </span>
+                          )}
+
+                          {course.start_date && (
+                            <span className="flex items-center">
+                              <Calendar className="w-4 h-4 mr-1" />
+                              {formatDate(course.start_date)}
                             </span>
                           )}
                         </div>
@@ -489,7 +514,7 @@ const SpeakerProfilePage = () => {
                           
                           <Link
                             to={`/courses/${course.id}`}
-                            className="inline-flex items-center text-primary-600 hover:text-primary-700 text-sm"
+                            className="inline-flex items-center px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-md transition-colors"
                           >
                             Подробнее
                             <ExternalLink className="w-3 h-3 ml-1" />
@@ -498,6 +523,13 @@ const SpeakerProfilePage = () => {
                       </div>
                     </div>
                   ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <GraduationCap className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500 dark:text-gray-400">
+                    У этого спикера пока нет курсов
+                  </p>
                 </div>
               )}
             </div>
