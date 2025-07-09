@@ -60,4 +60,4 @@ export const EventMediaSection: React.FC<EventMediaSectionProps> = ({
 };
 
 // Default export для удобства импорта
-export default EventMediaSection;
+export default EventMediaSection;  
