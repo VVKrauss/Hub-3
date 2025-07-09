@@ -368,16 +368,33 @@ const CreateEditEventPage: React.FC = () => {
     loadSpeakers();
   }, [id, loadEvent, loadSpeakers]);
 
-  const handleMediaDataChange = useCallback((newMediaData: EventMediaData) => {
-    setMediaData(newMediaData);
-    
-    setEvent(prev => ({
-      ...prev,
-      cover_image_url: newMediaData.coverImage.url || '',                    // ✅ ИСПРАВЛЕНО: заменил croppedUrl на url
-      cover_image_original_url: newMediaData.coverImage.originalUrl || '',
-      gallery_images: newMediaData.galleryImages.map(img => img.url)
-    }));
-  }, []);
+ // Замените существующую функцию handleMediaDataChange на:
+const handleMediaDataChange = useCallback((newMediaData: {
+  cover_image_url?: string;
+  gallery_images?: string[];
+  video_url?: string;
+}) => {
+  // Обновляем mediaData в старом формате для совместимости
+  setMediaData({
+    coverImage: {
+      url: newMediaData.cover_image_url || '',
+      originalUrl: newMediaData.cover_image_url || ''
+    },
+    galleryImages: (newMediaData.gallery_images || []).map((url, index) => ({
+      id: `img_${index}`,
+      url
+    }))
+  });
+  
+  // Обновляем event
+  setEvent(prev => ({
+    ...prev,
+    cover_image_url: newMediaData.cover_image_url || '',
+    cover_image_original_url: newMediaData.cover_image_url || '',
+    gallery_images: newMediaData.gallery_images || [],
+    video_url: newMediaData.video_url || ''
+  }));
+}, []);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
