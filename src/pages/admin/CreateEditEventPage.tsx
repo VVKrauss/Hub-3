@@ -285,19 +285,19 @@ const CreateEditEventPage: React.FC = () => {
     }
   }, [id]);
 
-const initializeMediaData = useCallback((loadedEvent: EventFormData) => {
-  const initialMediaData: EventMediaData = {
-    coverImage: {
-      url: loadedEvent.cover_image_url,           // ✅ ИСПРАВЛЕНО: заменил croppedUrl на url
-      originalUrl: loadedEvent.cover_image_original_url
-    },
-    galleryImages: (loadedEvent.gallery_images || []).map((url, index) => ({
-      id: `existing_${index}`,
-      url
-    }))
-  };
-  setMediaData(initialMediaData);
-}, []);
+  const initializeMediaData = useCallback((loadedEvent: EventFormData) => {
+    const initialMediaData: EventMediaData = {
+      coverImage: {
+        url: loadedEvent.cover_image_url,           // ✅ ИСПРАВЛЕНО: заменил croppedUrl на url
+        originalUrl: loadedEvent.cover_image_original_url
+      },
+      galleryImages: (loadedEvent.gallery_images || []).map((url, index) => ({
+        id: `existing_${index}`,
+        url
+      }))
+    };
+    setMediaData(initialMediaData);
+  }, []);
 
   const loadEvent = useCallback(async (eventId: string) => {
     try {
