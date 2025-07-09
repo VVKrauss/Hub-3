@@ -480,7 +480,7 @@ const CreateEditEventPage: React.FC = () => {
 
       const eventData = {
         ...event,
-        cover_image_url: mediaData.coverImage.croppedUrl || null,
+        cover_image_url: mediaData.coverImage.url || null, 
         cover_image_original_url: mediaData.coverImage.originalUrl || null,
         gallery_images: mediaData.galleryImages.map(img => img.url),
         venue_name: event.location_type === 'physical' ? event.venue_name : null,
