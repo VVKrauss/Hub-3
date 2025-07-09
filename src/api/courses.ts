@@ -153,4 +153,154 @@ export const getCoursesByInstructor = async (instructorId: string): Promise<ApiR
 };
 
 // Получение рекомендуемых курсов
-export const getFeaturedCour
+export const getFeaturedCourses = async (): Promise<ApiResponse<Course[]>> => {
+  try {
+    console.log('Fetching featured courses...');
+
+    const { data, error } = await supabase
+      .from('sh_courses')
+      .select('*')
+      .eq('is_public', true)
+      .eq('is_featured', true)
+      .in('status', ['published'])
+      .order('created_at', { ascending: false })
+      .limit(6);
+
+    if (error) throw error;
+
+    console.log(`Found ${data?.length || 0} featured courses`);
+    return createApiResponse(data || []);
+  } catch (error) {
+    console.error('Error fetching featured courses:', error);
+    return createApiResponse(null, error);
+  }
+};
+
+// Получение курсов по категории
+export const getCoursesByCategory = async (category: string): Promise<ApiResponse<Course[]>> => {
+  try {
+    console.log('Fetching courses by category:', category);
+
+    const { data, error } = await supabase
+      .from('sh_courses')
+      .select('*')
+      .eq('is_public', true)
+      .eq('category', category)
+      .in('status', ['published'])
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    console.log(`Found ${data?.length || 0} courses in category ${category}`);
+    return createApiResponse(data || []);
+  } catch (error) {
+    console.error('Error fetching courses by category:', error);
+    return createApiResponse(null, error);
+  }
+};
+
+// Поиск курсов
+export const searchCourses = async (
+  query: string,
+  filters?: {
+    course_type?: string[];
+    level?: string[];
+    payment_type?: string[];
+    category?: string[];
+  }
+): Promise<ApiResponse<Course[]>> => {
+  try {
+    console.log('Searching courses with query:', query, 'and filters:', filters);
+
+    let supabaseQuery = supabase
+      .from('sh_courses')
+      .select('*')
+      .eq('is_public', true)
+      .in('status', ['published']);
+
+    // Поиск по тексту
+    if (query.trim()) {
+      supabaseQuery = supabaseQuery.or(
+        `title.ilike.%${query}%,short_description.ilike.%${query}%,description.ilike.%${query}%`
+      );
+    }
+
+    // Применяем фильтры
+    if (filters?.course_type && filters.course_type.length > 0) {
+      supabaseQuery = supabaseQuery.in('course_type', filters.course_type);
+    }
+
+    if (filters?.level && filters.level.length > 0) {
+      supabaseQuery = supabaseQuery.in('level', filters.level);
+    }
+
+    if (filters?.payment_type && filters.payment_type.length > 0) {
+      supabaseQuery = supabaseQuery.in('payment_type', filters.payment_type);
+    }
+
+    if (filters?.category && filters.category.length > 0) {
+      supabaseQuery = supabaseQuery.in('category', filters.category);
+    }
+
+    // Сортировка: сначала рекомендуемые, потом по дате
+    supabaseQuery = supabaseQuery.order('is_featured', { ascending: false });
+    supabaseQuery = supabaseQuery.order('created_at', { ascending: false });
+
+    const { data, error } = await supabaseQuery;
+
+    if (error) throw error;
+
+    console.log(`Search returned ${data?.length || 0} courses`);
+    return createApiResponse(data || []);
+  } catch (error) {
+    console.error('Error searching courses:', error);
+    return createApiResponse(null, error);
+  }
+};
+
+// Получение статистики курсов
+export const getCoursesStats = async (): Promise<ApiResponse<{
+  total: number;
+  byType: Record<string, number>;
+  byLevel: Record<string, number>;
+  byCategory: Record<string, number>;
+}>> => {
+  try {
+    console.log('Fetching courses statistics...');
+
+    const { data, error } = await supabase
+      .from('sh_courses')
+      .select('course_type, level, category')
+      .eq('is_public', true)
+      .in('status', ['published']);
+
+    if (error) throw error;
+
+    const stats = {
+      total: data?.length || 0,
+      byType: {} as Record<string, number>,
+      byLevel: {} as Record<string, number>,
+      byCategory: {} as Record<string, number>
+    };
+
+    // Подсчитываем статистику
+    data?.forEach(course => {
+      // По типу
+      stats.byType[course.course_type] = (stats.byType[course.course_type] || 0) + 1;
+      
+      // По уровню
+      stats.byLevel[course.level] = (stats.byLevel[course.level] || 0) + 1;
+      
+      // По категории
+      if (course.category) {
+        stats.byCategory[course.category] = (stats.byCategory[course.category] || 0) + 1;
+      }
+    });
+
+    console.log('Courses stats calculated:', stats);
+    return createApiResponse(stats);
+  } catch (error) {
+    console.error('Error fetching courses stats:', error);
+    return createApiResponse(null, error);
+  }
+};
