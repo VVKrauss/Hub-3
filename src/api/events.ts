@@ -4,7 +4,6 @@ import type { EventWithDetails, PaginatedResponse, ApiResponse } from '../types/
 // Helper function to create API response
 const createApiResponse = <T>(data: T | null, error?: any): ApiResponse<T> => {
   if (error) {
-    console.error('API Error:', error);
     return {
       data: null,
       error: error.message || 'An error occurred',
@@ -33,7 +32,6 @@ const enrichEventSpeakers = async (eventSpeakers: any[]) => {
     .eq('status', 'active');
 
   if (error) {
-    console.warn('Error loading speakers:', error);
     return eventSpeakers;
   }
 
