@@ -138,12 +138,9 @@ const SocialLinksManager: React.FC<SocialLinksManagerProps> = ({
   const saveChanges = async () => {
     try {
       setLoading(true);
-      console.log('Начинаем сохранение социальных ссылок...', { speakerId, links });
 
       // Фильтруем ссылки с валидными URL
       const validLinks = links.filter(link => link.url.trim());
-      console.log('Валидные ссылки:', validLinks);
-
       // Сначала удаляем все существующие ссылки для этого спикера
       console.log('Удаляем существующие ссылки...');
       const { error: deleteError } = await supabase
@@ -152,10 +149,8 @@ const SocialLinksManager: React.FC<SocialLinksManagerProps> = ({
         .eq('speaker_id', speakerId);
 
       if (deleteError) {
-        console.error('Ошибка при удалении:', deleteError);
         throw deleteError;
       }
-      console.log('Существующие ссылки удалены');
 
       // Создаем новые ссылки, если есть
       if (validLinks.length > 0) {
@@ -185,8 +180,6 @@ const SocialLinksManager: React.FC<SocialLinksManagerProps> = ({
           console.error('Ошибка при создании:', insertError);
           throw insertError;
         }
-        
-        console.log('Ссылки созданы:', insertedData);
       }
 
       toast.success('Социальные ссылки обновлены');
@@ -196,8 +189,7 @@ const SocialLinksManager: React.FC<SocialLinksManagerProps> = ({
       if (onUpdate) {
         onUpdate(validLinks);
       }
-      
-      console.log('Сохранение завершено успешно');
+
     } catch (error) {
       console.error('Error saving social links:', error);
       toast.error('Ошибка при сохранении ссылок: ' + (error instanceof Error ? error.message : 'Неизвестная ошибка'));
