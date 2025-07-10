@@ -25,17 +25,22 @@ const checkConnections = async () => {
   try {
     console.log('🔍 Starting connection check...');
     
-    // УПРОЩЕННАЯ проверка БД - используем системную функцию
+    // Проверяем БД через простой запрос к существующей таблице
     let dbStatus = false;
     let dbError = null;
     
     try {
-      // Самый простой запрос к PostgreSQL
-      const { data: dbData, error: dbErr } = await supabase.rpc('version');
+      // Используем таблицу, которая точно существует
+      const { data: dbData, error: dbErr } = await supabase
+        .from('site_settings')
+        .select('id')
+        .limit(1);
+      
       dbStatus = !dbErr;
       dbError = dbErr;
+      console.log('✅ DB check completed');
     } catch (err) {
-      console.error('❌ DB check failed with exception:', err);
+      console.error('❌ DB check failed:', err);
       dbStatus = false;
       dbError = err;
     }
@@ -48,8 +53,9 @@ const checkConnections = async () => {
       const { data: authData, error: authErr } = await supabase.auth.getSession();
       authStatus = !authErr && !!authData.session;
       authError = authErr;
+      console.log('✅ Auth check completed');
     } catch (err) {
-      console.error('❌ Auth check failed with exception:', err);
+      console.error('❌ Auth check failed:', err);
       authStatus = false;
       authError = err;
     }
@@ -61,7 +67,6 @@ const checkConnections = async () => {
       checking: false
     });
     
-    // Логируем результат
     console.log('🔍 Connection check result:', {
       database: dbStatus,
       auth: authStatus,
@@ -87,7 +92,7 @@ const checkConnections = async () => {
       checking: false
     });
   }
-}; 
+};
 
   // Автоматическая проверка каждые 15 секунд
   useEffect(() => {
