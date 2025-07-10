@@ -100,7 +100,7 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
       
       {/* Modal */}
       <div className="flex min-h-screen items-center justify-center p-4">
-        <div className="relative w-full max-w-md transform overflow-hidden rounded-2xl bg-white dark:bg-gray-900 shadow-2xl transition-all">
+        <div className="relative w-full max-w-md transform overflow-hidden rounded-2xl bg-white dark:bg-dark-900 shadow-2xl transition-all">
           {/* Header с градиентом */}
           <div className="relative bg-gradient-to-br from-primary-600 via-primary-700 to-secondary-600 px-8 py-8 text-white">
             {/* Декоративные элементы */}
