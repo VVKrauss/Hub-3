@@ -1,7 +1,6 @@
-// src/contexts/AuthContext.tsx
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+// src/contexts/AuthContext.tsx - Версия без лишних уведомлений
+import { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { supabase, getStoredSession, clearStoredSession } from '../lib/supabase';
-import { User as SupabaseUser } from '@supabase/supabase-js';
 
 type User = {
   id: string;
@@ -23,6 +22,10 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Отслеживаем состояние для предотвращения дублирования уведомлений
+  const wasAuthenticatedRef = useRef(false);
+  const initialCheckDoneRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -47,6 +50,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setUser(null);
             setLoading(false);
             initializationCompleted = true;
+            initialCheckDoneRef.current = true;
           }
           return;
         }
@@ -61,13 +65,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               name: session.user.user_metadata?.name
             };
             setUser(userData);
+            wasAuthenticatedRef.current = true;
             console.log('🔐 AuthProvider: Пользователь установлен:', userData.email);
           } else {
             setUser(null);
+            wasAuthenticatedRef.current = false;
             console.log('🔐 AuthProvider: Пользователь не найден');
           }
           setLoading(false);
           initializationCompleted = true;
+          initialCheckDoneRef.current = true;
         }
       } catch (error) {
         console.error('🔐 AuthProvider: Ошибка инициализации:', error);
@@ -77,6 +84,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setUser(null);
           setLoading(false);
           initializationCompleted = true;
+          initialCheckDoneRef.current = true;
         }
       }
     };
@@ -94,6 +102,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         switch (event) {
           case 'INITIAL_SESSION':
             // Начальная сессия уже обработана в initializeAuth
+            console.log('🔐 AuthProvider: Обработка начальной сессии пропущена');
             break;
             
           case 'SIGNED_IN':
@@ -103,8 +112,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 email: session.user.email || '',
                 name: session.user.user_metadata?.name
               };
+              
+              // Проверяем, это новый вход или восстановление сессии
+              const isNewSignIn = !wasAuthenticatedRef.current && initialCheckDoneRef.current;
+              
               setUser(userData);
-              console.log('🔐 AuthProvider: Пользователь вошел:', userData.email);
+              wasAuthenticatedRef.current = true;
+              
+              if (isNewSignIn) {
+                console.log('🔐 AuthProvider: Новый пользователь вошел:', userData.email);
+              } else {
+                console.log('🔐 AuthProvider: Восстановление сессии:', userData.email);
+              }
             }
             if (initializationCompleted) {
               setLoading(false);
@@ -113,6 +132,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             
           case 'SIGNED_OUT':
             setUser(null);
+            wasAuthenticatedRef.current = false;
             clearStoredSession();
             console.log('🔐 AuthProvider: Пользователь вышел');
             if (initializationCompleted) {
@@ -122,7 +142,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             
           case 'TOKEN_REFRESHED':
             console.log('🔐 AuthProvider: Токен обновлен');
-            // Пользователь остается тем же, просто обновился токен
+            // При обновлении токена не меняем пользователя
             break;
             
           case 'USER_UPDATED':
@@ -197,6 +217,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Принудительно очищаем состояние
     clearStoredSession();
     setUser(null);
+    wasAuthenticatedRef.current = false;
     console.log('🔐 AuthProvider: Выход выполнен');
   };
 
