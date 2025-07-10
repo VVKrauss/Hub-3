@@ -10,17 +10,15 @@ import { TopBarProvider } from './contexts/TopBarContext';
 import AppLoadingWrapper from './components/AppLoadingWrapper';
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <BrowserRouter>
-      <ThemeProvider>
-        <AuthProvider>
-          <TopBarProvider>
-            <AppLoadingWrapper>
-              <App />
-            </AppLoadingWrapper>
-          </TopBarProvider>
-        </AuthProvider>
-      </ThemeProvider>
-    </BrowserRouter>
-  </StrictMode>
+  <BrowserRouter>
+    <ThemeProvider>
+      <AuthProvider>
+        <TopBarProvider>
+          <AppLoadingWrapper>
+            <App />
+          </AppLoadingWrapper>
+        </TopBarProvider>
+      </AuthProvider>
+    </ThemeProvider>
+  </BrowserRouter>
 );
