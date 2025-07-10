@@ -1,4 +1,4 @@
-// src/App.tsx
+// src/App.tsx - ОПТИМИЗИРОВАННАЯ ВЕРСИЯ
 import { Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import HomePage from './pages/HomePage';
@@ -33,13 +33,16 @@ import AuthCallbackPage from './pages/auth/AuthCallbackPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import ProfilePage from './pages/ProfilePage';
 import SessionMonitor from './components/SessionMonitor';
+import AppRecovery from './components/AppRecovery';
 
 function App() {
   return (
     <div className="app">
       <Toaster position="top-center" />
-      {/* Монитор сессии для предотвращения зависаний */}
+      
+      {/* Оптимизированные мониторы - избегают конфликтов */}
       <SessionMonitor />
+      <AppRecovery />
       
       <Routes>
         {/* Public routes */}
