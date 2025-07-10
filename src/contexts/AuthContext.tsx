@@ -1,4 +1,4 @@
-// src/contexts/AuthContext.tsx - ОПТИМИЗИРОВАННАЯ ВЕРСИЯ
+// src/contexts/AuthContext.tsx - ИСПРАВЛЕННАЯ ВЕРСИЯ (убираем двойные уведомления)
 import { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { supabase, getStoredSession, clearStoredSession } from '../lib/supabase';
 import { User as SupabaseUser } from '@supabase/supabase-js';
@@ -12,12 +12,12 @@ type User = {
 type AuthContextType = {
   user: User;
   loading: boolean;
-  isQuickReturn: boolean; // НОВЫЙ флаг для быстрого возврата
+  isQuickReturn: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, name: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
-  forceQuickCheck: () => Promise<void>; // НОВЫЙ метод для принудительной быстрой проверки
+  forceQuickCheck: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -208,6 +208,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               setUser(userData);
               setLoading(false);
               console.log('🔐 AuthProvider: Пользователь вошел:', userData.email);
+              // УБРАЛИ toast отсюда - будет только в TopBarContext
             }
             break;
             
@@ -216,6 +217,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             clearStoredSession();
             setLoading(false);
             console.log('🔐 AuthProvider: Пользователь вышел');
+            // УБРАЛИ toast отсюда - будет только в TopBarContext
             break;
             
           case 'TOKEN_REFRESHED':
