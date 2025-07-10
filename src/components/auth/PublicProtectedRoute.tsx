@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+// src/components/auth/PublicProtectedRoute.tsx
+import { useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
+import { useAuthCheck } from '../../hooks/useAuthCheck';
 import LoginModal from './LoginModal';
 
 type PublicProtectedRouteProps = {
@@ -8,67 +9,44 @@ type PublicProtectedRouteProps = {
 };
 
 const PublicProtectedRoute = ({ children }: PublicProtectedRouteProps) => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-  const [showLoginModal, setShowLoginModal] = useState(false);
   const location = useLocation();
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  
+  const { authStatus, isAuthorized } = useAuthCheck({
+    requireAuth: true
+  });
 
-  useEffect(() => {
-    checkAuth();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN') {
-        setIsAuthenticated(true);
-        setShowLoginModal(false);
-      } else if (event === 'SIGNED_OUT') {
-        setIsAuthenticated(false);
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  const checkAuth = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const isAuthed = !!session;
-      setIsAuthenticated(isAuthed);
-      
-      if (!isAuthed) {
-        setShowLoginModal(true);
-      }
-    } catch (error) {
-      console.error('Error checking auth status:', error);
-      setIsAuthenticated(false);
-      setShowLoginModal(true);
-    }
-  };
-
-  if (isAuthenticated === null) {
+  // Показываем загрузку пока идет проверка
+  if (authStatus === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">
+            Проверка авторизации...
+          </p>
+        </div>
       </div>
     );
   }
 
-  return (
-    <>
-      {!isAuthenticated && (
+  // Если не авторизован, показываем модальное окно
+  if (authStatus === 'unauthenticated') {
+    return (
+      <>
         <LoginModal 
-          isOpen={showLoginModal} 
-          onClose={() => setShowLoginModal(false)} 
+          isOpen={true} 
+          onClose={() => {
+            // При закрытии модального окна перенаправляем на главную
+          }} 
         />
-      )}
-      
-      {isAuthenticated ? (
-        children
-      ) : (
         <Navigate to="/" state={{ from: location }} replace />
-      )}
-    </>
-  );
+      </>
+    );
+  }
+
+  // Если авторизован, показываем контент
+  return <>{children}</>;
 };
 
 export default PublicProtectedRoute;
