@@ -11,7 +11,7 @@ export const Skeleton = ({ className = '', ...props }) => (
 
 // Skeleton для карточки события
 export const EventCardSkeleton = () => (
-  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
+  <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md overflow-hidden">
     <Skeleton className="h-48 w-full" />
     <div className="p-6">
       <Skeleton className="h-6 w-3/4 mb-2" />
@@ -28,7 +28,7 @@ export const EventCardSkeleton = () => (
 
 // Skeleton для карточки спикера
 export const SpeakerCardSkeleton = () => (
-  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 text-center">
+  <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-6 text-center">
     <Skeleton className="w-24 h-24 rounded-full mx-auto mb-4" />
     <Skeleton className="h-6 w-3/4 mx-auto mb-2" />
     <Skeleton className="h-4 w-1/2 mx-auto mb-4" />
@@ -55,9 +55,9 @@ export const ListSkeleton = ({ items = 3 }) => (
 
 // Skeleton для таблицы
 export const TableSkeleton = ({ rows = 5, cols = 4 }) => (
-  <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+  <div className="bg-white dark:bg-dark-800 rounded-lg shadow overflow-hidden">
     {/* Header */}
-    <div className="bg-gray-50 dark:bg-gray-700 p-4">
+    <div className="bg-gray-50 dark:bg-dark-700 p-4">
       <div className="flex space-x-4">
         {Array.from({ length: cols }).map((_, i) => (
           <Skeleton key={i} className="h-4 flex-1" />
@@ -66,7 +66,7 @@ export const TableSkeleton = ({ rows = 5, cols = 4 }) => (
     </div>
     
     {/* Rows */}
-    <div className="divide-y divide-gray-200 dark:divide-gray-600">
+    <div className="divide-y divide-gray-200 dark:divide-dark-600">
       {Array.from({ length: rows }).map((_, i) => (
         <div key={i} className="p-4">
           <div className="flex space-x-4">
