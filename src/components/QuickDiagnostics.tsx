@@ -87,7 +87,7 @@ const checkConnections = async () => {
       checking: false
     });
   }
-};
+}; 
 
   // Автоматическая проверка каждые 15 секунд
   useEffect(() => {
