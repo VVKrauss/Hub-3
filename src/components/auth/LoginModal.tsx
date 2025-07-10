@@ -172,7 +172,7 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
                       id="name"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 py-3 pl-12 pr-4 text-gray-900 dark:text-white placeholder-gray-500 transition-all focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 dark:focus:border-primary-400"
+                      className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-800 py-3 pl-12 pr-4 text-dark-900 dark:text-white placeholder-dark-500 transition-all focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 dark:focus:border-primary-400"
                       placeholder="Введите ваше имя"
                       required
                     />
