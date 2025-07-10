@@ -1,4 +1,4 @@
-// src/App.tsx - ОБНОВЛЕННЫЙ с добавлением диагностики
+// src/App.tsx - ТЕСТОВАЯ ВЕРСИЯ без диагностики
 import { Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import HomePage from './pages/HomePage';
@@ -32,18 +32,19 @@ import PostersPage from './components/posters/PostersPage';
 import AuthCallbackPage from './pages/auth/AuthCallbackPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import ProfilePage from './pages/ProfilePage';
-import AppRecovery from './components/AppRecovery';
 
-// ДОБАВЛЯЕМ ДИАГНОСТИКУ
-import QuickDiagnostics from './components/QuickDiagnostics';
+// ОТКЛЮЧАЕМ ВСЕ ДИАГНОСТИЧЕСКИЕ КОМПОНЕНТЫ
+// import QuickDiagnostics from './components/QuickDiagnostics';
+// import AppRecovery from './components/AppRecovery';
 
 function App() {
   return (
     <div className="app">
       <Toaster position="top-center" />
-      <AppRecovery />
-      {/* ДОБАВЛЯЕМ ДИАГНОСТИКУ */}
-      <QuickDiagnostics />
+      
+      {/* ВРЕМЕННО ОТКЛЮЧЕНО ДЛЯ ТЕСТА */}
+      {/* <AppRecovery /> */}
+      {/* <QuickDiagnostics /> */}
       
       <Routes>
         {/* Public routes */}
