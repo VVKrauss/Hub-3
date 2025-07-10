@@ -248,7 +248,7 @@ const SocialLinksManager: React.FC<SocialLinksManagerProps> = ({
           {links.map((link, index) => (
             <div 
               key={index} 
-              className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50"
+              className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-dark-800/50"
             >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
@@ -256,7 +256,7 @@ const SocialLinksManager: React.FC<SocialLinksManagerProps> = ({
                   <select
                     value={link.platform}
                     onChange={(e) => updateLink(index, { platform: e.target.value as SocialPlatform })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-dark-700 text-gray-900 dark:text-white text-sm"
                   >
                     <option value="website">Веб-сайт</option>
                     <option value="linkedin">LinkedIn</option>
@@ -274,7 +274,7 @@ const SocialLinksManager: React.FC<SocialLinksManagerProps> = ({
                     type="url"
                     value={link.url}
                     onChange={(e) => updateLink(index, { url: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-dark-700 text-gray-900 dark:text-white text-sm"
                     placeholder="https://..."
                   />
                 </div>
@@ -285,7 +285,7 @@ const SocialLinksManager: React.FC<SocialLinksManagerProps> = ({
                     type="text"
                     value={link.display_name || ''}
                     onChange={(e) => updateLink(index, { display_name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-dark-700 text-gray-900 dark:text-white text-sm"
                     placeholder="@username или название"
                   />
                 </div>
@@ -296,7 +296,7 @@ const SocialLinksManager: React.FC<SocialLinksManagerProps> = ({
                     type="text"
                     value={link.description || ''}
                     onChange={(e) => updateLink(index, { description: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-dark-700 text-gray-900 dark:text-white text-sm"
                     placeholder="Краткое описание"
                   />
                 </div>
@@ -324,7 +324,7 @@ const SocialLinksManager: React.FC<SocialLinksManagerProps> = ({
                     className={`text-xs px-2 py-1 rounded ${
                       link.is_primary
                         ? 'bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-300'
-                        : 'bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-500'
+                        : 'bg-gray-200 text-gray-700 dark:bg-dark-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-500'
                     }`}
                   >
                     {link.is_primary ? 'Основная' : 'Сделать основной'}
