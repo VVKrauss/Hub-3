@@ -1,7 +1,7 @@
-// src/components/AppLoadingWrapper.tsx
+// src/components/AppLoadingWrapper.tsx - ОПТИМИЗИРОВАННАЯ ВЕРСИЯ
 import { useAuth } from '../contexts/AuthContext';
 import { useEffect, useState } from 'react';
-import { Loader2, AlertTriangle, RotateCcw } from 'lucide-react';
+import { Loader2, AlertTriangle, RotateCcw, Zap } from 'lucide-react';
 import { clearStoredSession } from '../lib/supabase';
 
 interface AppLoadingWrapperProps {
@@ -9,11 +9,11 @@ interface AppLoadingWrapperProps {
 }
 
 const AppLoadingWrapper = ({ children }: AppLoadingWrapperProps) => {
-  const { loading } = useAuth();
+  const { loading, isQuickReturn } = useAuth();
   const [timeoutReached, setTimeoutReached] = useState(false);
   const [forceShow, setForceShow] = useState(false);
 
-  // Таймаут для предотвращения бесконечной загрузки
+  // Разные таймауты для разных типов загрузки
   useEffect(() => {
     if (!loading) {
       setTimeoutReached(false);
@@ -21,13 +21,16 @@ const AppLoadingWrapper = ({ children }: AppLoadingWrapperProps) => {
       return;
     }
 
+    // Для быстрого возврата - короткий таймаут
+    const timeoutDuration = isQuickReturn ? 5000 : 10000; // 5 сек для возврата, 10 сек для полной загрузки
+
     const timeout = setTimeout(() => {
-      console.warn('⚠️ AppLoadingWrapper: Превышен таймаут загрузки авторизации');
+      console.warn(`⚠️ AppLoadingWrapper: Превышен таймаут загрузки (${timeoutDuration}ms, быстрый возврат: ${isQuickReturn})`);
       setTimeoutReached(true);
-    }, 10000); // 10 секунд
+    }, timeoutDuration);
 
     return () => clearTimeout(timeout);
-  }, [loading]);
+  }, [loading, isQuickReturn]);
 
   const handleForceShow = () => {
     console.log('🔄 AppLoadingWrapper: Принудительное продолжение без ожидания авторизации');
@@ -52,28 +55,42 @@ const AppLoadingWrapper = ({ children }: AppLoadingWrapperProps) => {
         <div className="bg-white dark:bg-dark-800 rounded-2xl shadow-xl p-8 text-center">
           {!timeoutReached ? (
             <>
-              {/* Обычная загрузка */}
+              {/* Обычная загрузка или быстрый возврат */}
               <div className="mb-6">
                 <div className="relative mx-auto w-16 h-16">
-                  <Loader2 className="w-16 h-16 text-primary-600 animate-spin" />
+                  {isQuickReturn ? (
+                    <Zap className="w-16 h-16 text-primary-600 animate-pulse" />
+                  ) : (
+                    <Loader2 className="w-16 h-16 text-primary-600 animate-spin" />
+                  )}
                   <div className="absolute inset-0 w-16 h-16 border-4 border-primary-200 dark:border-primary-800 rounded-full"></div>
                 </div>
               </div>
 
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-                Загрузка приложения
+                {isQuickReturn ? 'Быстрое восстановление' : 'Загрузка приложения'}
               </h1>
 
               <p className="text-gray-600 dark:text-gray-300 mb-6">
-                Подготавливаем все для вас...
+                {isQuickReturn 
+                  ? 'Восстанавливаем ваш сеанс...' 
+                  : 'Подготавливаем все для вас...'
+                }
               </p>
 
               <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                <div className="bg-gradient-to-r from-primary-600 to-secondary-600 h-2 rounded-full animate-pulse w-3/4"></div>
+                <div className={`${
+                  isQuickReturn 
+                    ? 'bg-gradient-to-r from-green-400 to-blue-500 animate-pulse w-4/5' 
+                    : 'bg-gradient-to-r from-primary-600 to-secondary-600 animate-pulse w-3/4'
+                } h-2 rounded-full`}></div>
               </div>
               
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-4">
-                Если загрузка занимает слишком много времени, попробуйте обновить страницу
+                {isQuickReturn 
+                  ? 'Быстрое восстановление обычно занимает несколько секунд'
+                  : 'Если загрузка занимает слишком много времени, попробуйте обновить страницу'
+                }
               </p>
             </>
           ) : (
@@ -84,11 +101,14 @@ const AppLoadingWrapper = ({ children }: AppLoadingWrapperProps) => {
               </div>
 
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-                Проблемы с загрузкой
+                {isQuickReturn ? 'Медленное восстановление' : 'Проблемы с загрузкой'}
               </h1>
 
               <p className="text-gray-600 dark:text-gray-300 mb-6">
-                Приложение загружается дольше обычного. Это может быть связано с медленным соединением или проблемами с авторизацией.
+                {isQuickReturn 
+                  ? 'Восстановление сеанса занимает дольше обычного. Это может быть связано с медленным соединением.'
+                  : 'Приложение загружается дольше обычного. Это может быть связано с медленным соединением или проблемами с авторизацией.'
+                }
               </p>
 
               <div className="space-y-3">
@@ -109,7 +129,10 @@ const AppLoadingWrapper = ({ children }: AppLoadingWrapperProps) => {
               </div>
 
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-4">
-                Если проблемы продолжаются, обратитесь к администратору
+                {isQuickReturn 
+                  ? 'При медленном соединении восстановление может занять до минуты'
+                  : 'Если проблемы продолжаются, обратитесь к администратору'
+                }
               </p>
             </>
           )}
