@@ -1,12 +1,12 @@
-// src/components/SessionMonitor.tsx - ОПТИМИЗИРОВАННАЯ ВЕРСИЯ
+// src/components/SessionMonitor.tsx - ИСПРАВЛЕННАЯ ВЕРСИЯ (правильная проверка токенов)
 import { useEffect, useRef } from 'react';
 import { supabase, clearStoredSession } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 
 /**
- * Оптимизированный компонент для мониторинга состояния сессии
- * Работает совместно с AuthContext, избегая конфликтов
+ * Исправленный компонент для мониторинга состояния сессии
+ * Правильно проверяет истечение токенов
  */
 const SessionMonitor = () => {
   const { user, loading, isQuickReturn } = useAuth();
@@ -30,7 +30,7 @@ const SessionMonitor = () => {
     console.log('🔍 SessionMonitor: Запуск мониторинга сессии');
     isMonitoring.current = true;
 
-    // Функция ЛЕГКОЙ проверки состояния сессии (не конфликтует с AuthContext)
+    // Функция ПРАВИЛЬНОЙ проверки состояния сессии
     const checkSessionHealth = async () => {
       // Пропускаем проверку если AuthContext в процессе инициализации
       if (loading || isQuickReturn) {
@@ -45,8 +45,7 @@ const SessionMonitor = () => {
       }
 
       try {
-        // ВАЖНО: Используем минимальную проверку через localStorage
-        // чтобы не конфликтовать с AuthContext
+        // ИСПРАВЛЕНО: Правильная проверка через localStorage
         const storedAuth = localStorage.getItem('sb-auth-token');
         
         if (!storedAuth && user) {
@@ -59,25 +58,33 @@ const SessionMonitor = () => {
         if (storedAuth) {
           try {
             const session = JSON.parse(storedAuth);
-            const expiresAt = session.expires_at ? new Date(session.expires_at).getTime() : 0;
-            const now = Date.now();
             
-            // Проверяем не истек ли токен
-            if (expiresAt > 0 && expiresAt < now) {
-              console.warn('🔍 SessionMonitor: Токен истек');
-              handleSessionLost();
-              return;
+            // ИСПРАВЛЕНО: Правильная проверка времени истечения
+            if (session.expires_at) {
+              // expires_at в Supabase - это Unix timestamp в СЕКУНДАХ, а не миллисекундах
+              const expiresAtMs = session.expires_at * 1000; // Конвертируем в миллисекунды
+              const now = Date.now();
+              
+              console.log('🔍 SessionMonitor: Проверка токена:', {
+                expiresAt: new Date(expiresAtMs).toISOString(),
+                now: new Date(now).toISOString(),
+                diffMinutes: Math.round((expiresAtMs - now) / 60000)
+              });
+              
+              // Проверяем не истек ли токен (с буфером 5 минут)
+              const bufferMs = 5 * 60 * 1000; // 5 минут
+              if (expiresAtMs < (now + bufferMs)) {
+                console.warn('🔍 SessionMonitor: Токен истекает или истек');
+                handleSessionLost();
+                return;
+              }
             }
             
             // Обновляем время последней успешной проверки
             lastSessionCheck.current = Date.now();
             sessionLostNotificationShown.current = false;
             
-            // Если токен истекает в ближайшие 5 минут - уведомляем AuthContext
-            if (expiresAt > 0 && expiresAt - now < 300000) {
-              console.log('🔍 SessionMonitor: Токен скоро истечет, уведомляем AuthContext');
-              // Не вызываем обновление напрямую - пусть AuthContext сам решает
-            }
+            console.log('✅ SessionMonitor: Токен валиден');
             
           } catch (parseError) {
             console.error('🔍 SessionMonitor: Ошибка парсинга сессии:', parseError);
@@ -123,8 +130,8 @@ const SessionMonitor = () => {
     // Проверяем сессию каждые 60 секунд (реже чем раньше)
     sessionCheckInterval.current = setInterval(checkSessionHealth, 60000);
     
-    // Выполняем первую проверку через 5 секунд (даем AuthContext завершиться)
-    const initialCheckTimeout = setTimeout(checkSessionHealth, 5000);
+    // Выполняем первую проверку через 10 секунд (даем AuthContext полностью завершиться)
+    const initialCheckTimeout = setTimeout(checkSessionHealth, 10000);
 
     // НЕ слушаем visibilitychange - это делает AuthContext
     // НЕ слушаем focus - это тоже делает AuthContext
