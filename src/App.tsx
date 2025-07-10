@@ -32,6 +32,7 @@ import PostersPage from './components/posters/PostersPage';
 import AuthCallbackPage from './pages/auth/AuthCallbackPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import ProfilePage from './pages/ProfilePage';
+import AppRecovery from './components/AppRecovery';
 
 // ДОБАВЛЯЕМ ДИАГНОСТИКУ
 import QuickDiagnostics from './components/QuickDiagnostics';
