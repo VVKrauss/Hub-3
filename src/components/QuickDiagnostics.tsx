@@ -206,4 +206,4 @@ const QuickDiagnostics: React.FC = () => {
   );
 };
 
-export default QuickDiagnostics;
+export default QuickDiagnostics; 
