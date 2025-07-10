@@ -69,7 +69,6 @@ const createApiResponse = <T>(data: T | null, error?: any): ApiResponse<T> => {
 // Получение всех публичных курсов
 export const getCourses = async (): Promise<ApiResponse<Course[]>> => {
   try {
-    console.log('Fetching courses...');
 
     const { data, error } = await supabase
       .from('sh_courses')
@@ -80,10 +79,8 @@ export const getCourses = async (): Promise<ApiResponse<Course[]>> => {
 
     if (error) throw error;
 
-    console.log(`Loaded ${data?.length || 0} courses`);
     return createApiResponse(data || []);
   } catch (error) {
-    console.error('Error fetching courses:', error);
     return createApiResponse(null, error);
   }
 };
@@ -91,7 +88,6 @@ export const getCourses = async (): Promise<ApiResponse<Course[]>> => {
 // Получение курса по ID
 export const getCourseById = async (courseId: string): Promise<ApiResponse<CourseWithInstructor>> => {
   try {
-    console.log('Fetching course by ID:', courseId);
 
     const { data: course, error } = await supabase
       .from('sh_courses')
@@ -121,10 +117,8 @@ export const getCourseById = async (courseId: string): Promise<ApiResponse<Cours
       throw new Error('Курс не найден');
     }
 
-    console.log('Course loaded successfully:', course.title);
     return createApiResponse(course);
   } catch (error) {
-    console.error('Error fetching course:', error);
     return createApiResponse(null, error);
   }
 };
@@ -132,7 +126,6 @@ export const getCourseById = async (courseId: string): Promise<ApiResponse<Cours
 // Получение курсов по инструктору (спикеру)
 export const getCoursesByInstructor = async (instructorId: string): Promise<ApiResponse<Course[]>> => {
   try {
-    console.log('Fetching courses by instructor:', instructorId);
 
     const { data, error } = await supabase
       .from('sh_courses')
@@ -144,10 +137,8 @@ export const getCoursesByInstructor = async (instructorId: string): Promise<ApiR
 
     if (error) throw error;
 
-    console.log(`Found ${data?.length || 0} courses for instructor ${instructorId}`);
     return createApiResponse(data || []);
   } catch (error) {
-    console.error('Error fetching courses by instructor:', error);
     return createApiResponse(null, error);
   }
 };
@@ -155,7 +146,6 @@ export const getCoursesByInstructor = async (instructorId: string): Promise<ApiR
 // Получение рекомендуемых курсов
 export const getFeaturedCourses = async (): Promise<ApiResponse<Course[]>> => {
   try {
-    console.log('Fetching featured courses...');
 
     const { data, error } = await supabase
       .from('sh_courses')
@@ -168,10 +158,8 @@ export const getFeaturedCourses = async (): Promise<ApiResponse<Course[]>> => {
 
     if (error) throw error;
 
-    console.log(`Found ${data?.length || 0} featured courses`);
     return createApiResponse(data || []);
   } catch (error) {
-    console.error('Error fetching featured courses:', error);
     return createApiResponse(null, error);
   }
 };
@@ -179,7 +167,6 @@ export const getFeaturedCourses = async (): Promise<ApiResponse<Course[]>> => {
 // Получение курсов по категории
 export const getCoursesByCategory = async (category: string): Promise<ApiResponse<Course[]>> => {
   try {
-    console.log('Fetching courses by category:', category);
 
     const { data, error } = await supabase
       .from('sh_courses')
@@ -191,10 +178,9 @@ export const getCoursesByCategory = async (category: string): Promise<ApiRespons
 
     if (error) throw error;
 
-    console.log(`Found ${data?.length || 0} courses in category ${category}`);
+
     return createApiResponse(data || []);
   } catch (error) {
-    console.error('Error fetching courses by category:', error);
     return createApiResponse(null, error);
   }
 };
@@ -210,7 +196,6 @@ export const searchCourses = async (
   }
 ): Promise<ApiResponse<Course[]>> => {
   try {
-    console.log('Searching courses with query:', query, 'and filters:', filters);
 
     let supabaseQuery = supabase
       .from('sh_courses')
@@ -250,10 +235,8 @@ export const searchCourses = async (
 
     if (error) throw error;
 
-    console.log(`Search returned ${data?.length || 0} courses`);
     return createApiResponse(data || []);
   } catch (error) {
-    console.error('Error searching courses:', error);
     return createApiResponse(null, error);
   }
 };
@@ -266,7 +249,6 @@ export const getCoursesStats = async (): Promise<ApiResponse<{
   byCategory: Record<string, number>;
 }>> => {
   try {
-    console.log('Fetching courses statistics...');
 
     const { data, error } = await supabase
       .from('sh_courses')
@@ -297,10 +279,8 @@ export const getCoursesStats = async (): Promise<ApiResponse<{
       }
     });
 
-    console.log('Courses stats calculated:', stats);
     return createApiResponse(stats);
   } catch (error) {
-    console.error('Error fetching courses stats:', error);
     return createApiResponse(null, error);
   }
 };
