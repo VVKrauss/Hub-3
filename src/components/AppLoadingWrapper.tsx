@@ -1,8 +1,9 @@
-// src/components/AppLoadingWrapper.tsx - ОПТИМИЗИРОВАННАЯ ВЕРСИЯ
+// src/components/AppLoadingWrapper.tsx - ОБНОВЛЕННАЯ ВЕРСИЯ с анимированным логотипом
 import { useAuth } from '../contexts/AuthContext';
 import { useEffect, useState } from 'react';
-import { Loader2, AlertTriangle, RotateCcw, Zap } from 'lucide-react';
+import { AlertTriangle, RotateCcw, Zap } from 'lucide-react';
 import { clearStoredSession } from '../lib/supabase';
+import CustomLoader from './ui/CustomLoader';
 
 interface AppLoadingWrapperProps {
   children: React.ReactNode;
@@ -55,16 +56,18 @@ const AppLoadingWrapper = ({ children }: AppLoadingWrapperProps) => {
         <div className="bg-white dark:bg-dark-800 rounded-2xl shadow-xl p-8 text-center">
           {!timeoutReached ? (
             <>
-              {/* Обычная загрузка или быстрый возврат */}
+              {/* Анимированный логотип */}
               <div className="mb-6">
-                <div className="relative mx-auto w-16 h-16">
-                  {isQuickReturn ? (
-                    <Zap className="w-16 h-16 text-primary-600 animate-pulse" />
-                  ) : (
-                    <Loader2 className="w-16 h-16 text-primary-600 animate-spin" />
-                  )}
-                  <div className="absolute inset-0 w-16 h-16 border-4 border-primary-200 dark:border-primary-800 rounded-full"></div>
-                </div>
+                {isQuickReturn ? (
+                  <div className="relative">
+                    <CustomLoader size="xl" />
+                    <div className="absolute -top-2 -right-2 bg-green-500 rounded-full p-1">
+                      <Zap className="w-4 h-4 text-white" />
+                    </div>
+                  </div>
+                ) : (
+                  <CustomLoader size="xl" />
+                )}
               </div>
 
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
@@ -83,7 +86,7 @@ const AppLoadingWrapper = ({ children }: AppLoadingWrapperProps) => {
                   isQuickReturn 
                     ? 'bg-gradient-to-r from-green-400 to-blue-500 animate-pulse w-4/5' 
                     : 'bg-gradient-to-r from-primary-600 to-secondary-600 animate-pulse w-3/4'
-                } h-2 rounded-full`}></div>
+                } h-2 rounded-full transition-all duration-300`}></div>
               </div>
               
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-4">
@@ -97,7 +100,12 @@ const AppLoadingWrapper = ({ children }: AppLoadingWrapperProps) => {
             <>
               {/* Превышен таймаут */}
               <div className="mb-6">
-                <AlertTriangle className="w-16 h-16 text-yellow-500 mx-auto" />
+                <div className="relative">
+                  <CustomLoader size="xl" className="opacity-50" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <AlertTriangle className="w-8 h-8 text-yellow-500" />
+                  </div>
+                </div>
               </div>
 
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
