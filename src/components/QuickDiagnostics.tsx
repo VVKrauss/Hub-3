@@ -10,6 +10,19 @@ interface DiagnosticStatus {
   checking: boolean;
 }
 
+// Функция для добавления таймаута к промисам
+const withTimeout = <T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => 
+      setTimeout(() => {
+        console.error(`⏰ TIMEOUT: ${label} after ${timeoutMs}ms`);
+        reject(new Error(`Timeout: ${label} after ${timeoutMs}ms`));
+      }, timeoutMs)
+    )
+  ]);
+};
+
 const QuickDiagnostics: React.FC = () => {
   const [status, setStatus] = useState<DiagnosticStatus>({
     db: null,
@@ -18,81 +31,84 @@ const QuickDiagnostics: React.FC = () => {
     checking: false
   });
 
-// Замените функцию checkConnections в QuickDiagnostics.tsx
-const checkConnections = async () => {
-  setStatus(prev => ({ ...prev, checking: true }));
-  
-  try {
-    console.log('🔍 Starting connection check...');
-    
-    // Проверяем БД через простой запрос к существующей таблице
-    let dbStatus = false;
-    let dbError = null;
+  const checkConnections = async () => {
+    setStatus(prev => ({ ...prev, checking: true }));
     
     try {
-      // Используем таблицу, которая точно существует
-      const { data: dbData, error: dbErr } = await supabase
-        .from('site_settings')
-        .select('id')
-        .limit(1);
+      console.log('🔍 Starting connection check...');
       
-      dbStatus = !dbErr;
-      dbError = dbErr;
-      console.log('✅ DB check completed');
-    } catch (err) {
-      console.error('❌ DB check failed:', err);
-      dbStatus = false;
-      dbError = err;
+      // Проверяем БД с коротким таймаутом
+      let dbStatus = false;
+      let dbError = null;
+      
+      try {
+        console.log('📊 Starting DB check...');
+        const dbPromise = supabase
+          .from('site_settings')
+          .select('id')
+          .limit(1);
+        
+        const { data: dbData, error: dbErr } = await withTimeout(
+          dbPromise, 
+          3000, // 3 секунды максимум
+          'DB check'
+        );
+        
+        dbStatus = !dbErr;
+        dbError = dbErr;
+        console.log('✅ DB check completed successfully');
+      } catch (err) {
+        console.error('❌ DB check failed or timed out:', err);
+        dbStatus = false;
+        dbError = err;
+      }
+      
+      // Проверяем авторизацию с коротким таймаутом
+      let authStatus = false;
+      let authError = null;
+      
+      try {
+        console.log('🔐 Starting Auth check...');
+        const authPromise = supabase.auth.getSession();
+        
+        const { data: authData, error: authErr } = await withTimeout(
+          authPromise,
+          2000, // 2 секунды максимум
+          'Auth check'
+        );
+        
+        authStatus = !authErr && !!authData.session;
+        authError = authErr;
+        console.log('✅ Auth check completed successfully');
+      } catch (err) {
+        console.error('❌ Auth check failed or timed out:', err);
+        authStatus = false;
+        authError = err;
+      }
+      
+      setStatus({
+        db: dbStatus,
+        auth: authStatus,
+        lastCheck: new Date().toLocaleTimeString(),
+        checking: false
+      });
+      
+      console.log('🔍 Connection check completed:', {
+        database: dbStatus,
+        auth: authStatus,
+        timestamp: new Date().toISOString()
+      });
+      
+    } catch (error) {
+      console.error('❌ Connection check failed completely:', error);
+      setStatus({
+        db: false,
+        auth: false,
+        lastCheck: new Date().toLocaleTimeString(),
+        checking: false
+      });
     }
-    
-    // Проверяем авторизацию
-    let authStatus = false;
-    let authError = null;
-    
-    try {
-      const { data: authData, error: authErr } = await supabase.auth.getSession();
-      authStatus = !authErr && !!authData.session;
-      authError = authErr;
-      console.log('✅ Auth check completed');
-    } catch (err) {
-      console.error('❌ Auth check failed:', err);
-      authStatus = false;
-      authError = err;
-    }
-    
-    setStatus({
-      db: dbStatus,
-      auth: authStatus,
-      lastCheck: new Date().toLocaleTimeString(),
-      checking: false
-    });
-    
-    console.log('🔍 Connection check result:', {
-      database: dbStatus,
-      auth: authStatus,
-      dbError,
-      authError,
-      timestamp: new Date().toISOString()
-    });
-    
-    // Если есть проблемы, логируем детали
-    if (!dbStatus) {
-      console.error('❌ Database connection failed:', dbError);
-    }
-    if (!authStatus) {
-      console.warn('⚠️ Auth session issue:', authError || 'No session');
-    }
-    
-  } catch (error) {
-    console.error('❌ Connection check failed:', error);
-    setStatus({
-      db: false,
-      auth: false,
-      lastCheck: new Date().toLocaleTimeString(),
-      checking: false
-    });
-  }
-};
+  };
 
   // Автоматическая проверка каждые 15 секунд
   useEffect(() => {
@@ -167,6 +183,14 @@ const checkConnections = async () => {
               </span>
             </div>
             <div className="text-xs text-yellow-700 mt-1">
+              {status.db === false && status.auth === false 
+                ? 'Проблемы с БД и авторизацией'
+                : status.db === false 
+                ? 'Проблема с базой данных' 
+                : 'Проблема с авторизацией'
+              }
+            </div>
+            <div className="text-xs text-yellow-600 mt-1">
               Попробуйте перезагрузить страницу
             </div>
           </div>
