@@ -4,7 +4,7 @@ import CustomLoader from './CustomLoader';
 // Базовый skeleton
 export const Skeleton = ({ className = '', ...props }) => (
   <div
-    className={`animate-pulse bg-gray-200 dark:bg-gray-700 rounded ${className}`}
+    className={`animate-pulse bg-gray-200 dark:bg-dark-700 rounded ${className}`}
     {...props}
   />
 );
