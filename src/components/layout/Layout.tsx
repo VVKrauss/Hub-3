@@ -35,7 +35,7 @@ const Layout = ({
   }, [location.pathname, showTransition, transitionDuration]);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col transition-colors duration-200">
+    <div className="min-h-screen bg-gray-50 dark:bg-dark-900 flex flex-col transition-colors duration-200">
       {/* Header */}
       <TopBar />
       
