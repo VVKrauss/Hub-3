@@ -223,10 +223,7 @@ const AdminLayout = () => {
                       {item.label}
                     </span>
                   )}
-                  {(!isSidebarCollapsed || isMobile) && item.to.includes('speakers-migration') && (
-                    <span className="ml-auto bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
-                      Новое
-                    </span>
+                  {(!isSidebarCollapsed || isMobile) && item.to.includes('speakers-migration')
                   )}
                 </NavLink>
               );
