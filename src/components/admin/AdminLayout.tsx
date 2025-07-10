@@ -224,7 +224,7 @@ const AdminLayout = () => {
                     </span>
                   )}
                   {(!isSidebarCollapsed || isMobile) && item.to.includes('speakers-migration')
-                  )}
+                  }
                 </NavLink>
               );
             })}
