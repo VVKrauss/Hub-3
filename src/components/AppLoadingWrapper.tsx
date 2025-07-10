@@ -51,7 +51,7 @@ const AppLoadingWrapper = ({ children }: AppLoadingWrapperProps) => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50 dark:from-dark-900 dark:to-dark-800 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50 dark:from-dark-900 dark:to-dark-600 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
         <div className="bg-white dark:bg-dark-800 rounded-2xl shadow-xl p-8 text-center">
           {!timeoutReached ? (
