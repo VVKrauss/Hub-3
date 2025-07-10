@@ -1,22 +1,89 @@
-// src/utils/networkUtils.ts
+// src/utils/networkUtils.ts - ОПТИМИЗИРОВАННАЯ ВЕРСИЯ
 import { supabase } from '../lib/supabase';
+import { 
+  isTokenValid, 
+  isOnline, 
+  withTimeout, 
+  globalOperationManager,
+  createOperationId 
+} from './performanceUtils';
 
 /**
- * Утилиты для работы с сетевым соединением и восстановлением сессии
+ * Оптимизированные утилиты для работы с сетевым соединением
  */
 
 // Проверка доступности сети
 export const checkNetworkConnection = (): boolean => {
-  return navigator.onLine;
+  return isOnline();
 };
 
-// Проверка соединения с Supabase
+// Быстрая проверка соединения с Supabase
 export const checkSupabaseConnection = async (): Promise<boolean> => {
+  const operationId = createOperationId();
+  
+  if (!globalOperationManager.start(operationId)) {
+    console.log('🔄 Проверка Supabase уже выполняется');
+    return false;
+  }
+
   try {
-    const { error } = await supabase.auth.getSession();
+    const { error } = await withTimeout(supabase.auth.getSession(), 3000);
     return !error;
   } catch {
     return false;
+  } finally {
+    globalOperationManager.end(operationId);
+  }
+};
+
+// Проверка валидности токена из localStorage
+export const checkStoredTokenValidity = (): boolean => {
+  try {
+    const stored = localStorage.getItem('sb-auth-token');
+    if (!stored) return false;
+    
+    const session = JSON.parse(stored);
+    if (!session.expires_at) return false;
+    
+    return isTokenValid(new Date(session.expires_at).getTime() / 1000);
+  } catch {
+    return false;
+  }
+};
+
+// Принудительное обновление токена
+export const forceTokenRefresh = async (): Promise<boolean> => {
+  const operationId = createOperationId();
+  
+  if (!globalOperationManager.start(operationId)) {
+    console.log('🔄 Обновление токена уже выполняется');
+    return false;
+  }
+
+  try {
+    console.log('🔄 Попытка обновления токена...');
+    
+    const { data, error } = await withTimeout(
+      supabase.auth.refreshSession(),
+      5000
+    );
+    
+    if (error) {
+      console.error('❌ Ошибка обновления токена:', error);
+      return false;
+    }
+    
+    if (data.session) {
+      console.log('✅ Токен успешно обновлен');
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('❌ Таймаут при обновлении токена:', error);
+    return false;
+  } finally {
+    globalOperationManager.end(operationId);
   }
 };
 
@@ -25,11 +92,34 @@ export const restoreSupabaseConnection = async (): Promise<boolean> => {
   try {
     console.log('🔄 Попытка восстановления соединения с Supabase...');
     
+    // Сначала проверяем сеть
+    if (!checkNetworkConnection()) {
+      console.log('🌐 Нет интернет-соединения');
+      return false;
+    }
+    
+    // Проверяем валидность сохраненного токена
+    if (checkStoredTokenValidity()) {
+      console.log('✅ Сохраненный токен валиден');
+      return true;
+    }
+    
     // Пытаемся получить текущую сессию
-    const { data: { session }, error } = await supabase.auth.getSession();
+    const { data: { session }, error } = await withTimeout(
+      supabase.auth.getSession(),
+      5000
+    );
     
     if (error) {
       console.error('❌ Ошибка при восстановлении сессии:', error);
+      
+      // Пытаемся обновить токен
+      const refreshed = await forceTokenRefresh();
+      if (refreshed) {
+        console.log('✅ Сессия восстановлена через обновление токена');
+        return true;
+      }
+      
       return false;
     }
     
@@ -46,10 +136,21 @@ export const restoreSupabaseConnection = async (): Promise<boolean> => {
   }
 };
 
-// Переподключение к Supabase при потере соединения
-export const reconnectToSupabase = async (): Promise<void> => {
-  return new Promise((resolve) => {
+// Умное переподключение к Supabase при потере соединения
+export const reconnectToSupabase = async (maxAttempts = 5): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    let attempts = 0;
+    
     const attemptReconnect = async () => {
+      attempts++;
+      
+      if (attempts > maxAttempts) {
+        reject(new Error(`Не удалось переподключиться после ${maxAttempts} попыток`));
+        return;
+      }
+      
+      console.log(`🔄 Попытка переподключения ${attempts}/${maxAttempts}`);
+      
       const isOnline = checkNetworkConnection();
       
       if (!isOnline) {
@@ -58,14 +159,15 @@ export const reconnectToSupabase = async (): Promise<void> => {
         return;
       }
       
-      const isConnected = await checkSupabaseConnection();
+      const isConnected = await restoreSupabaseConnection();
       
       if (isConnected) {
-        console.log('✅ Соединение с Supabase восстановлено');
+        console.log('✅ Переподключение к Supabase успешно');
         resolve();
       } else {
-        console.log('🔄 Повторная попытка подключения через 3 секунды...');
-        setTimeout(attemptReconnect, 3000);
+        const delay = Math.min(1000 * Math.pow(2, attempts - 1), 30000); // Exponential backoff
+        console.log(`🔄 Повторная попытка через ${delay}ms...`);
+        setTimeout(attemptReconnect, delay);
       }
     };
     
@@ -73,15 +175,24 @@ export const reconnectToSupabase = async (): Promise<void> => {
   });
 };
 
-// Обработчик событий сети
+// Обработчик событий сети с debouncing
 export const setupNetworkEventListeners = () => {
+  let onlineTimeout: NodeJS.Timeout;
+  let offlineTimeout: NodeJS.Timeout;
+  
   const handleOnline = () => {
-    console.log('🌐 Соединение с интернетом восстановлено');
-    restoreSupabaseConnection();
+    clearTimeout(offlineTimeout);
+    onlineTimeout = setTimeout(() => {
+      console.log('🌐 Соединение с интернетом восстановлено');
+      restoreSupabaseConnection();
+    }, 1000); // Небольшая задержка для стабилизации
   };
   
   const handleOffline = () => {
-    console.log('🌐 Соединение с интернетом потеряно');
+    clearTimeout(onlineTimeout);
+    offlineTimeout = setTimeout(() => {
+      console.log('🌐 Соединение с интернетом потеряно');
+    }, 1000);
   };
   
   window.addEventListener('online', handleOnline);
@@ -89,41 +200,12 @@ export const setupNetworkEventListeners = () => {
   
   // Возвращаем функцию очистки
   return () => {
+    clearTimeout(onlineTimeout);
+    clearTimeout(offlineTimeout);
     window.removeEventListener('online', handleOnline);
     window.removeEventListener('offline', handleOffline);
   };
 };
 
-// Проверка валидности токена
-export const isTokenValid = (expiresAt?: number): boolean => {
-  if (!expiresAt) return false;
-  
-  const now = Math.floor(Date.now() / 1000);
-  const buffer = 60; // 1 минута буфера
-  
-  return expiresAt > (now + buffer);
-};
-
-// Принудительное обновление токена
-export const forceTokenRefresh = async (): Promise<boolean> => {
-  try {
-    console.log('🔄 Принудительное обновление токена...');
-    
-    const { data, error } = await supabase.auth.refreshSession();
-    
-    if (error) {
-      console.error('❌ Ошибка обновления токена:', error);
-      return false;
-    }
-    
-    if (data.session) {
-      console.log('✅ Токен успешно обновлен');
-      return true;
-    }
-    
-    return false;
-  } catch (error) {
-    console.error('❌ Неожиданная ошибка при обновлении токена:', error);
-    return false;
-  }
-};
+// Экспорт для обратной совместимости
+export { isTokenValid } from './performanceUtils';
