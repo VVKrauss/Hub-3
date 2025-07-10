@@ -41,7 +41,7 @@ export const SpeakerCardSkeleton = () => (
 export const ListSkeleton = ({ items = 3 }) => (
   <div className="space-y-4">
     {Array.from({ length: items }).map((_, i) => (
-      <div key={i} className="flex items-center space-x-4 p-4 bg-white dark:bg-gray-800 rounded-lg">
+      <div key={i} className="flex items-center space-x-4 p-4 bg-white dark:bg-dark-800 rounded-lg">
         <Skeleton className="h-12 w-12 rounded-full" />
         <div className="flex-1">
           <Skeleton className="h-4 w-3/4 mb-2" />
