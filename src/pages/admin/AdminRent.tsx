@@ -975,3 +975,5 @@ const AdminRent = () => {
 };
 
 export default AdminRent;
+
+
