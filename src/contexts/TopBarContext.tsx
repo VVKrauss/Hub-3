@@ -1,4 +1,4 @@
-// src/contexts/TopBarContext.tsx - ИСПРАВЛЕННАЯ ВЕРСИЯ (единственные toast уведомления)
+// src/contexts/TopBarContext.tsx - ФИНАЛЬНАЯ ВЕРСИЯ (максимальная защита от дублей)
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
@@ -50,6 +50,51 @@ const fallbackNavigation: NavigationItem[] = [
   { id: '7', label: 'О нас', path: '/about', visible: true, order: 7 }
 ];
 
+// Глобальный менеджер уведомлений для предотвращения дублирования
+class ToastManager {
+  private static instance: ToastManager;
+  private shownToasts = new Set<string>();
+  
+  static getInstance(): ToastManager {
+    if (!ToastManager.instance) {
+      ToastManager.instance = new ToastManager();
+    }
+    return ToastManager.instance;
+  }
+  
+  showWelcomeToast(userId: string): boolean {
+    const toastId = `welcome_${userId}`;
+    if (this.shownToasts.has(toastId)) {
+      console.log('🍞 ToastManager: Welcome toast уже показан для пользователя:', userId);
+      return false;
+    }
+    
+    this.shownToasts.add(toastId);
+    toast.success('Добро пожаловать!', { id: toastId });
+    console.log('✅ ToastManager: Показан welcome toast для пользователя:', userId);
+    
+    // Удаляем из множества через 10 секунд, чтобы не накапливать данные
+    setTimeout(() => {
+      this.shownToasts.delete(toastId);
+    }, 10000);
+    
+    return true;
+  }
+  
+  showLogoutToast(): void {
+    const toastId = 'logout_toast';
+    // Для logout не проверяем дубли, так как это может быть полезно
+    toast.success('Вы вышли из системы', { id: toastId });
+    console.log('✅ ToastManager: Показан logout toast');
+  }
+  
+  clear(): void {
+    this.shownToasts.clear();
+  }
+}
+
+const toastManager = ToastManager.getInstance();
+
 // Утилиты для кэша
 const getNavigationFromCache = (): NavigationItem[] | null => {
   try {
@@ -88,7 +133,7 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
   // Refs для управления состоянием
   const isMountedRef = useRef(true);
   const initializationCompleted = useRef(false);
-  const toastShownForSession = useRef<string>(''); // Отслеживаем для какой сессии показали toast
+  const lastSignedInUserId = useRef<string>(''); // Отслеживаем последнего вошедшего пользователя
 
   // Используем данные из AuthContext вместо собственных проверок
   const { user: authUser, loading: authLoading, isQuickReturn } = useAuth();
@@ -102,7 +147,8 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
       } else {
         // Если нет пользователя в AuthContext, очищаем локального
         setUser(null);
-        toastShownForSession.current = ''; // Сбрасываем флаг toast при выходе
+        lastSignedInUserId.current = ''; // Сбрасываем при выходе
+        toastManager.clear(); // Очищаем менеджер уведомлений
       }
     }
   }, [authUser, authLoading, isQuickReturn]);
@@ -232,25 +278,24 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMountedRef.current) return;
       
-      console.log('🔐 TopBarProvider: Auth событие:', event);
+      console.log('🔐 TopBarProvider: Auth событие:', event, session?.user?.id);
       
-      if (event === 'SIGNED_IN' && session) {
-        // ВАЖНО: Показываем toast только один раз для этой сессии
-        const sessionId = session.access_token.slice(-10); // Берем последние 10 символов как ID
+      if (event === 'SIGNED_IN' && session?.user) {
+        const userId = session.user.id;
         
-        if (toastShownForSession.current !== sessionId) {
-          toast.success('Добро пожаловать!');
-          toastShownForSession.current = sessionId;
-          console.log('✅ TopBarProvider: Показали приветствие для сессии:', sessionId);
+        // МАКСИМАЛЬНАЯ ЗАЩИТА: Показываем toast только если это новый пользователь
+        if (lastSignedInUserId.current !== userId) {
+          toastManager.showWelcomeToast(userId);
+          lastSignedInUserId.current = userId;
         } else {
-          console.log('ℹ️ TopBarProvider: Toast уже показан для этой сессии');
+          console.log('ℹ️ TopBarProvider: Пропускаем toast - тот же пользователь');
         }
         
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
-        toastShownForSession.current = ''; // Сбрасываем при выходе
-        toast.success('Вы вышли из системы');
-        console.log('✅ TopBarProvider: Показали уведомление о выходе');
+        lastSignedInUserId.current = ''; // Сбрасываем при выходе
+        toastManager.showLogoutToast();
+        console.log('✅ TopBarProvider: Обработан выход пользователя');
       }
     });
 
@@ -283,15 +328,6 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
     refreshNavigation,
     refreshUser
   };
-
-  // Минимальное логирование состояния
-  const prevStateRef = useRef({ navItemsCount: 0, user: false, mounted: false, loading: true });
-  const currentState = { navItemsCount: navItems.length, user: !!user, mounted, loading };
-  
-  if (JSON.stringify(prevStateRef.current) !== JSON.stringify(currentState)) {
-    console.log('🎨 TopBarProvider: Состояние:', currentState);
-    prevStateRef.current = currentState;
-  }
 
   return (
     <TopBarContext.Provider value={value}>
