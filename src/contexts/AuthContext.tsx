@@ -1,5 +1,5 @@
-// src/contexts/AuthContext.tsx - Исправленная версия
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+// src/contexts/AuthContext.tsx - ИСПРАВЛЕННАЯ ВЕРСИЯ с автовосстановлением
+import { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 
 type User = {
@@ -23,16 +23,95 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User>(null);
   const [loading, setLoading] = useState(true);
   const [initialCheckDone, setInitialCheckDone] = useState(false);
+  const mounted = useRef(true);
+  const lastActiveTime = useRef(Date.now());
+
+  // Функция восстановления сессии
+  const recoverSession = async () => {
+    try {
+      console.log('🔄 AuthContext: Attempting session recovery...');
+      
+      // Пытаемся получить текущую сессию
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.error('❌ AuthContext: Session recovery error:', error);
+        
+        // Пытаемся обновить токен
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        
+        if (refreshError) {
+          console.error('❌ AuthContext: Token refresh failed:', refreshError);
+          if (mounted.current) {
+            setUser(null);
+          }
+          return false;
+        } else {
+          console.log('✅ AuthContext: Token refreshed successfully');
+          if (mounted.current && refreshData.session?.user) {
+            setUser({
+              id: refreshData.session.user.id,
+              email: refreshData.session.user.email || '',
+              name: refreshData.session.user.user_metadata?.name
+            });
+          }
+          return true;
+        }
+      } else {
+        console.log('✅ AuthContext: Session recovered successfully');
+        if (mounted.current) {
+          setUser(session?.user ? {
+            id: session.user.id,
+            email: session.user.email || '',
+            name: session.user.user_metadata?.name
+          } : null);
+        }
+        return true;
+      }
+    } catch (error) {
+      console.error('❌ AuthContext: Session recovery exception:', error);
+      return false;
+    }
+  };
+
+  // Отслеживание активности вкладки
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        lastActiveTime.current = Date.now();
+        console.log('😴 AuthContext: Tab became inactive');
+      } else {
+        const inactiveTime = Date.now() - lastActiveTime.current;
+        console.log(`👁️ AuthContext: Tab became active (inactive for ${Math.round(inactiveTime / 1000)}s)`);
+        
+        // Если была неактивна больше 30 секунд и есть пользователь - проверяем сессию
+        if (inactiveTime > 30000 && user) {
+          console.log('⚠️ AuthContext: Long inactivity detected - checking session');
+          setTimeout(() => {
+            recoverSession();
+          }, 2000);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user]);
 
   useEffect(() => {
-    let mounted = true;
+    mounted.current = true;
 
     const checkUser = async () => {
       try {
+        console.log('🔐 AuthContext: Initial session check...');
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
-          if (mounted) {
+          console.error('❌ AuthContext: Initial session error:', error);
+          if (mounted.current) {
             setUser(null);
             setLoading(false);
             setInitialCheckDone(true);
@@ -40,7 +119,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           return;
         }
         
-        if (mounted) {
+        if (mounted.current) {
           setUser(session?.user ? {
             id: session.user.id,
             email: session.user.email || '',
@@ -50,8 +129,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setInitialCheckDone(true);
         }
       } catch (error) {
-        console.error('Error checking auth status:', error);
-        if (mounted) {
+        console.error('❌ AuthContext: Initial session exception:', error);
+        if (mounted.current) {
           setUser(null);
           setLoading(false);
           setInitialCheckDone(true);
@@ -59,7 +138,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     };
 
-    // Выполняем первоначальную проверку только один раз
     if (!initialCheckDone) {
       checkUser();
     }
@@ -67,18 +145,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Настраиваем слушатель изменений состояния аутентификации
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (mounted) {
-          if (session?.user) {
-            setUser({
-              id: session.user.id,
-              email: session.user.email || '',
-              name: session.user.user_metadata?.name
-            });
-          } else {
+        console.log('🔐 AuthContext: Auth state changed:', event);
+        
+        if (mounted.current) {
+          if (event === 'SIGNED_OUT') {
             setUser(null);
+          } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+            if (session?.user) {
+              setUser({
+                id: session.user.id,
+                email: session.user.email || '',
+                name: session.user.user_metadata?.name
+              });
+            }
           }
           
-          // Устанавливаем loading в false только после первоначальной проверки
           if (initialCheckDone) {
             setLoading(false);
           }
@@ -87,7 +168,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     );
 
     return () => {
-      mounted = false;
+      mounted.current = false;
       authListener.subscription.unsubscribe();
     };
   }, [initialCheckDone]);
@@ -99,7 +180,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setLoading(false);
         setInitialCheckDone(true);
       }
-    }, 10000); // 10 секунд максимум на загрузку
+    }, 10000);
 
     return () => clearTimeout(timeout);
   }, [loading, initialCheckDone]);
