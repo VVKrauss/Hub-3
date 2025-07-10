@@ -22,8 +22,8 @@ import {
   ChevronRight,
   TrendingUp,
   QrCode,
-  Shield,      // НОВАЯ ИКОНКА для управления пользователями
-  ArrowRight   // НОВАЯ ИКОНКА для миграции
+  Shield,      
+  ArrowRight   
 } from 'lucide-react';
 
 import { toast } from 'react-hot-toast';
