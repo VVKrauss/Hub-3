@@ -41,7 +41,7 @@ function App() {
   return (
     <div className="app">
       <Toaster position="top-center" />
-      
+      <AppRecovery />
       {/* ДОБАВЛЯЕМ ДИАГНОСТИКУ */}
       <QuickDiagnostics />
       
