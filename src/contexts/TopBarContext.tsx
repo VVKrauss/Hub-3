@@ -1,19 +1,21 @@
-// src/contexts/TopBarContext.tsx - Исправленная обработка auth событий
-import { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
+// src/contexts/TopBarContext.tsx - ОПТИМИЗИРОВАННАЯ ВЕРСИЯ
+import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
-import { getNavigationItems, getTopbarSettings } from '../api/settings';
+import { useAuth } from './AuthContext';
+import { getNavigationItems } from '../api/settings';
 import { toast } from 'react-hot-toast';
 
-interface NavItem {
+// Типы данных
+export interface NavigationItem {
   id: string;
   label: string;
   path: string;
+  icon?: string;
   visible: boolean;
   order: number;
-  badge?: number;
 }
 
-interface UserProfile {
+export interface TopBarUser {
   id: string;
   email: string;
   name?: string;
@@ -22,9 +24,9 @@ interface UserProfile {
 }
 
 interface TopBarContextType {
-  navItems: NavItem[];
-  topbarHeight: 'compact' | 'standard' | 'large';
-  user: UserProfile | null;
+  navItems: NavigationItem[];
+  topbarHeight: string;
+  user: TopBarUser | null;
   mounted: boolean;
   loading: boolean;
   refreshNavigation: () => Promise<void>;
@@ -33,79 +35,84 @@ interface TopBarContextType {
 
 const TopBarContext = createContext<TopBarContextType | undefined>(undefined);
 
-// Кэш для навигации
-const NAVIGATION_CACHE_KEY = 'topbar_navigation_cache';
-const CACHE_DURATION = 5 * 60 * 1000; // 5 минут
+// Константы
+const NAVIGATION_CACHE_KEY = 'navigation_cache';
+const CACHE_DURATION = 10 * 60 * 1000; // 10 минут
 
-const getNavigationFromCache = (): NavItem[] | null => {
+// Fallback навигация
+const fallbackNavigation: NavigationItem[] = [
+  { id: '1', label: 'Главная', path: '/', visible: true, order: 1 },
+  { id: '2', label: 'События', path: '/events', visible: true, order: 2 },
+  { id: '3', label: 'Курсы', path: '/courses', visible: true, order: 3 },
+  { id: '4', label: 'Спикеры', path: '/speakers', visible: true, order: 4 },
+  { id: '5', label: 'Аренда', path: '/rent', visible: true, order: 5 },
+  { id: '6', label: 'Коворкинг', path: '/coworking', visible: true, order: 6 },
+  { id: '7', label: 'О нас', path: '/about', visible: true, order: 7 }
+];
+
+// Утилиты для кэша
+const getNavigationFromCache = (): NavigationItem[] | null => {
   try {
     const cached = localStorage.getItem(NAVIGATION_CACHE_KEY);
-    if (!cached) return null;
-    
-    const { data, timestamp } = JSON.parse(cached);
-    
-    // Проверяем, не истек ли кэш
-    if (Date.now() - timestamp > CACHE_DURATION) {
-      localStorage.removeItem(NAVIGATION_CACHE_KEY);
-      return null;
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp < CACHE_DURATION) {
+        return data;
+      }
     }
-    
-    return data;
-  } catch {
-    return null;
+  } catch (error) {
+    console.warn('Ошибка чтения кэша навигации:', error);
   }
+  return null;
 };
 
-const setNavigationToCache = (navItems: NavItem[]) => {
+const setNavigationToCache = (data: NavigationItem[]) => {
   try {
-    const cacheData = {
-      data: navItems,
+    localStorage.setItem(NAVIGATION_CACHE_KEY, JSON.stringify({
+      data,
       timestamp: Date.now()
-    };
-    localStorage.setItem(NAVIGATION_CACHE_KEY, JSON.stringify(cacheData));
+    }));
   } catch (error) {
-    console.warn('Не удалось сохранить навигацию в кэш:', error);
+    console.warn('Ошибка записи кэша навигации:', error);
   }
 };
 
 export const TopBarProvider = ({ children }: { children: ReactNode }) => {
-  const [navItems, setNavItems] = useState<NavItem[]>([]);
-  const [topbarHeight, setTopbarHeight] = useState<'compact' | 'standard' | 'large'>('standard');
-  const [user, setUser] = useState<UserProfile | null>(null);
+  // Состояние
+  const [navItems, setNavItems] = useState<NavigationItem[]>(fallbackNavigation);
+  const [topbarHeight] = useState('normal');
+  const [user, setUser] = useState<TopBarUser | null>(null);
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [initialized, setInitialized] = useState(false);
-  const isMountedRef = useRef(true);
   
-  // Отслеживаем была ли уже авторизация чтобы не показывать повторные приветствия
-  const wasAuthenticatedRef = useRef(false);
-  const initialAuthCheckDone = useRef(false);
+  // Refs для управления состоянием
+  const isMountedRef = useRef(true);
+  const initializationCompleted = useRef(false);
 
-  // Fallback навигация
-  const fallbackNavigation = [
-    { id: 'home', label: 'Главная', path: '/', visible: true, order: 0 },
-    { id: 'events', label: 'Мероприятия', path: '/events', visible: true, order: 1 },
-    { id: 'courses', label: 'Курсы', path: '/courses', visible: true, order: 2 },
-    { id: 'speakers', label: 'Спикеры', path: '/speakers', visible: true, order: 3 },
-    { id: 'coworking', label: 'Коворкинг', path: '/coworking', visible: true, order: 4 },
-    { id: 'rent', label: 'Аренда', path: '/rent', visible: true, order: 5 },
-    { id: 'about', label: 'О нас', path: '/about', visible: true, order: 6 }
-  ];
+  // Используем данные из AuthContext вместо собственных проверок
+  const { user: authUser, loading: authLoading, isQuickReturn } = useAuth();
 
-  // БЫСТРАЯ ИНИЦИАЛИЗАЦИЯ
+  // Синхронизируем пользователя с AuthContext
+  useEffect(() => {
+    if (!authLoading && !isQuickReturn) {
+      if (authUser) {
+        // Если есть пользователь в AuthContext, получаем его расширенные данные
+        fetchUserProfile(authUser.id);
+      } else {
+        // Если нет пользователя в AuthContext, очищаем локального
+        setUser(null);
+      }
+    }
+  }, [authUser, authLoading, isQuickReturn]);
+
+  // Основная инициализация (ТОЛЬКО навигация)
   useEffect(() => {
     let cleanup = false;
-    isMountedRef.current = true;
-    
-    if (initialized) {
-      console.log('🔄 TopBarProvider: Пропуск повторной инициализации');
-      return;
-    }
-    
-    console.log('🎨 TopBarProvider: Быстрая инициализация...');
-    
+
     const quickInit = async () => {
       try {
+        console.log('🎨 TopBarProvider: Быстрая инициализация...');
+
         // 1. Сразу загружаем навигацию из кэша или используем fallback
         const cachedNav = getNavigationFromCache();
         if (cachedNav && cachedNav.length > 0) {
@@ -117,38 +124,15 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
           setNavigationToCache(fallbackNavigation);
         }
 
-        // 2. Проверяем авторизацию (быстро)
-        if (!cleanup && isMountedRef.current) {
-          try {
-            const { data: { session } } = await Promise.race([
-              supabase.auth.getSession(),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('Auth timeout')), 2000))
-            ]);
-            
-            if (session && session.user) {
-              // Устанавливаем флаг что пользователь уже был авторизован
-              wasAuthenticatedRef.current = true;
-              
-              // Загружаем профиль в фоне, не блокируя UI
-              fetchUserProfile(session.user.id, true); // true = это начальная загрузка
-            }
-            
-            initialAuthCheckDone.current = true;
-          } catch (error) {
-            console.warn('🎨 TopBarProvider: Ошибка быстрой проверки авторизации:', error);
-            initialAuthCheckDone.current = true;
-          }
-        }
-
-        // 3. Завершаем инициализацию
+        // 2. Завершаем инициализацию
         if (!cleanup && isMountedRef.current) {
           setMounted(true);
           setLoading(false);
-          setInitialized(true);
+          initializationCompleted.current = true;
           console.log('✅ TopBarProvider: Быстрая инициализация завершена');
         }
 
-        // 4. Обновляем навигацию в фоне (только если не было кэша)
+        // 3. Обновляем навигацию в фоне (только если не было кэша)
         if (!cachedNav && !cleanup && isMountedRef.current) {
           fetchNavItemsInBackground();
         }
@@ -159,7 +143,7 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
           setNavItems(fallbackNavigation);
           setMounted(true);
           setLoading(false);
-          setInitialized(true);
+          initializationCompleted.current = true;
         }
       }
     };
@@ -172,64 +156,6 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  // ПОДПИСКА НА АВТОРИЗАЦИЮ (с умной обработкой событий)
-  useEffect(() => {
-    if (!mounted) return;
-
-    console.log('🔐 TopBarProvider: Подписка на auth события...');
-    
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!isMountedRef.current) return;
-      
-      console.log('🔐 TopBarProvider: Auth событие:', event, 'wasAuthenticated:', wasAuthenticatedRef.current);
-      
-      switch (event) {
-        case 'INITIAL_SESSION':
-          // Игнорируем начальную сессию - она уже обработана в quickInit
-          break;
-          
-        case 'SIGNED_IN':
-          if (session?.user) {
-            // Проверяем: это новый вход или восстановление сессии?
-            const isNewSignIn = !wasAuthenticatedRef.current && initialAuthCheckDone.current;
-            
-            await fetchUserProfile(session.user.id, false); // false = не начальная загрузка
-            
-            // Показываем приветствие только при реальном новом входе
-            if (isNewSignIn) {
-              toast.success('Добро пожаловать!');
-              console.log('🔐 TopBarProvider: Новый вход в систему');
-            } else {
-              console.log('🔐 TopBarProvider: Восстановление сессии');
-            }
-            
-            wasAuthenticatedRef.current = true;
-          }
-          break;
-          
-        case 'SIGNED_OUT':
-          setUser(null);
-          wasAuthenticatedRef.current = false;
-          toast.success('Вы вышли из системы');
-          console.log('🔐 TopBarProvider: Выход из системы');
-          break;
-          
-        case 'TOKEN_REFRESHED':
-          console.log('🔐 TopBarProvider: Токен обновлен');
-          // Не показываем никаких уведомлений при обновлении токена
-          break;
-          
-        default:
-          console.log('🔐 TopBarProvider: Неизвестное событие:', event);
-      }
-    });
-
-    return () => {
-      console.log('🔐 TopBarProvider: Отписка от auth событий');
-      subscription.unsubscribe();
-    };
-  }, [mounted]);
-
   // Фоновая загрузка навигации
   const fetchNavItemsInBackground = async () => {
     try {
@@ -238,7 +164,7 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
       const response = await Promise.race([
         getNavigationItems(),
         new Promise<any>((_, reject) => 
-          setTimeout(() => reject(new Error('Background nav timeout')), 10000)
+          setTimeout(() => reject(new Error('Navigation timeout')), 8000)
         )
       ]);
       
@@ -254,8 +180,8 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Загрузка профиля пользователя
-  const fetchUserProfile = async (userId: string, isInitial: boolean = false) => {
+  // Загрузка расширенного профиля пользователя
+  const fetchUserProfile = async (userId: string) => {
     try {
       if (!isMountedRef.current) return;
       
@@ -266,43 +192,72 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
         )
       ]);
 
-      if (error) {
-        console.warn('Ошибка загрузки профиля:', error);
+      if (error && error.code !== 'PGRST116') { // PGRST116 = не найдено (это нормально)
+        console.warn('⚠️ TopBarProvider: Ошибка загрузки профиля:', error);
       }
 
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (isMountedRef.current) {
-        const userData = {
+      if (isMountedRef.current && authUser) {
+        setUser({
           id: userId,
-          email: session?.user.email || '',
-          name: profile?.name || session?.user.user_metadata?.name,
+          email: authUser.email,
+          name: profile?.name || authUser.name,
           role: profile?.role,
           avatar: profile?.avatar
-        };
-        
-        setUser(userData);
-        
-        if (isInitial) {
-          console.log('🔐 TopBarProvider: Начальный профиль загружен:', userData.email);
-        }
+        });
+        console.log('✅ TopBarProvider: Профиль пользователя загружен');
       }
     } catch (error) {
-      console.error('Ошибка получения профиля пользователя:', error);
+      console.warn('⚠️ TopBarProvider: Таймаут загрузки профиля:', error);
+      // При ошибке используем базовые данные из AuthContext
+      if (isMountedRef.current && authUser) {
+        setUser({
+          id: authUser.id,
+          email: authUser.email,
+          name: authUser.name,
+          role: undefined,
+          avatar: undefined
+        });
+      }
     }
   };
 
+  // ПОДПИСКА НА АВТОРИЗАЦИЮ (упрощенная)
+  useEffect(() => {
+    if (!mounted) return;
+
+    console.log('🔐 TopBarProvider: Подписка на auth события...');
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMountedRef.current) return;
+      
+      console.log('🔐 TopBarProvider: Auth событие:', event);
+      
+      if (event === 'SIGNED_IN' && session) {
+        // Данные пользователя уже будут обновлены через AuthContext
+        toast.success('Добро пожаловать!');
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+        toast.success('Вы вышли из системы');
+      }
+    });
+
+    return () => {
+      console.log('🔐 TopBarProvider: Отписка от auth событий');
+      subscription.unsubscribe();
+    };
+  }, [mounted]);
+
   // ПУБЛИЧНЫЕ МЕТОДЫ
   const refreshNavigation = async () => {
-    // Очищаем кэш и перезагружаем
+    console.log('🔄 TopBarProvider: Принудительное обновление навигации');
     localStorage.removeItem(NAVIGATION_CACHE_KEY);
     await fetchNavItemsInBackground();
   };
 
   const refreshUser = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-      await fetchUserProfile(session.user.id, false);
+    console.log('🔄 TopBarProvider: Принудительное обновление пользователя');
+    if (authUser) {
+      await fetchUserProfile(authUser.id);
     }
   };
 
@@ -316,7 +271,7 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
     refreshUser
   };
 
-  // Минимальное логирование
+  // Минимальное логирование состояния
   const prevStateRef = useRef({ navItemsCount: 0, user: false, mounted: false, loading: true });
   const currentState = { navItemsCount: navItems.length, user: !!user, mounted, loading };
   
