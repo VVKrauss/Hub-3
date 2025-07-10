@@ -68,9 +68,7 @@ class ToastManager {
       console.log('🍞 ToastManager: Welcome toast уже показан для пользователя:', userId);
       return false;
     }
-    
-    this.shownToasts.add(toastId);
-    toast.success('Добро пожаловать!', { id: toastId });
+
     console.log('✅ ToastManager: Показан welcome toast для пользователя:', userId);
     
     // Удаляем из множества через 10 секунд, чтобы не накапливать данные
