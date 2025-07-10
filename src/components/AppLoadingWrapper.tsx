@@ -81,7 +81,7 @@ const AppLoadingWrapper = ({ children }: AppLoadingWrapperProps) => {
                 }
               </p>
 
-              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+              <div className="w-full bg-gray-200 dark:bg-dark-700 rounded-full h-2">
                 <div className={`${
                   isQuickReturn 
                     ? 'bg-gradient-to-r from-green-400 to-blue-500 animate-pulse w-4/5' 
