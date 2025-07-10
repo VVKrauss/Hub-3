@@ -1,4 +1,4 @@
-// src/contexts/TopBarContext.tsx - ОПТИМИЗИРОВАННАЯ ВЕРСИЯ
+// src/contexts/TopBarContext.tsx - ИСПРАВЛЕННАЯ ВЕРСИЯ (единственные toast уведомления)
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
@@ -88,6 +88,7 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
   // Refs для управления состоянием
   const isMountedRef = useRef(true);
   const initializationCompleted = useRef(false);
+  const toastShownForSession = useRef<string>(''); // Отслеживаем для какой сессии показали toast
 
   // Используем данные из AuthContext вместо собственных проверок
   const { user: authUser, loading: authLoading, isQuickReturn } = useAuth();
@@ -101,6 +102,7 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
       } else {
         // Если нет пользователя в AuthContext, очищаем локального
         setUser(null);
+        toastShownForSession.current = ''; // Сбрасываем флаг toast при выходе
       }
     }
   }, [authUser, authLoading, isQuickReturn]);
@@ -221,7 +223,7 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // ПОДПИСКА НА АВТОРИЗАЦИЮ (упрощенная)
+  // ПОДПИСКА НА АВТОРИЗАЦИЮ (упрощенная) - ТОЛЬКО ДЛЯ TOAST УВЕДОМЛЕНИЙ
   useEffect(() => {
     if (!mounted) return;
 
@@ -233,11 +235,22 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
       console.log('🔐 TopBarProvider: Auth событие:', event);
       
       if (event === 'SIGNED_IN' && session) {
-        // Данные пользователя уже будут обновлены через AuthContext
-        toast.success('Добро пожаловать!');
+        // ВАЖНО: Показываем toast только один раз для этой сессии
+        const sessionId = session.access_token.slice(-10); // Берем последние 10 символов как ID
+        
+        if (toastShownForSession.current !== sessionId) {
+          toast.success('Добро пожаловать!');
+          toastShownForSession.current = sessionId;
+          console.log('✅ TopBarProvider: Показали приветствие для сессии:', sessionId);
+        } else {
+          console.log('ℹ️ TopBarProvider: Toast уже показан для этой сессии');
+        }
+        
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
+        toastShownForSession.current = ''; // Сбрасываем при выходе
         toast.success('Вы вышли из системы');
+        console.log('✅ TopBarProvider: Показали уведомление о выходе');
       }
     });
 
