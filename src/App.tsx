@@ -1,4 +1,4 @@
-// src/App.tsx - ТЕСТОВАЯ ВЕРСИЯ без диагностики
+// src/App.tsx
 import { Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import HomePage from './pages/HomePage';
@@ -32,19 +32,14 @@ import PostersPage from './components/posters/PostersPage';
 import AuthCallbackPage from './pages/auth/AuthCallbackPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import ProfilePage from './pages/ProfilePage';
-
-// ОТКЛЮЧАЕМ ВСЕ ДИАГНОСТИЧЕСКИЕ КОМПОНЕНТЫ
-// import QuickDiagnostics from './components/QuickDiagnostics';
-// import AppRecovery from './components/AppRecovery';
+import SessionMonitor from './components/SessionMonitor';
 
 function App() {
   return (
     <div className="app">
       <Toaster position="top-center" />
-      
-      {/* ВРЕМЕННО ОТКЛЮЧЕНО ДЛЯ ТЕСТА */}
-      {/* <AppRecovery /> */}
-      {/* <QuickDiagnostics /> */}
+      {/* Монитор сессии для предотвращения зависаний */}
+      <SessionMonitor />
       
       <Routes>
         {/* Public routes */}
