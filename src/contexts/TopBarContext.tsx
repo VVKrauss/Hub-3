@@ -1,4 +1,4 @@
-// src/contexts/TopBarContext.tsx - Исправленная версия
+// src/contexts/TopBarContext.tsx - Исправленная версия с таймаутом
 import { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { getNavigationItems, getTopbarSettings } from '../api/settings';
@@ -42,7 +42,7 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
   const [initialized, setInitialized] = useState(false);
   const isMountedRef = useRef(true);
 
-  // ИНИЦИАЛИЗАЦИЯ ТОЛЬКО ОДИН РАЗ
+  // ИНИЦИАЛИЗАЦИЯ С ТАЙМАУТОМ
   useEffect(() => {
     let cleanup = false;
     isMountedRef.current = true;
@@ -55,27 +55,61 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
     
     console.log('🎨 TopBarProvider: Глобальная инициализация...');
     
+    // Принудительный таймаут для завершения загрузки
+    const forceInitTimeout = setTimeout(() => {
+      if (!cleanup && isMountedRef.current && !initialized) {
+        console.warn('⚠️ TopBarProvider: Принудительное завершение инициализации по таймауту');
+        setFallbackNavigation();
+        setMounted(true);
+        setLoading(false);
+        setInitialized(true);
+      }
+    }, 8000); // 8 секунд таймаут
+    
     const initialize = async () => {
       try {
         if (cleanup || !isMountedRef.current) return;
         
         // 1. Проверяем текущую сессию
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session && !cleanup && isMountedRef.current) {
-          await fetchUserProfile(session.user.id);
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session && !cleanup && isMountedRef.current) {
+            await fetchUserProfile(session.user.id);
+          }
+        } catch (error) {
+          console.warn('🎨 TopBarProvider: Ошибка загрузки профиля:', error);
         }
 
-        // 2. Загружаем навигацию
+        // 2. Загружаем навигацию с таймаутом
         if (!cleanup && isMountedRef.current) {
-          await fetchNavItems();
+          try {
+            await Promise.race([
+              fetchNavItems(),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Navigation timeout')), 5000)
+              )
+            ]);
+          } catch (error) {
+            console.warn('🎨 TopBarProvider: Таймаут/ошибка навигации, используем fallback:', error);
+            setFallbackNavigation();
+          }
         }
 
         // 3. Загружаем настройки топбара
         if (!cleanup && isMountedRef.current) {
-          await fetchTopbarSettings();
+          try {
+            await Promise.race([
+              fetchTopbarSettings(),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Topbar settings timeout')), 3000)
+              )
+            ]);
+          } catch (error) {
+            console.warn('🎨 TopBarProvider: Таймаут настроек топбара:', error);
+          }
         }
 
-        if (!cleanup && isMountedRef.current) {
+        if (!cleanup && isMountedRef.current && !initialized) {
           setMounted(true);
           setLoading(false);
           setInitialized(true);
@@ -83,7 +117,7 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
         }
       } catch (error) {
         console.error('❌ TopBarProvider: Ошибка инициализации:', error);
-        if (!cleanup && isMountedRef.current) {
+        if (!cleanup && isMountedRef.current && !initialized) {
           setFallbackNavigation();
           setMounted(true);
           setLoading(false);
@@ -92,15 +126,17 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
       }
     };
 
+    // Запускаем инициализацию
     initialize();
 
     return () => {
       cleanup = true;
       isMountedRef.current = false;
+      clearTimeout(forceInitTimeout);
     };
   }, []); // Пустые зависимости - инициализация только один раз
 
-  // ПОДПИСКА НА АВТОРИЗАЦИЮ
+  // ПОДПИСКА НА АВТОРИЗАЦИЮ (только после инициализации)
   useEffect(() => {
     if (!mounted) return;
 
@@ -158,20 +194,27 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
       if (!isMountedRef.current) return;
       
       console.log('🔄 TopBarProvider: Загрузка навигации из API...');
-      const response = await getNavigationItems();
+      
+      // Добавляем таймаут для API запроса
+      const response = await Promise.race([
+        getNavigationItems(),
+        new Promise<any>((_, reject) => 
+          setTimeout(() => reject(new Error('Navigation API timeout')), 4000)
+        )
+      ]);
       
       if (response.data && response.data.length > 0 && isMountedRef.current) {
         const sortedItems = response.data.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
         setNavItems(sortedItems);
-        console.log('✅ TopBarProvider: Навигация загружена из API:', sortedItems);
+        console.log('✅ TopBarProvider: Навигация загружена из API:', sortedItems.length, 'элементов');
       } else if (isMountedRef.current) {
-        console.log('⚠️ TopBarProvider: Использование fallback навигации');
+        console.log('⚠️ TopBarProvider: Пустой ответ API, используем fallback навигацию');
         setFallbackNavigation();
       }
     } catch (error) {
       console.error('❌ Error fetching navigation:', error);
       if (isMountedRef.current) {
-        console.log('⚠️ TopBarProvider: Fallback из-за ошибки API');
+        console.log('⚠️ TopBarProvider: Fallback из-за ошибки/таймаута API');
         setFallbackNavigation();
       }
     }
@@ -188,7 +231,7 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
       { id: 'about', label: 'О нас', path: '/about', visible: true, order: 6 }
     ];
     setNavItems(fallbackItems);
-    console.log('✅ TopBarProvider: Fallback навигация установлена:', fallbackItems);
+    console.log('✅ TopBarProvider: Fallback навигация установлена:', fallbackItems.length, 'элементов');
   };
 
   const fetchTopbarSettings = async () => {
@@ -226,12 +269,14 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
     refreshUser
   };
 
-  console.log('🎨 TopBarProvider: Текущее состояние:', {
-    navItemsCount: navItems.length,
-    user: !!user,
-    mounted,
-    loading
-  });
+  // Логирование только при изменениях состояния
+  const prevState = useRef({ navItemsCount: 0, user: false, mounted: false, loading: true });
+  const currentState = { navItemsCount: navItems.length, user: !!user, mounted, loading };
+  
+  if (JSON.stringify(prevState.current) !== JSON.stringify(currentState)) {
+    console.log('🎨 TopBarProvider: Изменение состояния:', currentState);
+    prevState.current = currentState;
+  }
 
   return (
     <TopBarContext.Provider value={value}>
