@@ -1,4 +1,4 @@
-// src/contexts/TopBarContext.tsx - Версия с кэшированием навигации
+// src/contexts/TopBarContext.tsx - Исправленная обработка auth событий
 import { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { getNavigationItems, getTopbarSettings } from '../api/settings';
@@ -76,6 +76,10 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
   const isMountedRef = useRef(true);
+  
+  // Отслеживаем была ли уже авторизация чтобы не показывать повторные приветствия
+  const wasAuthenticatedRef = useRef(false);
+  const initialAuthCheckDone = useRef(false);
 
   // Fallback навигация
   const fallbackNavigation = [
@@ -122,11 +126,17 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
             ]);
             
             if (session && session.user) {
+              // Устанавливаем флаг что пользователь уже был авторизован
+              wasAuthenticatedRef.current = true;
+              
               // Загружаем профиль в фоне, не блокируя UI
-              fetchUserProfile(session.user.id);
+              fetchUserProfile(session.user.id, true); // true = это начальная загрузка
             }
+            
+            initialAuthCheckDone.current = true;
           } catch (error) {
             console.warn('🎨 TopBarProvider: Ошибка быстрой проверки авторизации:', error);
+            initialAuthCheckDone.current = true;
           }
         }
 
@@ -162,6 +172,64 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
+  // ПОДПИСКА НА АВТОРИЗАЦИЮ (с умной обработкой событий)
+  useEffect(() => {
+    if (!mounted) return;
+
+    console.log('🔐 TopBarProvider: Подписка на auth события...');
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMountedRef.current) return;
+      
+      console.log('🔐 TopBarProvider: Auth событие:', event, 'wasAuthenticated:', wasAuthenticatedRef.current);
+      
+      switch (event) {
+        case 'INITIAL_SESSION':
+          // Игнорируем начальную сессию - она уже обработана в quickInit
+          break;
+          
+        case 'SIGNED_IN':
+          if (session?.user) {
+            // Проверяем: это новый вход или восстановление сессии?
+            const isNewSignIn = !wasAuthenticatedRef.current && initialAuthCheckDone.current;
+            
+            await fetchUserProfile(session.user.id, false); // false = не начальная загрузка
+            
+            // Показываем приветствие только при реальном новом входе
+            if (isNewSignIn) {
+              toast.success('Добро пожаловать!');
+              console.log('🔐 TopBarProvider: Новый вход в систему');
+            } else {
+              console.log('🔐 TopBarProvider: Восстановление сессии');
+            }
+            
+            wasAuthenticatedRef.current = true;
+          }
+          break;
+          
+        case 'SIGNED_OUT':
+          setUser(null);
+          wasAuthenticatedRef.current = false;
+          toast.success('Вы вышли из системы');
+          console.log('🔐 TopBarProvider: Выход из системы');
+          break;
+          
+        case 'TOKEN_REFRESHED':
+          console.log('🔐 TopBarProvider: Токен обновлен');
+          // Не показываем никаких уведомлений при обновлении токена
+          break;
+          
+        default:
+          console.log('🔐 TopBarProvider: Неизвестное событие:', event);
+      }
+    });
+
+    return () => {
+      console.log('🔐 TopBarProvider: Отписка от auth событий');
+      subscription.unsubscribe();
+    };
+  }, [mounted]);
+
   // Фоновая загрузка навигации
   const fetchNavItemsInBackground = async () => {
     try {
@@ -186,34 +254,8 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // ПОДПИСКА НА АВТОРИЗАЦИЮ (только после инициализации)
-  useEffect(() => {
-    if (!mounted) return;
-
-    console.log('🔐 TopBarProvider: Подписка на auth события...');
-    
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!isMountedRef.current) return;
-      
-      console.log('🔐 TopBarProvider: Auth событие:', event);
-      
-      if (event === 'SIGNED_IN' && session) {
-        await fetchUserProfile(session.user.id);
-        toast.success('Добро пожаловать!');
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-        toast.success('Вы вышли из системы');
-      }
-    });
-
-    return () => {
-      console.log('🔐 TopBarProvider: Отписка от auth событий');
-      subscription.unsubscribe();
-    };
-  }, [mounted]);
-
   // Загрузка профиля пользователя
-  const fetchUserProfile = async (userId: string) => {
+  const fetchUserProfile = async (userId: string, isInitial: boolean = false) => {
     try {
       if (!isMountedRef.current) return;
       
@@ -231,13 +273,19 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (isMountedRef.current) {
-        setUser({
+        const userData = {
           id: userId,
           email: session?.user.email || '',
           name: profile?.name || session?.user.user_metadata?.name,
           role: profile?.role,
           avatar: profile?.avatar
-        });
+        };
+        
+        setUser(userData);
+        
+        if (isInitial) {
+          console.log('🔐 TopBarProvider: Начальный профиль загружен:', userData.email);
+        }
       }
     } catch (error) {
       console.error('Ошибка получения профиля пользователя:', error);
@@ -254,7 +302,7 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
   const refreshUser = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
-      await fetchUserProfile(session.user.id);
+      await fetchUserProfile(session.user.id, false);
     }
   };
 
