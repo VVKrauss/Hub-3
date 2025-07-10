@@ -1,4 +1,4 @@
-// src/utils/performanceUtils.ts - Утилиты для оптимизации производительности
+// src/utils/performanceUtils.ts - ИСПРАВЛЕННАЯ ВЕРСИЯ (правильная работа с токенами Supabase)
 import { useRef, useCallback } from 'react';
 
 /**
@@ -77,12 +77,46 @@ export const useThrottle = <T extends (...args: any[]) => any>(
 };
 
 /**
- * Проверка валидности токена
+ * ИСПРАВЛЕНО: Проверка валидности токена Supabase
+ * Supabase использует Unix timestamp в СЕКУНДАХ для expires_at
  */
 export const isTokenValid = (expiresAt: number): boolean => {
-  const now = Date.now() / 1000; // Supabase использует секунды
-  const buffer = 300; // 5 минут буфер
-  return expiresAt > (now + buffer);
+  // expiresAt уже в секундах (Unix timestamp)
+  const now = Math.floor(Date.now() / 1000); // Текущее время в секундах
+  const buffer = 300; // 5 минут буфер в секундах
+  
+  const isValid = expiresAt > (now + buffer);
+  
+  console.log('🔍 Token validation:', {
+    expiresAt,
+    now,
+    buffer,
+    expiresAtDate: new Date(expiresAt * 1000).toISOString(),
+    nowDate: new Date(now * 1000).toISOString(),
+    remainingMinutes: Math.round((expiresAt - now) / 60),
+    isValid
+  });
+  
+  return isValid;
+};
+
+/**
+ * ИСПРАВЛЕНО: Проверка валидности токена из localStorage
+ */
+export const isStoredTokenValid = (): boolean => {
+  try {
+    const stored = localStorage.getItem('sb-auth-token');
+    if (!stored) return false;
+    
+    const session = JSON.parse(stored);
+    if (!session.expires_at) return false;
+    
+    // expires_at в Supabase сессии уже в секундах
+    return isTokenValid(session.expires_at);
+  } catch (error) {
+    console.warn('Ошибка проверки сохраненного токена:', error);
+    return false;
+  }
 };
 
 /**
