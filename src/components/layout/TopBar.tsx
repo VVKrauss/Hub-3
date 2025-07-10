@@ -178,7 +178,7 @@ const TopBar = () => {
                     : 'text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400'
                 }`}
               >
-                {item.name}
+                {item.label || item.name}
                 {location.pathname === item.path && (
                   <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary-600 dark:bg-primary-400"></span>
                 )}
@@ -296,7 +296,7 @@ const TopBar = () => {
                   }`}
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  {item.name}
+                  {item.label || item.name}
                 </Link>
               ))}
               
