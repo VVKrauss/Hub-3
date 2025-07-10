@@ -26,6 +26,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     let mounted = true;
+    let initializationCompleted = false;
 
     const initializeAuth = async () => {
       console.log('🔐 AuthProvider: Инициализация авторизации...');
@@ -42,16 +43,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           console.error('🔐 AuthProvider: Ошибка получения сессии:', error);
           // Очищаем поврежденную сессию
           clearStoredSession();
-          if (mounted) {
+          if (mounted && !initializationCompleted) {
             setUser(null);
             setLoading(false);
+            initializationCompleted = true;
           }
           return;
         }
 
         console.log('🔐 AuthProvider: Текущая сессия:', !!session);
 
-        if (mounted) {
+        if (mounted && !initializationCompleted) {
           if (session?.user) {
             const userData: User = {
               id: session.user.id,
@@ -65,14 +67,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             console.log('🔐 AuthProvider: Пользователь не найден');
           }
           setLoading(false);
+          initializationCompleted = true;
         }
       } catch (error) {
         console.error('🔐 AuthProvider: Ошибка инициализации:', error);
         // В случае любой ошибки очищаем состояние
         clearStoredSession();
-        if (mounted) {
+        if (mounted && !initializationCompleted) {
           setUser(null);
           setLoading(false);
+          initializationCompleted = true;
         }
       }
     };
@@ -102,14 +106,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               setUser(userData);
               console.log('🔐 AuthProvider: Пользователь вошел:', userData.email);
             }
-            setLoading(false);
+            if (initializationCompleted) {
+              setLoading(false);
+            }
             break;
             
           case 'SIGNED_OUT':
             setUser(null);
             clearStoredSession();
             console.log('🔐 AuthProvider: Пользователь вышел');
-            setLoading(false);
+            if (initializationCompleted) {
+              setLoading(false);
+            }
             break;
             
           case 'TOKEN_REFRESHED':
