@@ -2,6 +2,12 @@
 import { useEffect, useRef } from 'react';
 import { supabase, clearStoredSession } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
+import { 
+  checkNetworkConnection, 
+  setupNetworkEventListeners, 
+  isTokenValid, 
+  forceTokenRefresh 
+} from '../utils/networkUtils';
 
 /**
  * Компонент для мониторинга состояния сессии Supabase
@@ -15,8 +21,17 @@ const SessionMonitor = () => {
   useEffect(() => {
     console.log('🔍 SessionMonitor: Запуск мониторинга сессии');
 
+    // Настраиваем слушатели сетевых событий
+    const cleanupNetworkListeners = setupNetworkEventListeners();
+
     // Функция проверки состояния сессии
     const checkSessionHealth = async () => {
+      // Проверяем интернет-соединение
+      if (!checkNetworkConnection()) {
+        console.log('🔍 SessionMonitor: Нет интернет-соединения, пропускаем проверку');
+        return;
+      }
+
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
         
@@ -25,7 +40,8 @@ const SessionMonitor = () => {
           
           // Если ошибка связана с истекшей сессией
           if (error.message.includes('refresh_token_not_found') || 
-              error.message.includes('invalid_token')) {
+              error.message.includes('invalid_token') ||
+              error.message.includes('JWT expired')) {
             handleSessionLost();
           }
           return;
@@ -36,19 +52,15 @@ const SessionMonitor = () => {
           lastSessionCheck.current = Date.now();
           sessionLostNotificationShown.current = false;
           
-          // Проверяем, не истекает ли токен скоро
-          if (session.expires_at) {
-            const expiresAt = session.expires_at * 1000; // Конвертируем в миллисекунды
-            const timeUntilExpiry = expiresAt - Date.now();
-            const fiveMinutes = 5 * 60 * 1000;
+          // Проверяем валидность токена
+          if (session.expires_at && !isTokenValid(session.expires_at)) {
+            console.log('🔍 SessionMonitor: Токен истекает, попытка обновления');
+            const refreshed = await forceTokenRefresh();
             
-            if (timeUntilExpiry < fiveMinutes && timeUntilExpiry > 0) {
-              console.log('🔍 SessionMonitor: Токен скоро истечет, попытка обновления');
-              try {
-                await supabase.auth.refreshSession();
-              } catch (refreshError) {
-                console.error('🔍 SessionMonitor: Не удалось обновить токен:', refreshError);
-              }
+            if (!refreshed) {
+              console.error('🔍 SessionMonitor: Не удалось обновить токен');
+              handleSessionLost();
+              return;
             }
           }
         } else {
@@ -62,6 +74,14 @@ const SessionMonitor = () => {
         }
       } catch (error) {
         console.error('🔍 SessionMonitor: Неожиданная ошибка при проверке сессии:', error);
+        
+        // Если это ошибка сети, не показываем пользователю
+        if (error instanceof TypeError && error.message.includes('fetch')) {
+          console.log('🔍 SessionMonitor: Ошибка сети, пропускаем обработку');
+          return;
+        }
+        
+        handleSessionLost();
       }
     };
 
@@ -122,6 +142,9 @@ const SessionMonitor = () => {
       
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleWindowFocus);
+      
+      // Очищаем слушатели сетевых событий
+      cleanupNetworkListeners();
     };
   }, []);
 
