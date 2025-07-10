@@ -89,7 +89,7 @@ const AppLoadingWrapper = ({ children }: AppLoadingWrapperProps) => {
                 } h-2 rounded-full transition-all duration-300`}></div>
               </div>
               
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-4">
+              <p className="text-xs text-gray-500 dark:text-dark-400 mt-4">
                 {isQuickReturn 
                   ? 'Быстрое восстановление обычно занимает несколько секунд'
                   : 'Если загрузка занимает слишком много времени, попробуйте обновить страницу'
