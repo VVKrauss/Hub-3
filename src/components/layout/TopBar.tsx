@@ -1,6 +1,4 @@
-// src/components/layout/TopBar.tsx  
-// УПРОЩЕННАЯ ВЕРСИЯ с использованием контекста
-
+// src/components/layout/TopBar.tsx
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu, X, Sun, Moon, LogIn, User, LogOut, Settings, ChevronDown } from 'lucide-react';
@@ -9,6 +7,7 @@ import Logo from '../ui/Logo';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useTopBar } from '../../contexts/TopBarContext';
 import { toast } from 'react-hot-toast';
+import LoginModal from '../auth/LoginModal';
 
 interface LoginFormData {
   email: string;
@@ -179,34 +178,31 @@ const TopBar = () => {
                     : 'text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400'
                 }`}
               >
-                {item.label}
-                {item.badge && (
-                  <span className="absolute -top-1 -right-2 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 min-w-[1.25rem] h-5 flex items-center justify-center">
-                    {item.badge}
-                  </span>
-                )}
+                {item.label || item.name}
                 {location.pathname === item.path && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-600 dark:bg-primary-400"></div>
+                  <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary-600 dark:bg-primary-400"></span>
                 )}
               </Link>
             ))}
           </nav>
 
-          {/* Right Side - Desktop */}
-          <div className="hidden md:flex items-center space-x-4">
+          {/* Right Side Actions */}
+          <div className="flex items-center space-x-4">
+            {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
-              className="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-              aria-label="Переключить тему"
+              className="p-2 rounded-lg bg-gray-100 dark:bg-dark-700 hover:bg-gray-200 dark:hover:bg-dark-600 transition-colors"
+              title={theme === 'dark' ? 'Светлая тема' : 'Темная тема'}
             >
               {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>
 
+            {/* User Menu */}
             {user ? (
               <div className="relative" ref={userDropdownRef}>
                 <button
                   onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                  className="flex items-center space-x-2 p-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700 transition-colors"
                 >
                   {user.avatar ? (
                     <img 
@@ -219,25 +215,22 @@ const TopBar = () => {
                       <User className="h-4 w-4 text-primary-600 dark:text-primary-400" />
                     </div>
                   )}
-                  <span className="font-medium">{user.name || user.email}</span>
-                  <ChevronDown className="h-4 w-4" />
+                  <span className="hidden md:block font-medium text-gray-900 dark:text-white">
+                    {user.name || 'Пользователь'}
+                  </span>
+                  <ChevronDown className="h-4 w-4 text-gray-500" />
                 </button>
 
                 {userDropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-dark-800 rounded-lg shadow-lg border border-gray-200 dark:border-dark-700 py-2">
-                    <div className="px-4 py-2 border-b border-gray-200 dark:border-dark-700">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white">
-                        {user.name || 'Пользователь'}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">{user.email}</p>
-                      {user.role && (
-                        <p className="text-xs text-primary-600 dark:text-primary-400">{user.role}</p>
-                      )}
+                  <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-dark-800 rounded-lg shadow-lg border border-gray-200 dark:border-dark-700 py-2 z-50">
+                    <div className="px-4 py-3 border-b border-gray-200 dark:border-dark-700">
+                      <p className="font-medium text-gray-900 dark:text-white">{user.name || 'Пользователь'}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
                     </div>
                     
                     <Link
                       to="/profile"
-                      className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-700"
+                      className="flex items-center px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-700 transition-colors"
                       onClick={() => setUserDropdownOpen(false)}
                     >
                       <User className="h-4 w-4 mr-3" />
@@ -247,7 +240,7 @@ const TopBar = () => {
                     {user.role === 'Admin' && (
                       <Link
                         to="/admin"
-                        className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-700"
+                        className="flex items-center px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-700 transition-colors"
                         onClick={() => setUserDropdownOpen(false)}
                       >
                         <Settings className="h-4 w-4 mr-3" />
@@ -255,11 +248,9 @@ const TopBar = () => {
                       </Link>
                     )}
                     
-                    <hr className="my-2 border-gray-200 dark:border-dark-700" />
-                    
                     <button
                       onClick={handleLogout}
-                      className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      className="flex items-center w-full px-4 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                     >
                       <LogOut className="h-4 w-4 mr-3" />
                       Выйти
@@ -276,57 +267,41 @@ const TopBar = () => {
                 <span>Войти</span>
               </button>
             )}
-          </div>
 
-          {/* Mobile menu button */}
-          <div className="md:hidden flex items-center space-x-2">
-            <button
-              onClick={toggleTheme}
-              className="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-            >
-              {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-            </button>
-            
+            {/* Mobile Menu Toggle */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-              aria-label="Открыть меню"
+              className="md:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700 transition-colors"
             >
               {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
             </button>
           </div>
         </div>
 
-        {/* Mobile Navigation */}
+        {/* Mobile Menu */}
         {mobileMenuOpen && (
-          <div ref={menuRef} className="md:hidden border-t border-gray-200 dark:border-dark-700 bg-white dark:bg-dark-900">
-            <div className="px-4 py-4 space-y-4">
+          <div 
+            ref={menuRef}
+            className="md:hidden bg-white dark:bg-dark-900 border-t border-gray-200 dark:border-dark-700 shadow-lg"
+          >
+            <nav className="container mx-auto px-4 py-4 space-y-2">
               {visibleNavItems.map(item => (
                 <Link
                   key={item.id}
                   to={item.path}
-                  className={`block py-2 font-medium transition-colors duration-200 ${
+                  className={`block py-2 px-3 rounded-lg transition-colors ${
                     location.pathname === item.path
-                      ? 'text-primary-600 dark:text-primary-400'
-                      : 'text-gray-700 dark:text-gray-300'
+                      ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-700'
                   }`}
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  <div className="flex items-center justify-between">
-                    <span>{item.label}</span>
-                    {item.badge && (
-                      <span className="bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 min-w-[1.25rem] h-5 flex items-center justify-center">
-                        {item.badge}
-                      </span>
-                    )}
-                  </div>
+                  {item.label || item.name}
                 </Link>
               ))}
               
-              <hr className="border-gray-200 dark:border-dark-700" />
-              
               {user ? (
-                <div className="space-y-2">
+                <div className="space-y-2 pt-4 border-t border-gray-200 dark:border-dark-700">
                   <div className="flex items-center space-x-3 py-2">
                     {user.avatar ? (
                       <img 
@@ -390,142 +365,16 @@ const TopBar = () => {
                   <span>Войти</span>
                 </button>
               )}
-            </div>
+            </nav>
           </div>
         )}
       </header>
 
-      {/* Login Modal */}
-      {loginModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-              <div className="absolute inset-0 bg-gray-500 opacity-75" onClick={() => setLoginModalOpen(false)}></div>
-            </div>
-
-            <div className="inline-block align-bottom bg-white dark:bg-dark-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <div className="bg-white dark:bg-dark-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div className="sm:flex sm:items-start">
-                  <div className="w-full">
-                    <div className="flex justify-between items-center mb-4">
-                      <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                        {authMode === 'login' ? 'Вход в систему' : 'Регистрация'}
-                      </h3>
-                      <button
-                        onClick={() => setLoginModalOpen(false)}
-                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                      >
-                        <X className="h-6 w-6" />
-                      </button>
-                    </div>
-
-                    {authMode === 'login' ? (
-                      <form onSubmit={handleLogin} className="space-y-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Email
-                          </label>
-                          <input
-                            type="email"
-                            value={loginForm.email}
-                            onChange={(e) => setLoginForm(prev => ({ ...prev, email: e.target.value }))}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white"
-                            placeholder="Введите ваш email"
-                            required
-                          />
-                        </div>
-                        
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Пароль
-                          </label>
-                          <input
-                            type="password"
-                            value={loginForm.password}
-                            onChange={(e) => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white"
-                            placeholder="Введите пароль"
-                            required
-                          />
-                        </div>
-
-                        <button
-                          type="submit"
-                          disabled={authLoading}
-                          className="w-full bg-primary-600 text-white py-2 px-4 rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                          {authLoading ? 'Вход...' : 'Войти'}
-                        </button>
-                      </form>
-                    ) : (
-                      <form onSubmit={handleRegister} className="space-y-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Имя
-                          </label>
-                          <input
-                            type="text"
-                            value={registerForm.name}
-                            onChange={(e) => setRegisterForm(prev => ({ ...prev, name: e.target.value }))}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white"
-                            placeholder="Введите ваше имя"
-                            required
-                          />
-                        </div>
-                        
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Email
-                          </label>
-                          <input
-                            type="email"
-                            value={registerForm.email}
-                            onChange={(e) => setRegisterForm(prev => ({ ...prev, email: e.target.value }))}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white"
-                            placeholder="Введите ваш email"
-                            required
-                          />
-                        </div>
-                        
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Пароль
-                          </label>
-                          <input
-                            type="password"
-                            value={registerForm.password}
-                            onChange={(e) => setRegisterForm(prev => ({ ...prev, password: e.target.value }))}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-dark-700 dark:text-white"
-                            placeholder="Создайте пароль"
-                            required
-                          />
-                        </div>
-
-                        <button
-                          type="submit"
-                          disabled={authLoading}
-                          className="w-full bg-primary-600 text-white py-2 px-4 rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                          {authLoading ? 'Регистрация...' : 'Зарегистрироваться'}
-                        </button>
-                      </form>
-                    )}
-
-                    <div className="mt-4 text-center">
-                      <button
-                        onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}
-                        className="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-                      >
-                        {authMode === 'login' ? 'Нет аккаунта? Зарегистрируйтесь' : 'Уже есть аккаунт? Войдите'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Модальное окно авторизации вынесено за пределы header */}
+      <LoginModal 
+        isOpen={loginModalOpen} 
+        onClose={() => setLoginModalOpen(false)} 
+      />
     </>
   );
 };

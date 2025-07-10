@@ -1,4 +1,4 @@
-// src/components/admin/AdminLayout.tsx - Обновленный с пунктом управления пользователями
+// src/components/admin/AdminLayout.tsx - Обновленный с ссылкой на основной сайт
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useState, useEffect } from 'react';
@@ -22,8 +22,9 @@ import {
   ChevronRight,
   TrendingUp,
   QrCode,
-  Shield,      // НОВАЯ ИКОНКА для управления пользователями
-  ArrowRight   // НОВАЯ ИКОНКА для миграции
+  Shield,
+  ArrowRight,
+  Home  // Новая иконка для ссылки на главную
 } from 'lucide-react';
 
 import { toast } from 'react-hot-toast';
@@ -67,7 +68,7 @@ const AdminLayout = () => {
     { to: '/admin/calendar', icon: Calendar, label: 'Календарь', shortLabel: 'Календ.' },
     { to: '/admin/event-statistics', icon: TrendingUp, label: 'Статистика мероприятий', shortLabel: 'Стат. мер.' },
     
-    // НОВЫЕ ПУНКТЫ МЕНЮ
+    // Управление пользователями и миграция
     { to: '/admin/users', icon: Shield, label: 'Управление пользователями', shortLabel: 'Пользов.' },
     { to: '/admin/speakers-migration', icon: ArrowRight, label: 'Миграция спикеров', shortLabel: 'Миграция' },
     
@@ -184,6 +185,29 @@ const AdminLayout = () => {
           )}
         </div>
 
+        {/* Ссылка на основной сайт */}
+        <div className="px-2 py-1 border-b border-gray-200 dark:border-dark-700">
+          <a
+            href="/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`
+              w-full flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-700 rounded-lg transition-colors text-sm
+              ${isSidebarCollapsed && !isMobile ? 'justify-center' : ''}
+            `}
+            title="Перейти на основной сайт"
+            onClick={isMobile ? closeMobileMenu : undefined}
+          >
+            <Home className="h-4 w-4" />
+            {(!isSidebarCollapsed || isMobile) && (
+              <>
+                <span>Основной сайт</span>
+                <ExternalLink className="h-3 w-3 ml-auto opacity-60" />
+              </>
+            )}
+          </a>
+        </div>
+
         {/* Quick QR Scanner Access in sidebar */}
         {(!isSidebarCollapsed || isMobile) && (
           <div className="p-2 border-b border-gray-200 dark:border-dark-700">
@@ -210,23 +234,18 @@ const AdminLayout = () => {
                   end={item.end}
                   onClick={isMobile ? closeMobileMenu : undefined}
                   className={({ isActive }) => `
-                    flex items-center gap-3 px-3 py-2 rounded-lg transition-colors group
+                    flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium
                     ${isActive 
-                      ? 'bg-primary-100 dark:bg-primary-900/20 text-primary-700 dark:text-primary-400' 
+                      ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300' 
                       : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-700'
                     }
+                    ${isSidebarCollapsed && !isMobile ? 'justify-center' : ''}
                   `}
+                  title={isSidebarCollapsed && !isMobile ? item.label : undefined}
                 >
-                  <Icon className={`h-5 w-5 flex-shrink-0 ${isSidebarCollapsed && !isMobile ? 'mx-auto' : ''}`} />
+                  <Icon className="h-5 w-5 flex-shrink-0" />
                   {(!isSidebarCollapsed || isMobile) && (
-                    <span className="font-medium truncate">
-                      {item.label}
-                    </span>
-                  )}
-                  {(!isSidebarCollapsed || isMobile) && item.to.includes('speakers-migration') && (
-                    <span className="ml-auto bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
-                      Новое
-                    </span>
+                    <span className="truncate">{isMobile ? item.label : item.shortLabel}</span>
                   )}
                 </NavLink>
               );
@@ -234,12 +253,12 @@ const AdminLayout = () => {
           </div>
         </nav>
 
-        {/* Sidebar footer */}
-        <div className="border-t border-gray-200 dark:border-dark-700 p-2">
+        {/* Bottom section - Logout */}
+        <div className="p-2 border-t border-gray-200 dark:border-dark-700">
           <button
             onClick={handleLogout}
             className={`
-              w-full flex items-center gap-3 px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors
+              w-full flex items-center gap-3 px-3 py-2.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors text-sm font-medium
               ${isSidebarCollapsed && !isMobile ? 'justify-center' : ''}
             `}
           >
@@ -270,6 +289,18 @@ const AdminLayout = () => {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Ссылка на основной сайт в топбаре */}
+            <a
+              href="/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700 text-gray-600 dark:text-gray-400 flex items-center gap-1"
+              title="Перейти на основной сайт"
+            >
+              <Home className="h-4 w-4" />
+              <ExternalLink className="h-3 w-3" />
+            </a>
+            
             <button className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700 relative">
               <Bell className="h-5 w-5" />
               <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></span>

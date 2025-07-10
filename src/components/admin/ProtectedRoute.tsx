@@ -1,6 +1,7 @@
+// src/components/admin/ProtectedRoute.tsx
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase'; // Используем единый экземпляр
+import { useAuthCheck } from '../../hooks/useAuthCheck';
 import LoginModal from '../auth/LoginModal';
 import { toast } from 'react-hot-toast';
 
@@ -9,87 +10,63 @@ type ProtectedRouteProps = {
 };
 
 const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
-  const [showLoginModal, setShowLoginModal] = useState(false);
   const navigate = useNavigate();
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [hasShownError, setHasShownError] = useState(false);
 
+  const { 
+    authStatus, 
+    userRole, 
+    isAuthorized, 
+    user, 
+    checkingRole 
+  } = useAuthCheck({
+    requireAuth: true,
+    requireRole: 'Admin'
+  });
+
+  // Обработка неавторизованных пользователей
   useEffect(() => {
-    checkAuth();
+    if (authStatus === 'loading' || checkingRole) {
+      return; // Ждем завершения проверок
+    }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN') {
-        checkUserRole(session?.user.id);
-        setIsAuthenticated(true);
-        setShowLoginModal(false);
-      } else if (event === 'SIGNED_OUT') {
-        setIsAuthenticated(false);
-        setIsAuthorized(false);
-        setShowLoginModal(true);
-        navigate('/');
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [navigate]);
-
-  const checkAuth = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const isAuthed = !!session;
-      setIsAuthenticated(isAuthed);
-      
-      if (isAuthed) {
-        await checkUserRole(session.user.id);
-      } else {
-        setShowLoginModal(true);
-      }
-    } catch (error) {
-      console.error('Error checking auth status:', error);
-      setIsAuthenticated(false);
-      setIsAuthorized(false);
+    if (authStatus === 'unauthenticated') {
       setShowLoginModal(true);
+      return;
     }
-  };
 
-  const checkUserRole = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', userId)
-        .single();
-
-      if (error) throw error;
-      
-      const isAdmin = data?.role === 'Admin';
-      setIsAuthorized(isAdmin);
-      
-      if (!isAdmin) {
-        toast.error('У вас нет доступа к панели управления');
-        navigate('/');
-      }
-    } catch (error) {
-      console.error('Error checking user role:', error);
-      setIsAuthorized(false);
-      toast.error('Ошибка при проверке прав доступа');
+    if (authStatus === 'authenticated' && user && userRole !== 'Admin' && !hasShownError) {
+      toast.error('У вас нет доступа к панели управления');
+      setHasShownError(true);
       navigate('/');
+      return;
     }
-  };
 
-  if (isAuthenticated === null || isAuthorized === null) {
+    if (isAuthorized) {
+      setShowLoginModal(false);
+      setHasShownError(false);
+    }
+  }, [authStatus, userRole, isAuthorized, user, checkingRole, navigate, hasShownError]);
+
+  // Показываем загрузку пока идут проверки
+  if (authStatus === 'loading' || checkingRole) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">
+            Проверка прав доступа...
+          </p>
+        </div>
       </div>
     );
   }
 
+  // Показываем контент только если пользователь авторизован
   return (
     <>
-      {!isAuthenticated && (
+      {!isAuthorized && (
         <LoginModal 
           isOpen={showLoginModal} 
           onClose={() => {
@@ -98,7 +75,7 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
           }} 
         />
       )}
-      {isAuthenticated && isAuthorized ? children : null}
+      {isAuthorized ? children : null}
     </>
   );
 };

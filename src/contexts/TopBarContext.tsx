@@ -1,6 +1,4 @@
-// src/contexts/TopBarContext.tsx
-// Контекст для избежания дублирования инициализации TopBar в StrictMode
-
+// src/contexts/TopBarContext.tsx - Версия с кэшированием навигации
 import { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { getNavigationItems, getTopbarSettings } from '../api/settings';
@@ -24,23 +22,51 @@ interface UserProfile {
 }
 
 interface TopBarContextType {
-  // Navigation
   navItems: NavItem[];
   topbarHeight: 'compact' | 'standard' | 'large';
-  
-  // Auth
   user: UserProfile | null;
-  
-  // State
   mounted: boolean;
   loading: boolean;
-  
-  // Actions
   refreshNavigation: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
 const TopBarContext = createContext<TopBarContextType | undefined>(undefined);
+
+// Кэш для навигации
+const NAVIGATION_CACHE_KEY = 'topbar_navigation_cache';
+const CACHE_DURATION = 5 * 60 * 1000; // 5 минут
+
+const getNavigationFromCache = (): NavItem[] | null => {
+  try {
+    const cached = localStorage.getItem(NAVIGATION_CACHE_KEY);
+    if (!cached) return null;
+    
+    const { data, timestamp } = JSON.parse(cached);
+    
+    // Проверяем, не истек ли кэш
+    if (Date.now() - timestamp > CACHE_DURATION) {
+      localStorage.removeItem(NAVIGATION_CACHE_KEY);
+      return null;
+    }
+    
+    return data;
+  } catch {
+    return null;
+  }
+};
+
+const setNavigationToCache = (navItems: NavItem[]) => {
+  try {
+    const cacheData = {
+      data: navItems,
+      timestamp: Date.now()
+    };
+    localStorage.setItem(NAVIGATION_CACHE_KEY, JSON.stringify(cacheData));
+  } catch (error) {
+    console.warn('Не удалось сохранить навигацию в кэш:', error);
+  }
+};
 
 export const TopBarProvider = ({ children }: { children: ReactNode }) => {
   const [navItems, setNavItems] = useState<NavItem[]>([]);
@@ -51,49 +77,76 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
   const [initialized, setInitialized] = useState(false);
   const isMountedRef = useRef(true);
 
-  // ИНИЦИАЛИЗАЦИЯ ТОЛЬКО ОДИН РАЗ
+  // Fallback навигация
+  const fallbackNavigation = [
+    { id: 'home', label: 'Главная', path: '/', visible: true, order: 0 },
+    { id: 'events', label: 'Мероприятия', path: '/events', visible: true, order: 1 },
+    { id: 'courses', label: 'Курсы', path: '/courses', visible: true, order: 2 },
+    { id: 'speakers', label: 'Спикеры', path: '/speakers', visible: true, order: 3 },
+    { id: 'coworking', label: 'Коворкинг', path: '/coworking', visible: true, order: 4 },
+    { id: 'rent', label: 'Аренда', path: '/rent', visible: true, order: 5 },
+    { id: 'about', label: 'О нас', path: '/about', visible: true, order: 6 }
+  ];
+
+  // БЫСТРАЯ ИНИЦИАЛИЗАЦИЯ
   useEffect(() => {
     let cleanup = false;
     isMountedRef.current = true;
     
-    // Предотвращаем повторную инициализацию в StrictMode
     if (initialized) {
-      console.log('🔄 TopBarProvider: Пропуск повторной инициализации (уже инициализирован)');
+      console.log('🔄 TopBarProvider: Пропуск повторной инициализации');
       return;
     }
     
-    console.log('🎨 TopBarProvider: Глобальная инициализация...');
+    console.log('🎨 TopBarProvider: Быстрая инициализация...');
     
-    const initialize = async () => {
+    const quickInit = async () => {
       try {
-        if (cleanup || !isMountedRef.current) return;
-        
-        // 1. Проверяем текущую сессию
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session && !cleanup && isMountedRef.current) {
-          await fetchUserProfile(session.user.id);
+        // 1. Сразу загружаем навигацию из кэша или используем fallback
+        const cachedNav = getNavigationFromCache();
+        if (cachedNav && cachedNav.length > 0) {
+          console.log('✅ TopBarProvider: Навигация загружена из кэша:', cachedNav.length, 'элементов');
+          setNavItems(cachedNav);
+        } else {
+          console.log('⚠️ TopBarProvider: Используем fallback навигацию');
+          setNavItems(fallbackNavigation);
+          setNavigationToCache(fallbackNavigation);
         }
 
-        // 2. Загружаем навигацию
+        // 2. Проверяем авторизацию (быстро)
         if (!cleanup && isMountedRef.current) {
-          await fetchNavItems();
+          try {
+            const { data: { session } } = await Promise.race([
+              supabase.auth.getSession(),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('Auth timeout')), 2000))
+            ]);
+            
+            if (session && session.user) {
+              // Загружаем профиль в фоне, не блокируя UI
+              fetchUserProfile(session.user.id);
+            }
+          } catch (error) {
+            console.warn('🎨 TopBarProvider: Ошибка быстрой проверки авторизации:', error);
+          }
         }
 
-        // 3. Загружаем настройки топбара
-        if (!cleanup && isMountedRef.current) {
-          await fetchTopbarSettings();
-        }
-
+        // 3. Завершаем инициализацию
         if (!cleanup && isMountedRef.current) {
           setMounted(true);
           setLoading(false);
           setInitialized(true);
-          console.log('✅ TopBarProvider: Глобальная инициализация завершена');
+          console.log('✅ TopBarProvider: Быстрая инициализация завершена');
         }
+
+        // 4. Обновляем навигацию в фоне (только если не было кэша)
+        if (!cachedNav && !cleanup && isMountedRef.current) {
+          fetchNavItemsInBackground();
+        }
+
       } catch (error) {
-        console.error('❌ TopBarProvider: Ошибка инициализации:', error);
+        console.error('❌ TopBarProvider: Ошибка быстрой инициализации:', error);
         if (!cleanup && isMountedRef.current) {
-          setFallbackNavigation();
+          setNavItems(fallbackNavigation);
           setMounted(true);
           setLoading(false);
           setInitialized(true);
@@ -101,15 +154,39 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
       }
     };
 
-    initialize();
+    quickInit();
 
     return () => {
       cleanup = true;
       isMountedRef.current = false;
     };
-  }, []); // Пустые зависимости - инициализация только один раз
+  }, []);
 
-  // ПОДПИСКА НА АВТОРИЗАЦИЮ
+  // Фоновая загрузка навигации
+  const fetchNavItemsInBackground = async () => {
+    try {
+      console.log('🔄 TopBarProvider: Фоновое обновление навигации...');
+      
+      const response = await Promise.race([
+        getNavigationItems(),
+        new Promise<any>((_, reject) => 
+          setTimeout(() => reject(new Error('Background nav timeout')), 10000)
+        )
+      ]);
+      
+      if (response.data && response.data.length > 0 && isMountedRef.current) {
+        const sortedItems = response.data.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+        setNavItems(sortedItems);
+        setNavigationToCache(sortedItems);
+        console.log('✅ TopBarProvider: Навигация обновлена в фоне:', sortedItems.length, 'элементов');
+      }
+    } catch (error) {
+      console.warn('⚠️ TopBarProvider: Ошибка фонового обновления навигации:', error);
+      // Не меняем navItems при ошибке - оставляем текущие
+    }
+  };
+
+  // ПОДПИСКА НА АВТОРИЗАЦИЮ (только после инициализации)
   useEffect(() => {
     if (!mounted) return;
 
@@ -135,16 +212,21 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [mounted]);
 
-  // ФУНКЦИИ ЗАГРУЗКИ ДАННЫХ
+  // Загрузка профиля пользователя
   const fetchUserProfile = async (userId: string) => {
     try {
       if (!isMountedRef.current) return;
       
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+      const { data: profile, error } = await Promise.race([
+        supabase.from('profiles').select('*').eq('id', userId).single(),
+        new Promise<any>((_, reject) => 
+          setTimeout(() => reject(new Error('Profile timeout')), 5000)
+        )
+      ]);
+
+      if (error) {
+        console.warn('Ошибка загрузки профиля:', error);
+      }
 
       const { data: { session } } = await supabase.auth.getSession();
       
@@ -158,63 +240,15 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
         });
       }
     } catch (error) {
-      console.error('Error fetching user profile:', error);
+      console.error('Ошибка получения профиля пользователя:', error);
     }
   };
 
-  const fetchNavItems = async () => {
-    try {
-      if (!isMountedRef.current) return;
-      
-      console.log('🔄 TopBarProvider: Загрузка навигации из API...');
-      const response = await getNavigationItems();
-      
-      if (response.data && response.data.length > 0 && isMountedRef.current) {
-        const sortedItems = response.data.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
-        setNavItems(sortedItems);
-        console.log('✅ TopBarProvider: Навигация загружена из API');
-      } else if (isMountedRef.current) {
-        console.log('⚠️ TopBarProvider: Использование fallback навигации');
-        setFallbackNavigation();
-      }
-    } catch (error) {
-      console.error('❌ Error fetching navigation:', error);
-      if (isMountedRef.current) {
-        console.log('⚠️ TopBarProvider: Fallback из-за ошибки API');
-        setFallbackNavigation();
-      }
-    }
-  };
-
-  const setFallbackNavigation = () => {
-    const fallbackItems = [
-      { id: 'home', label: 'Главная', path: '/', visible: true, order: 0 },
-      { id: 'events', label: 'Мероприятия', path: '/events', visible: true, order: 1 },
-      { id: 'courses', label: 'Курсы', path: '/courses', visible: true, order: 2 },
-      { id: 'speakers', label: 'Спикеры', path: '/speakers', visible: true, order: 3 },
-      { id: 'coworking', label: 'Коворкинг', path: '/coworking', visible: true, order: 4 },
-      { id: 'rent', label: 'Аренда', path: '/rent', visible: true, order: 5 },
-      { id: 'about', label: 'О нас', path: '/about', visible: true, order: 6 }
-    ];
-    setNavItems(fallbackItems);
-  };
-
-  const fetchTopbarSettings = async () => {
-    try {
-      if (!isMountedRef.current) return;
-      
-      const response = await getTopbarSettings();
-      if (response.data?.height && isMountedRef.current) {
-        setTopbarHeight(response.data.height);
-      }
-    } catch (error) {
-      console.error('Error fetching topbar settings:', error);
-    }
-  };
-
-  // ПУБЛИЧНЫЕ МЕТОДЫ ДЛЯ ОБНОВЛЕНИЯ
+  // ПУБЛИЧНЫЕ МЕТОДЫ
   const refreshNavigation = async () => {
-    await fetchNavItems();
+    // Очищаем кэш и перезагружаем
+    localStorage.removeItem(NAVIGATION_CACHE_KEY);
+    await fetchNavItemsInBackground();
   };
 
   const refreshUser = async () => {
@@ -234,6 +268,15 @@ export const TopBarProvider = ({ children }: { children: ReactNode }) => {
     refreshUser
   };
 
+  // Минимальное логирование
+  const prevStateRef = useRef({ navItemsCount: 0, user: false, mounted: false, loading: true });
+  const currentState = { navItemsCount: navItems.length, user: !!user, mounted, loading };
+  
+  if (JSON.stringify(prevStateRef.current) !== JSON.stringify(currentState)) {
+    console.log('🎨 TopBarProvider: Состояние:', currentState);
+    prevStateRef.current = currentState;
+  }
+
   return (
     <TopBarContext.Provider value={value}>
       {children}
@@ -248,4 +291,3 @@ export const useTopBar = (): TopBarContextType => {
   }
   return context;
 };
-

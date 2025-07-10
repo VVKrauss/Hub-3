@@ -1,112 +1,543 @@
-import { useState, useEffect, useRef } from 'react';
-import { supabase } from '../../lib/supabase';  // ✅ Правильный путь
+import React, { useState, useEffect, useRef } from 'react';
+import { supabase } from '../../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { 
-  Edit, 
-  Trash2, 
-  Plus, 
   Save, 
+  Loader2, 
+  Info, 
+  ImageIcon, 
+  Plus, 
   X, 
-  Image as ImageIcon,
-  Loader2,
-  Home,
-  DollarSign,
-  Phone,
+  DollarSign, 
+  Home, 
+  MapPin, 
+  Phone, 
   Mail,
-  MapPin,
-  Info
+  Upload,
+  Edit3,
+  Trash2,
+  Eye,
+  EyeOff
 } from 'lucide-react';
-import Cropper from 'react-cropper';
-import 'cropperjs/dist/cropper.css';
 
-type PriceItem = {
+// === ТИПЫ ===
+interface PriceItem {
   id: string;
   name: string;
   price: number;
-  duration: string; // 'hour', 'day', 'week', 'month'
+  duration: 'hour' | 'day' | 'week' | 'month';
   description?: string;
-};
+  is_featured?: boolean;
+}
 
-type RentInfoSettings = {
-  id: number;
+interface ContactInfo {
+  address: string;
+  phone: string;
+  email: string;
+  map_link?: string;
+  working_hours?: string;
+}
+
+interface RentSettings {
   title: string;
-  description: string | null;
-  photos: string[] | null;
+  description: string;
+  photos: string[];
+  amenities: string[];
   pricelist: PriceItem[];
-  contacts: {
-    address: string;
-    phone: string;
-    email: string;
-    map_link: string;
-  } | null;
-};
+  contacts: ContactInfo;
+  main_prices: {
+    hourly?: number;
+    daily?: number;
+  };
+  included_services: string[];
+  meta_description?: string;
+  is_active: boolean;
+}
 
-const LoadingSpinner = () => (
-  <div className="flex justify-center items-center py-12">
-    <div className="relative">
-      <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
-      <div className="absolute inset-0 w-8 h-8 border-2 border-primary-200 dark:border-primary-800 rounded-full"></div>
-    </div>
-    <span className="ml-3 text-gray-600 dark:text-gray-300 font-medium">Загрузка данных...</span>
-  </div>
-);
+// === КОМПОНЕНТЫ ===
 
-const AdminRent = () => {
-  const [data, setData] = useState<RentInfoSettings | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [editData, setEditData] = useState<Partial<RentInfoSettings>>({});
-  const [newPriceItem, setNewPriceItem] = useState<Omit<PriceItem, 'id'>>({
-    name: '',
-    price: 0,
-    duration: 'hour',
-    description: ''
-  });
-  
-  // Photo management states
-  const [isUploading, setIsUploading] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [croppedImage, setCroppedImage] = useState<string | null>(null);
-  const [showCropper, setShowCropper] = useState(false);
-  const cropperRef = useRef<Cropper>(null);
+// Компонент для управления фотографиями
+const PhotoManager: React.FC<{
+  photos: string[];
+  onChange: (photos: string[]) => void;
+}> = ({ photos, onChange }) => {
+  const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Размер файла не должен превышать 10MB');
+      return;
+    }
+
+    try {
+      setUploading(true);
+      
+      const timestamp = Date.now();
+      const fileExt = file.name.split('.').pop();
+      const fileName = `rent-${timestamp}.${fileExt}`;
+      
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('images')
+        .upload(`rent/${fileName}`, file, {
+          contentType: file.type,
+          upsert: false
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrlData } = supabase.storage
+        .from('images')
+        .getPublicUrl(`rent/${fileName}`);
+
+      const photoUrl = publicUrlData.publicUrl;
+      onChange([...photos, photoUrl]);
+      
+      toast.success('Фото успешно загружено');
+    } catch (err) {
+      console.error('Error uploading photo:', err);
+      toast.error('Ошибка при загрузке фото');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removePhoto = (photoUrl: string) => {
+    onChange(photos.filter(url => url !== photoUrl));
+  };
+
+  const movePhoto = (fromIndex: number, toIndex: number) => {
+    const newPhotos = [...photos];
+    const [moved] = newPhotos.splice(fromIndex, 1);
+    newPhotos.splice(toIndex, 0, moved);
+    onChange(newPhotos);
+  };
+
+  return (
+    <div className="space-y-6">
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileUpload}
+        accept="image/*"
+        className="hidden"
+      />
+      
+      {/* Кнопка загрузки */}
+      <button
+        onClick={() => fileInputRef.current?.click()}
+        disabled={uploading}
+        className="w-full p-8 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl hover:border-primary-500 transition-colors text-center disabled:opacity-50"
+      >
+        {uploading ? (
+          <div className="flex items-center justify-center gap-2">
+            <Loader2 className="w-6 h-6 animate-spin text-primary-600" />
+            <span>Загрузка...</span>
+          </div>
+        ) : (
+          <>
+            <Upload className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+            <p className="text-lg font-medium text-gray-600 dark:text-gray-300">
+              Нажмите для загрузки фото
+            </p>
+            <p className="text-sm text-gray-500">PNG, JPG до 10MB</p>
+          </>
+        )}
+      </button>
+
+      {/* Галерея загруженных фото */}
+      {photos.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {photos.map((photo, index) => (
+            <div key={index} className="relative group">
+              <img
+                src={photo}
+                alt={`Фото ${index + 1}`}
+                className="w-full h-32 object-cover rounded-lg border border-gray-200 dark:border-gray-600"
+              />
+              
+              {/* Оверлей с кнопками */}
+              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
+                {index > 0 && (
+                  <button
+                    onClick={() => movePhoto(index, index - 1)}
+                    className="p-2 bg-white/20 text-white rounded-full hover:bg-white/30 transition-colors"
+                    title="Переместить влево"
+                  >
+                    ←
+                  </button>
+                )}
+                
+                <button
+                  onClick={() => removePhoto(photo)}
+                  className="p-2 bg-red-500/80 text-white rounded-full hover:bg-red-500 transition-colors"
+                  title="Удалить"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+                
+                {index < photos.length - 1 && (
+                  <button
+                    onClick={() => movePhoto(index, index + 1)}
+                    className="p-2 bg-white/20 text-white rounded-full hover:bg-white/30 transition-colors"
+                    title="Переместить вправо"
+                  >
+                    →
+                  </button>
+                )}
+              </div>
+              
+              {/* Индекс фото */}
+              <div className="absolute top-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs">
+                {index + 1}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Компонент для управления прайс-листом
+const PriceListManager: React.FC<{
+  pricelist: PriceItem[];
+  onChange: (pricelist: PriceItem[]) => void;
+}> = ({ pricelist, onChange }) => {
+  const addPriceItem = () => {
+    const newItem: PriceItem = {
+      id: `price-${Date.now()}`,
+      name: '',
+      price: 0,
+      duration: 'hour',
+      description: '',
+      is_featured: false
+    };
+    onChange([...pricelist, newItem]);
+  };
+
+  const updatePriceItem = (id: string, updates: Partial<PriceItem>) => {
+    onChange(pricelist.map(item => 
+      item.id === id ? { ...item, ...updates } : item
+    ));
+  };
+
+  const removePriceItem = (id: string) => {
+    onChange(pricelist.filter(item => item.id !== id));
+  };
+
+  const movePriceItem = (fromIndex: number, toIndex: number) => {
+    const newList = [...pricelist];
+    const [moved] = newList.splice(fromIndex, 1);
+    newList.splice(toIndex, 0, moved);
+    onChange(newList);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Кнопка добавления */}
+      <button
+        onClick={addPriceItem}
+        className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
+      >
+        <Plus className="w-4 h-4" />
+        Добавить услугу
+      </button>
+
+      {/* Список услуг */}
+      <div className="space-y-4">
+        {pricelist.map((item, index) => (
+          <div key={item.id} className="border dark:border-gray-600 rounded-lg p-6 bg-gray-50 dark:bg-gray-700/50">
+            <div className="flex justify-between items-start mb-4">
+              <div className="flex items-center gap-2">
+                <h3 className="font-medium text-lg">Услуга #{index + 1}</h3>
+                {item.is_featured && (
+                  <span className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 px-2 py-1 rounded-full text-xs font-medium">
+                    Рекомендуемая
+                  </span>
+                )}
+              </div>
+              
+              <div className="flex items-center gap-2">
+                {/* Кнопки перемещения */}
+                {index > 0 && (
+                  <button
+                    onClick={() => movePriceItem(index, index - 1)}
+                    className="p-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                    title="Переместить вверх"
+                  >
+                    ↑
+                  </button>
+                )}
+                
+                {index < pricelist.length - 1 && (
+                  <button
+                    onClick={() => movePriceItem(index, index + 1)}
+                    className="p-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                    title="Переместить вниз"
+                  >
+                    ↓
+                  </button>
+                )}
+                
+                <button
+                  onClick={() => removePriceItem(item.id)}
+                  className="p-1 text-red-500 hover:text-red-700"
+                  title="Удалить"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Название</label>
+                <input
+                  type="text"
+                  value={item.name}
+                  onChange={(e) => updatePriceItem(item.id, { name: e.target.value })}
+                  className="w-full p-3 border rounded-lg dark:border-gray-600 dark:bg-gray-700"
+                  placeholder="Название услуги"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-2">Цена (€)</label>
+                <input
+                  type="number"
+                  value={item.price}
+                  onChange={(e) => updatePriceItem(item.id, { price: Number(e.target.value) })}
+                  className="w-full p-3 border rounded-lg dark:border-gray-600 dark:bg-gray-700"
+                  placeholder="0"
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-2">Период</label>
+                <select
+                  value={item.duration}
+                  onChange={(e) => updatePriceItem(item.id, { duration: e.target.value as any })}
+                  className="w-full p-3 border rounded-lg dark:border-gray-600 dark:bg-gray-700"
+                >
+                  <option value="hour">час</option>
+                  <option value="day">день</option>
+                  <option value="week">неделя</option>
+                  <option value="month">месяц</option>
+                </select>
+              </div>
+              
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium mb-2">Описание</label>
+                <textarea
+                  value={item.description || ''}
+                  onChange={(e) => updatePriceItem(item.id, { description: e.target.value })}
+                  className="w-full p-3 border rounded-lg dark:border-gray-600 dark:bg-gray-700"
+                  placeholder="Описание услуги..."
+                  rows={2}
+                />
+              </div>
+              
+              <div className="flex items-center">
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={item.is_featured || false}
+                    onChange={(e) => updatePriceItem(item.id, { is_featured: e.target.checked })}
+                    className="mr-2"
+                  />
+                  <span className="text-sm">Рекомендуемая услуга</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        ))}
+        
+        {pricelist.length === 0 && (
+          <div className="text-center py-8 text-gray-500">
+            Нет дополнительных услуг. Нажмите "Добавить услугу" чтобы начать.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Компонент для управления списками (удобства, включенные услуги)
+const ListManager: React.FC<{
+  items: string[];
+  onChange: (items: string[]) => void;
+  placeholder: string;
+  addButtonText: string;
+}> = ({ items, onChange, placeholder, addButtonText }) => {
+  const [newItem, setNewItem] = useState('');
+
+  const addItem = () => {
+    if (newItem.trim() && !items.includes(newItem.trim())) {
+      onChange([...items, newItem.trim()]);
+      setNewItem('');
+    }
+  };
+
+  const removeItem = (index: number) => {
+    onChange(items.filter((_, i) => i !== index));
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addItem();
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Поле добавления */}
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={newItem}
+          onChange={(e) => setNewItem(e.target.value)}
+          onKeyPress={handleKeyPress}
+          className="flex-1 p-3 border rounded-lg dark:border-gray-600 dark:bg-gray-700"
+          placeholder={placeholder}
+        />
+        <button
+          onClick={addItem}
+          disabled={!newItem.trim()}
+          className="px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-400 text-white rounded-lg transition-colors"
+        >
+          {addButtonText}
+        </button>
+      </div>
+
+      {/* Список элементов */}
+      <div className="flex flex-wrap gap-2">
+        {items.map((item, index) => (
+          <div key={index} className="inline-flex items-center gap-2 bg-gray-100 dark:bg-gray-700 px-3 py-2 rounded-full">
+            <span>{item}</span>
+            <button
+              onClick={() => removeItem(index)}
+              className="text-red-500 hover:text-red-700"
+              title="Удалить"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        ))}
+        
+        {items.length === 0 && (
+          <div className="text-gray-500 text-sm py-2">
+            Список пуст. Добавьте первый элемент.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// === ОСНОВНОЙ КОМПОНЕНТ ===
+const AdminRent = () => {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [settings, setSettings] = useState<RentSettings>({
+    title: '',
+    description: '',
+    photos: [],
+    amenities: [],
+    pricelist: [],
+    contacts: {
+      address: '',
+      phone: '',
+      email: ''
+    },
+    main_prices: {},
+    included_services: [],
+    is_active: true
+  });
+
+  // Загрузка настроек
   useEffect(() => {
-    fetchSettings();
+    loadSettings();
   }, []);
 
-  const fetchSettings = async () => {
+  const loadSettings = async () => {
     try {
       setLoading(true);
+      
       const { data, error } = await supabase
-        .from('site_settings') 
-        .select('rent_info_settings')
-        .select('*')
+        .from('site_settings')
+        .select('rent_page_settings')
         .single();
 
-      if (error) throw error;
-      setData(data);
-      setEditData(data || {});
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+
+      if (data?.rent_page_settings) {
+        setSettings({
+          title: data.rent_page_settings.title || 'Аренда пространства Science Hub',
+          description: data.rent_page_settings.description || '',
+          photos: data.rent_page_settings.photos || [],
+          amenities: data.rent_page_settings.amenities || [],
+          pricelist: data.rent_page_settings.pricelist || [],
+          contacts: data.rent_page_settings.contacts || {
+            address: 'Science Hub, Панчево, Сербия',
+            phone: '+381 123 456 789',
+            email: 'info@sciencehub.site'
+          },
+          main_prices: data.rent_page_settings.main_prices || {},
+          included_services: data.rent_page_settings.included_services || [],
+          meta_description: data.rent_page_settings.meta_description || '',
+          is_active: data.rent_page_settings.is_active !== false
+        });
+      }
     } catch (err) {
-      console.error('Error fetching settings:', err);
+      console.error('Error loading settings:', err);
       toast.error('Не удалось загрузить настройки');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSave = async () => {
+  const saveSettings = async () => {
     try {
       setSaving(true);
-      const { error } = await supabase
-        .from('site_settings') 
-        .select('rent_info_settings')
-        .update(editData)
-        .eq('id', data?.id);
-
-      if (error) throw error;
-      await fetchSettings();
-      toast.success('Настройки успешно сохранены');
+      
+      // Получаем ID записи site_settings или создаем новую
+      let { data: existingSettings, error: fetchError } = await supabase
+        .from('site_settings')
+        .select('id')
+        .single();
+      
+      if (fetchError && fetchError.code === 'PGRST116') {
+        // Создаем новую запись
+        const { data: newSettings, error: createError } = await supabase
+          .from('site_settings')
+          .insert({ rent_page_settings: settings })
+          .select('id')
+          .single();
+          
+        if (createError) throw createError;
+        existingSettings = newSettings;
+      } else if (fetchError) {
+        throw fetchError;
+      } else {
+        // Обновляем существующую запись
+        const { error: updateError } = await supabase
+          .from('site_settings')
+          .update({ rent_page_settings: settings })
+          .eq('id', existingSettings.id);
+          
+        if (updateError) throw updateError;
+      }
+      
+      toast.success('Настройки аренды успешно сохранены');
     } catch (err) {
       console.error('Error saving settings:', err);
       toast.error('Ошибка при сохранении настроек');
@@ -115,221 +546,69 @@ const AdminRent = () => {
     }
   };
 
-  const handleAddPriceItem = () => {
-    if (!newPriceItem.name || newPriceItem.price <= 0) return;
-    
-    const updatedPricelist = [
-      ...(editData.pricelist || []),
-      {
-        ...newPriceItem,
-        id: Date.now().toString()
-      }
-    ];
-
-    setEditData(prev => ({
-      ...prev,
-      pricelist: updatedPricelist
-    }));
-
-    setNewPriceItem({
-      name: '',
-      price: 0,
-      duration: 'hour',
-      description: ''
-    });
+  // Обработчики изменений
+  const updateSettings = (updates: Partial<RentSettings>) => {
+    setSettings(prev => ({ ...prev, ...updates }));
   };
 
-  const handleRemovePriceItem = (id: string) => {
-    const updatedPricelist = (editData.pricelist || []).filter(item => item.id !== id);
-    setEditData(prev => ({
+  const updateContacts = (updates: Partial<ContactInfo>) => {
+    setSettings(prev => ({
       ...prev,
-      pricelist: updatedPricelist
+      contacts: { ...prev.contacts, ...updates }
     }));
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>, field: string) => {
-    setEditData(prev => ({
+  const updateMainPrices = (updates: Partial<RentSettings['main_prices']>) => {
+    setSettings(prev => ({
       ...prev,
-      [field]: e.target.value
+      main_prices: { ...prev.main_prices, ...updates }
     }));
-  };
-
-  const handleContactsChange = (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
-    setEditData(prev => ({
-      ...prev,
-      contacts: {
-        ...(prev.contacts || {}),
-        [field]: e.target.value
-      }
-    }));
-  };
-
-  const handlePriceItemChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>, field: string) => {
-    setNewPriceItem(prev => ({
-      ...prev,
-      [field]: field === 'price' ? Number(e.target.value) : e.target.value
-    }));
-  };
-
-  // Photo management functions
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0];
-      
-      // Check file size (max 5MB before compression)
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('Файл слишком большой. Максимальный размер 5MB.');
-        return;
-      }
-      
-      setSelectedFile(file);
-      setShowCropper(true);
-    }
-  };
-
-  const handleCropComplete = () => {
-    if (cropperRef.current && cropperRef.current.cropper) {
-      const croppedCanvas = cropperRef.current.cropper.getCroppedCanvas();
-      setCroppedImage(croppedCanvas.toDataURL('image/jpeg', 0.8));
-    }
-  };
-
-  const uploadPhoto = async () => {
-    if (!croppedImage || !selectedFile) return;
-    
-    try {
-      setIsUploading(true);
-      
-      // Convert data URL to Blob
-      const blob = await fetch(croppedImage).then(res => res.blob());
-      
-      // Generate unique filename
-      const timestamp = Date.now();
-      const fileExt = selectedFile.name.split('.').pop();
-      const filename = `${timestamp}.${fileExt}`;
-      const filePath = `rent_photos/${filename}`;
-      
-      // Upload to Supabase Storage in images bucket with rent_photos folder
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('images')
-        .upload(filePath, blob, {
-          cacheControl: '3600',
-          upsert: false,
-          contentType: 'image/jpeg',
-        });
-      
-      if (uploadError) throw uploadError;
-      
-      // Get public URL
-      const { data: publicUrlData } = supabase.storage
-        .from('images')
-        .getPublicUrl(filePath);
-      
-      // Update photos array
-      const updatedPhotos = [...(editData.photos || []), publicUrlData.publicUrl];
-      setEditData(prev => ({
-        ...prev,
-        photos: updatedPhotos
-      }));
-      
-      toast.success('Фото успешно загружено');
-      resetPhotoUpload();
-    } catch (err) {
-      console.error('Error uploading photo:', err);
-      toast.error('Ошибка при загрузке фото');
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const deletePhoto = async (photoUrl: string) => {
-    try {
-      // Extract filename from URL for images bucket with rent_photos folder
-      const urlParts = photoUrl.split('/');
-      const filename = urlParts[urlParts.length - 1];
-      const filePath = `rent_photos/${filename}`;
-      
-      // Delete from storage
-      const { error: deleteError } = await supabase.storage
-        .from('images')
-        .remove([filePath]);
-      
-      if (deleteError) throw deleteError;
-      
-      // Update photos array
-      const updatedPhotos = (editData.photos || []).filter(url => url !== photoUrl);
-      setEditData(prev => ({
-        ...prev,
-        photos: updatedPhotos
-      }));
-      
-      toast.success('Фото успешно удалено');
-    } catch (err) {
-      console.error('Error deleting photo:', err);
-      toast.error('Ошибка при удалении фото');
-    }
-  };
-
-  const resetPhotoUpload = () => {
-    setSelectedFile(null);
-    setCroppedImage(null);
-    setShowCropper(false);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-dark-900 dark:via-dark-900 dark:to-dark-800 py-8 font-sans">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <LoadingSpinner />
-        </div>
-      </div>
-    );
-  }
-
-  if (!data) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-dark-900 dark:via-dark-900 dark:to-dark-800 py-8 font-sans">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center py-12">
-            <div className="text-yellow-600 dark:text-yellow-400 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-              Настройки аренды не найдены. Создайте новую запись.
-            </div>
-          </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-300">Загрузка настроек...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-dark-900 dark:via-dark-900 dark:to-dark-800 py-8 font-sans">
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handleFileChange}
-        accept="image/*"
-        className="hidden"
-      />
-      
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-dark-900 dark:via-dark-900 dark:to-dark-800 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Заголовок */}
-        <div className="mb-12 text-center">
-          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-primary-600 via-primary-500 to-secondary-500 bg-clip-text text-transparent mb-4 font-heading">
+        <div className="mb-8 text-center">
+          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-primary-600 via-primary-500 to-secondary-500 bg-clip-text text-transparent mb-4">
             Управление арендой
           </h1>
-          <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto leading-relaxed">
+          <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
             Настройте информацию о ваших помещениях для аренды
           </p>
         </div>
 
-        {/* Кнопка сохранения */}
-        <div className="flex justify-center mb-10">
+        {/* Статус и кнопка сохранения */}
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8 p-4 bg-white dark:bg-dark-800 rounded-xl shadow-sm">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => updateSettings({ is_active: !settings.is_active })}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                settings.is_active 
+                  ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200' 
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+              }`}
+            >
+              {settings.is_active ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+              {settings.is_active ? 'Страница активна' : 'Страница скрыта'}
+            </button>
+          </div>
+          
           <button
-            onClick={handleSave}
+            onClick={saveSettings}
             disabled={saving}
-            className="inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none shadow-lg font-heading"
+            className="inline-flex items-center gap-3 px-8 py-3 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none shadow-lg"
           >
             {saving ? (
               <>
@@ -346,446 +625,349 @@ const AdminRent = () => {
         </div>
 
         <div className="space-y-8">
-          {/* Main Settings Section */}
+          {/* Основные настройки */}
           <div className="bg-white dark:bg-dark-800 rounded-2xl shadow-lg p-8 border border-gray-100 dark:border-gray-700">
             <div className="flex items-center mb-6">
               <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-900/30 dark:to-primary-800/30 rounded-xl mr-4">
                 <Info className="w-6 h-6 text-primary-600 dark:text-primary-400" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white font-heading">Основные настройки</h2>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Основная информация</h2>
                 <p className="text-gray-500 dark:text-gray-400">Заголовок и описание страницы аренды</p>
               </div>
             </div>
             
             <div className="space-y-6">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Заголовок страницы</label>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  Заголовок страницы *
+                </label>
                 <input
                   type="text"
-                  value={editData.title || ''}
-                  onChange={(e) => handleChange(e, 'title')}
+                  value={settings.title}
+                  onChange={(e) => updateSettings({ title: e.target.value })}
                   className="w-full p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800 transition-all duration-200"
                   placeholder="Введите заголовок страницы аренды"
+                  required
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Описание страницы</label>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  Описание страницы
+                </label>
                 <textarea
-                  value={editData.description || ''}
-                  onChange={(e) => handleChange(e, 'description')}
+                  value={settings.description}
+                  onChange={(e) => updateSettings({ description: e.target.value })}
                   rows={4}
                   className="w-full p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800 transition-all duration-200 resize-none"
                   placeholder="Опишите ваши помещения для аренды..."
                 />
               </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  Мета-описание (для SEO)
+                </label>
+                <textarea
+                  value={settings.meta_description || ''}
+                  onChange={(e) => updateSettings({ meta_description: e.target.value })}
+                  rows={2}
+                  maxLength={160}
+                  className="w-full p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800 transition-all duration-200 resize-none"
+                  placeholder="Краткое описание для поисковых систем (до 160 символов)"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {(settings.meta_description || '').length}/160 символов
+                </p>
+              </div>
             </div>
           </div>
           
-          {/* Photo Gallery Section */}
+          {/* Фотогалерея */}
           <div className="bg-white dark:bg-dark-800 rounded-2xl shadow-lg p-8 border border-gray-100 dark:border-gray-700">
             <div className="flex items-center mb-6">
               <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 rounded-xl mr-4">
                 <ImageIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white font-heading">Фотогалерея</h2>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Фотогалерея</h2>
                 <p className="text-gray-500 dark:text-gray-400">Загрузите фотографии ваших помещений</p>
               </div>
             </div>
             
-            {/* Photo Upload Section */}
-            <div className="mb-8">
-              {showCropper ? (
-                <div className="space-y-6 p-6 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-600 rounded-xl border border-gray-200 dark:border-gray-700">
-                  <h4 className="font-semibold text-gray-900 dark:text-white">Обрезка изображения</h4>
-                  
-                  <div className="h-64 w-full relative rounded-lg overflow-hidden">
-                    <Cropper
-                      src={selectedFile ? URL.createObjectURL(selectedFile) : ''}
-                      style={{ height: '100%', width: '100%' }}
-                      initialAspectRatio={16 / 9}
-                      guides={true}
-                      ref={cropperRef}
-                      crop={handleCropComplete}
-                      viewMode={1}
-                      minCropBoxHeight={100}
-                      minCropBoxWidth={100}
-                      responsive={true}
-                      autoCropArea={1}
-                      checkOrientation={false}
-                    />
-                  </div>
-                  
-                  {croppedImage && (
-                    <div>
-                      <h5 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Предпросмотр:</h5>
-                      <div className="flex justify-center">
-                        <img 
-                          src={croppedImage} 
-                          alt="Cropped preview" 
-                          className="max-h-40 rounded-lg border-2 border-gray-200 dark:border-gray-600 shadow-lg"
-                        />
-                      </div>
-                    </div>
-                  )}
-                  
-                  <div className="flex gap-3 justify-center">
-                    <button
-                      onClick={resetPhotoUpload}
-                      className="flex items-center gap-2 px-6 py-3 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
-                    >
-                      <X className="w-5 h-5" />
-                      Отмена
-                    </button>
-                    <button
-                      onClick={uploadPhoto}
-                      disabled={isUploading || !croppedImage}
-                      className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 disabled:transform-none"
-                    >
-                      {isUploading ? (
-                        <>
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                          Загрузка...
-                        </>
-                      ) : (
-                        <>
-                          <Save className="w-5 h-5" />
-                          Загрузить фото
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-8 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700/30 dark:to-gray-600/30 hover:border-primary-400 dark:hover:border-primary-500 transition-all duration-200">
-                  <div className="text-center">
-                    <div className="flex justify-center mb-4">
-                      <div className="p-4 bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-900/30 dark:to-primary-800/30 rounded-full">
-                        <ImageIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="text-primary-600 dark:text-primary-400 font-semibold hover:text-primary-700 dark:hover:text-primary-300 transition-colors duration-200"
-                    >
-                      Нажмите для загрузки фото
-                    </button>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                      или перетащите файл сюда
-                    </p>
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                      JPG, PNG (максимум 5MB)
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            {/* Current Photos */}
-            <div>
-              <h4 className="font-semibold text-gray-900 dark:text-white mb-4">Текущие фотографии</h4>
-              {(editData.photos && editData.photos.length > 0) ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                  {editData.photos.map((photoUrl, index) => (
-                    <div key={index} className="group relative">
-                      <div className="aspect-square rounded-xl overflow-hidden border-2 border-gray-200 dark:border-gray-600 shadow-lg hover:shadow-xl transition-all duration-300">
-                        <img
-                          src={photoUrl}
-                          alt={`Rent photo ${index + 1}`}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                      </div>
-                      <button
-                        onClick={() => deletePhoto(photoUrl)}
-                        className="absolute top-2 right-2 p-2 bg-red-500 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all duration-200 transform hover:scale-110 shadow-lg"
-                        title="Удалить фото"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <ImageIcon className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Нет загруженных фотографий</h3>
-                  <p className="text-gray-500 dark:text-gray-400">Добавьте фотографии ваших помещений</p>
-                </div>
-              )}
-            </div>
+            <PhotoManager
+              photos={settings.photos}
+              onChange={(photos) => updateSettings({ photos })}
+            />
           </div>
-          
-          {/* Price List Section */}
-          <div className="bg-white dark:bg-dark-800 rounded-2xl shadow-lg p-8 border border-gray-100 dark:border-gray-700">
-            <div className="flex justify-between items-center mb-6">
-              <div className="flex items-center">
-                <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900/30 dark:to-green-800/30 rounded-xl mr-4">
-                  <DollarSign className="w-6 h-6 text-green-600 dark:text-green-400" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white font-heading">Прайс-лист</h2>
-                  <p className="text-gray-500 dark:text-gray-400">Варианты аренды и цены</p>
-                </div>
-              </div>
-              <button
-                onClick={handleAddPriceItem}
-                disabled={!newPriceItem.name || newPriceItem.price <= 0}
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg font-heading disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-              >
-                <Plus className="w-5 h-5" />
-                Добавить вариант
-              </button>
-            </div>
-            
-            {/* Add New Price Item */}
-            <div className="mb-8 p-6 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-600 rounded-xl border border-gray-200 dark:border-gray-700">
-              <h4 className="font-semibold text-gray-900 dark:text-white mb-4">Добавить новый вариант</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Название</label>
-                  <input
-                    type="text"
-                    value={newPriceItem.name}
-                    onChange={(e) => handlePriceItemChange(e, 'name')}
-                    className="w-full p-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800 transition-all duration-200"
-                    placeholder="Стандартный зал"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Цена (₽)</label>
-                  <input
-                    type="number"
-                    value={newPriceItem.price}
-                    onChange={(e) => handlePriceItemChange(e, 'price')}
-                    className="w-full p-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800 transition-all duration-200"
-                    placeholder="1000"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Период</label>
-                  <select
-                    value={newPriceItem.duration}
-                    onChange={(e) => handlePriceItemChange(e, 'duration')}
-                    className="w-full p-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800 transition-all duration-200"
-                  >
-                    <option value="hour">Почасово</option>
-                    <option value="day">Посуточно</option>
-                    <option value="week">Понедельно</option>
-                    <option value="month">Помесячно</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Описание</label>
-                  <input
-                    type="text"
-                    value={newPriceItem.description || ''}
-                    onChange={(e) => handlePriceItemChange(e, 'description')}
-                    className="w-full p-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-800 transition-all duration-200"
-                    placeholder="Дополнительная информация"
-                  />
-                </div>
-              </div>
-            </div>
-            
-            {/* Price List Table */}
-            <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                  <thead className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-600">
-                    <tr>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Название</th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Цена</th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Период</th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Описание</th>
-                      <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Действия</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white dark:bg-dark-800 divide-y divide-gray-200 dark:divide-gray-700">
-                    {(editData.pricelist || []).length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="px-6 py-12 text-center">
-                          <DollarSign className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Нет вариантов аренды</h3>
-                          <p className="text-gray-500 dark:text-gray-400">Добавьте варианты аренды с ценами</p>
-                        </td>
-                      </tr>
-                    ) : (
-                      (editData.pricelist || []).map((item) => (
-                        <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors duration-200">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-semibold text-gray-900 dark:text-white">
-                              {item.name}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-green-600 dark:text-green-400">
-                              {item.price.toLocaleString('ru-RU')} ₽
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300">
-                              {{
-                                hour: 'Час',
-                                day: 'День',
-                                week: 'Неделя',
-                                month: 'Месяц'
-                              }[item.duration]}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm text-gray-500 dark:text-gray-400 max-w-xs">
-                              {item.description || '-'}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right">
-                            <button
-                              onClick={() => handleRemovePriceItem(item.id)}
-                              className="inline-flex items-center justify-center w-8 h-8 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-all duration-200 transform hover:scale-110"
-                              title="Удалить"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-          
-          {/* Contacts Section */}
+
+          {/* Основные цены */}
           <div className="bg-white dark:bg-dark-800 rounded-2xl shadow-lg p-8 border border-gray-100 dark:border-gray-700">
             <div className="flex items-center mb-6">
-              <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-orange-100 to-orange-200 dark:from-orange-900/30 dark:to-orange-800/30 rounded-xl mr-4">
-                <Phone className="w-6 h-6 text-orange-600 dark:text-orange-400" />
+              <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900/30 dark:to-green-800/30 rounded-xl mr-4">
+                <DollarSign className="w-6 h-6 text-green-600 dark:text-green-400" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white font-heading">Контактная информация</h2>
-                <p className="text-gray-500 dark:text-gray-400">Способы связи для аренды</p>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Основные тарифы</h2>
+                <p className="text-gray-500 dark:text-gray-400">Базовые цены на аренду</p>
               </div>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  <MapPin className="w-4 h-4 text-orange-500" />
-                  Адрес
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  Цена за час (€)
                 </label>
                 <input
-                  type="text"
-                  value={editData.contacts?.address || ''}
-                  onChange={(e) => handleContactsChange(e, 'address')}
-                  className="w-full p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 transition-all duration-200"
-                  placeholder="г. Москва, ул. Примерная, д. 1"
+                  type="number"
+                  value={settings.main_prices.hourly || ''}
+                  onChange={(e) => updateMainPrices({ hourly: e.target.value ? Number(e.target.value) : undefined })}
+                  className="w-full p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="25"
+                  min="0"
+                  step="0.01"
                 />
               </div>
               
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  <Phone className="w-4 h-4 text-orange-500" />
-                  Телефон
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  Цена за день (€)
                 </label>
                 <input
-                  type="tel"
-                  value={editData.contacts?.phone || ''}
-                  onChange={(e) => handleContactsChange(e, 'phone')}
-                  className="w-full p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 transition-all duration-200"
-                  placeholder="+7 (999) 123-45-67"
+                  type="number"
+                  value={settings.main_prices.daily || ''}
+                  onChange={(e) => updateMainPrices({ daily: e.target.value ? Number(e.target.value) : undefined })}
+                  className="w-full p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="150"
+                  min="0"
+                  step="0.01"
                 />
               </div>
-              
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  <Mail className="w-4 h-4 text-orange-500" />
-                  Email
+            </div>
+            
+            <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <p className="text-sm text-blue-800 dark:text-blue-200">
+                💡 <strong>Совет:</strong> Основные тарифы отображаются на странице аренды как главные предложения. 
+                Дополнительные услуги можно настроить в разделе "Прайс-лист" ниже.
+              </p>
+            </div>
+          </div>
+
+          {/* Прайс-лист дополнительных услуг */}
+          <div className="bg-white dark:bg-dark-800 rounded-2xl shadow-lg p-8 border border-gray-100 dark:border-gray-700">
+            <div className="flex items-center mb-6">
+              <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-purple-100 to-purple-200 dark:from-purple-900/30 dark:to-purple-800/30 rounded-xl mr-4">
+                <DollarSign className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Дополнительные услуги</h2>
+                <p className="text-gray-500 dark:text-gray-400">Прайс-лист дополнительных услуг и оборудования</p>
+              </div>
+            </div>
+            
+            <PriceListManager
+              pricelist={settings.pricelist}
+              onChange={(pricelist) => updateSettings({ pricelist })}
+            />
+          </div>
+
+          {/* Удобства */}
+          <div className="bg-white dark:bg-dark-800 rounded-2xl shadow-lg p-8 border border-gray-100 dark:border-gray-700">
+            <div className="flex items-center mb-6">
+              <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-orange-100 to-orange-200 dark:from-orange-900/30 dark:to-orange-800/30 rounded-xl mr-4">
+                <Home className="w-6 h-6 text-orange-600 dark:text-orange-400" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Удобства</h2>
+                <p className="text-gray-500 dark:text-gray-400">Список доступных удобств в помещении</p>
+              </div>
+            </div>
+            
+            <ListManager
+              items={settings.amenities}
+              onChange={(amenities) => updateSettings({ amenities })}
+              placeholder="Введите название удобства (например, Wi-Fi)"
+              addButtonText="Добавить"
+            />
+          </div>
+
+          {/* Включенные услуги */}
+          <div className="bg-white dark:bg-dark-800 rounded-2xl shadow-lg p-8 border border-gray-100 dark:border-gray-700">
+            <div className="flex items-center mb-6">
+              <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-teal-100 to-teal-200 dark:from-teal-900/30 dark:to-teal-800/30 rounded-xl mr-4">
+                <Home className="w-6 h-6 text-teal-600 dark:text-teal-400" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Включенные услуги</h2>
+                <p className="text-gray-500 dark:text-gray-400">Услуги, которые включены в стоимость аренды</p>
+              </div>
+            </div>
+            
+            <ListManager
+              items={settings.included_services}
+              onChange={(included_services) => updateSettings({ included_services })}
+              placeholder="Введите название включенной услуги"
+              addButtonText="Добавить"
+            />
+          </div>
+
+          {/* Контактная информация */}
+          <div className="bg-white dark:bg-dark-800 rounded-2xl shadow-lg p-8 border border-gray-100 dark:border-gray-700">
+            <div className="flex items-center mb-6">
+              <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-indigo-100 to-indigo-200 dark:from-indigo-900/30 dark:to-indigo-800/30 rounded-xl mr-4">
+                <MapPin className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Контактная информация</h2>
+                <p className="text-gray-500 dark:text-gray-400">Информация для связи и бронирования</p>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  <Mail className="w-4 h-4 inline mr-1" />
+                  Email *
                 </label>
                 <input
                   type="email"
-                  value={editData.contacts?.email || ''}
-                  onChange={(e) => handleContactsChange(e, 'email')}
-                  className="w-full p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 transition-all duration-200"
-                  placeholder="example@mail.com"
+                  value={settings.contacts.email}
+                  onChange={(e) => updateContacts({ email: e.target.value })}
+                  className="w-full p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="info@sciencehub.site"
+                  required
                 />
               </div>
               
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  <MapPin className="w-4 h-4 text-orange-500" />
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  <Phone className="w-4 h-4 inline mr-1" />
+                  Телефон *
+                </label>
+                <input
+                  type="tel"
+                  value={settings.contacts.phone}
+                  onChange={(e) => updateContacts({ phone: e.target.value })}
+                  className="w-full p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="+381 123 456 789"
+                  required
+                />
+              </div>
+              
+              <div className="md:col-span-2">
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  <MapPin className="w-4 h-4 inline mr-1" />
+                  Адрес *
+                </label>
+                <input
+                  type="text"
+                  value={settings.contacts.address}
+                  onChange={(e) => updateContacts({ address: e.target.value })}
+                  className="w-full p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="Science Hub, Панчево, Сербия"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                   Ссылка на карту
                 </label>
                 <input
                   type="url"
-                  value={editData.contacts?.map_link || ''}
-                  onChange={(e) => handleContactsChange(e, 'map_link')}
-                  className="w-full p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 transition-all duration-200"
-                  placeholder="https://yandex.ru/maps/..."
+                  value={settings.contacts.map_link || ''}
+                  onChange={(e) => updateContacts({ map_link: e.target.value })}
+                  className="w-full p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="https://maps.google.com/..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  Часы работы
+                </label>
+                <input
+                  type="text"
+                  value={settings.contacts.working_hours || ''}
+                  onChange={(e) => updateContacts({ working_hours: e.target.value })}
+                  className="w-full p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="Пн-Пт: 9:00-22:00, Сб-Вс: 10:00-20:00"
                 />
               </div>
             </div>
           </div>
 
-          {/* Statistics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-2xl p-6 border border-blue-200 dark:border-blue-700">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-blue-600 dark:text-blue-400">Загружено фото</p>
-                  <p className="text-3xl font-bold text-blue-900 dark:text-blue-100">{(editData.photos || []).length}</p>
+          {/* Статистика и превью */}
+          <div className="bg-gradient-to-r from-primary-50 to-secondary-50 dark:from-primary-900/20 dark:to-secondary-900/20 rounded-2xl p-8 border border-primary-200 dark:border-primary-700">
+            <h3 className="text-xl font-semibold mb-6 text-gray-900 dark:text-white">
+              📊 Статистика страницы
+            </h3>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              <div className="bg-white dark:bg-dark-800 rounded-xl p-4 text-center">
+                <div className="text-2xl font-bold text-primary-600 dark:text-primary-400">
+                  {settings.photos.length}
                 </div>
-                <div className="p-3 bg-blue-200 dark:bg-blue-800 rounded-xl">
-                  <ImageIcon className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+                <div className="text-sm text-gray-600 dark:text-gray-300">Фотографий</div>
+              </div>
+              
+              <div className="bg-white dark:bg-dark-800 rounded-xl p-4 text-center">
+                <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                  {settings.pricelist.length}
                 </div>
+                <div className="text-sm text-gray-600 dark:text-gray-300">Доп. услуг</div>
+              </div>
+              
+              <div className="bg-white dark:bg-dark-800 rounded-xl p-4 text-center">
+                <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                  {settings.amenities.length}
+                </div>
+                <div className="text-sm text-gray-600 dark:text-gray-300">Удобств</div>
+              </div>
+              
+              <div className="bg-white dark:bg-dark-800 rounded-xl p-4 text-center">
+                <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                  {settings.included_services.length}
+                </div>
+                <div className="text-sm text-gray-600 dark:text-gray-300">Включ. услуг</div>
               </div>
             </div>
-
-            <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-2xl p-6 border border-green-200 dark:border-green-700">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-green-600 dark:text-green-400">Вариантов аренды</p>
-                  <p className="text-3xl font-bold text-green-900 dark:text-green-100">{(editData.pricelist || []).length}</p>
+            
+            <div className="mt-6 flex gap-4">
+              <a
+                href="/rent"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
+              >
+                <Eye className="w-4 h-4" />
+                Предварительный просмотр
+              </a>
+              
+              {!settings.is_active && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 rounded-lg">
+                  <EyeOff className="w-4 h-4" />
+                  Страница скрыта от посетителей
                 </div>
-                <div className="p-3 bg-green-200 dark:bg-green-800 rounded-xl">
-                  <DollarSign className="w-8 h-8 text-green-600 dark:text-green-400" />
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-2xl p-6 border border-purple-200 dark:border-purple-700">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-purple-600 dark:text-purple-400">Мин. цена</p>
-                  <p className="text-3xl font-bold text-purple-900 dark:text-purple-100">
-                    {(editData.pricelist || []).length > 0 
-                      ? `${Math.min(...(editData.pricelist || []).map(item => item.price)).toLocaleString('ru-RU')} ₽`
-                      : '—'
-                    }
-                  </p>
-                </div>
-                <div className="p-3 bg-purple-200 dark:bg-purple-800 rounded-xl">
-                  <Home className="w-8 h-8 text-purple-600 dark:text-purple-400" />
-                </div>
-              </div>
+              )}
             </div>
           </div>
-        </div>
 
-        {/* Floating Save Button for Mobile */}
-        <div className="fixed bottom-6 right-6 md:hidden">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-2 px-6 py-4 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white rounded-full shadow-2xl transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-          >
-            {saving ? (
-              <Loader2 className="w-6 h-6 animate-spin" />
-            ) : (
-              <Save className="w-6 h-6" />
-            )}
-          </button>
+          {/* Плавающая кнопка сохранения для мобильных устройств */}
+          <div className="fixed bottom-6 right-6 md:hidden">
+            <button
+              onClick={saveSettings}
+              disabled={saving}
+              className="flex items-center gap-2 px-6 py-4 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white rounded-full shadow-2xl transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+            >
+              {saving ? (
+                <Loader2 className="w-6 h-6 animate-spin" />
+              ) : (
+                <Save className="w-6 h-6" />
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -793,3 +975,5 @@ const AdminRent = () => {
 };
 
 export default AdminRent;
+
+

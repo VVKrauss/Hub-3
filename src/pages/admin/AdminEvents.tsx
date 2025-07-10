@@ -1219,56 +1219,6 @@ return (
         </Link>
       </div>
 
-      {/* Debug информация (только в dev режиме) */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="fixed bottom-6 left-6 bg-black/80 text-white p-4 rounded-lg text-xs max-w-xs">
-          <div className="font-semibold mb-2">Debug Info:</div>
-          <div>Total Events: {events.length}</div>
-          <div>Filtered Events: {filteredEvents.length}</div>
-          <div>Selected Events: {selectedEvents.length}</div>
-          <div>Status Filter: {statusFilter}</div>
-          <div>Sort By: {sortBy}</div>
-          <div>Search Query: "{searchQuery}"</div>
-          <div className="mt-2 text-yellow-300">
-            Sources:
-          </div>
-          <div>
-            sh_events: {events.filter(e => detectEventTableSource(e) === 'sh_events').length}
-          </div>
-          <div>
-            events: {events.filter(e => detectEventTableSource(e) === 'events').length}
-          </div>
-          <div className="mt-2 text-green-300">
-            Status Distribution:
-          </div>
-          <div>
-            Active: {events.filter(e => e.status === 'active').length}
-          </div>
-          <div>
-            Draft: {events.filter(e => e.status === 'draft').length}
-          </div>
-          <div>
-            Past: {events.filter(e => e.status === 'past').length}
-          </div>
-        </div>
-      )}
-
-      {/* Toast для уведомлений о статусе загрузки данных */}
-      {events.length > 0 && (
-        <div className="sr-only">
-          {console.log(`
-🎯 AdminEvents Statistics (IMPROVED):
-📊 Total Events: ${events.length}
-📋 Filtered Events: ${filteredEvents.length}
-🎮 Active Events: ${events.filter(e => e.status === 'active').length}
-📝 Draft Events: ${events.filter(e => e.status === 'draft').length}
-📜 Past Events: ${events.filter(e => e.status === 'past').length}
-🆕 From sh_events: ${events.filter(e => detectEventTableSource(e) === 'sh_events').length}
-🔄 From events: ${events.filter(e => detectEventTableSource(e) === 'events').length}
-🖼️ With Images: ${events.filter(e => getEventImage(e)).length}
-          `)}
-        </div>
-      )}
     </div>
   );
 };

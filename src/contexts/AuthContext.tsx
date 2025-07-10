@@ -1,6 +1,7 @@
-// src/contexts/AuthContext.tsx - Исправленная версия
+// src/contexts/AuthContext.tsx
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, getStoredSession, clearStoredSession } from '../lib/supabase';
+import { User as SupabaseUser } from '@supabase/supabase-js';
 
 type User = {
   id: string;
@@ -22,94 +23,151 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User>(null);
   const [loading, setLoading] = useState(true);
-  const [initialCheckDone, setInitialCheckDone] = useState(false);
 
   useEffect(() => {
     let mounted = true;
+    let initializationCompleted = false;
 
-    const checkUser = async () => {
+    const initializeAuth = async () => {
+      console.log('🔐 AuthProvider: Инициализация авторизации...');
+      
       try {
+        // 1. Сначала проверяем сохраненную сессию
+        const storedSession = getStoredSession();
+        console.log('🔐 AuthProvider: Сохраненная сессия:', !!storedSession);
+
+        // 2. Получаем текущую сессию из Supabase
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
-          if (mounted) {
+          console.error('🔐 AuthProvider: Ошибка получения сессии:', error);
+          // Очищаем поврежденную сессию
+          clearStoredSession();
+          if (mounted && !initializationCompleted) {
             setUser(null);
             setLoading(false);
-            setInitialCheckDone(true);
+            initializationCompleted = true;
           }
           return;
         }
-        
-        if (mounted) {
-          setUser(session?.user ? {
-            id: session.user.id,
-            email: session.user.email || '',
-            name: session.user.user_metadata?.name
-          } : null);
+
+        console.log('🔐 AuthProvider: Текущая сессия:', !!session);
+
+        if (mounted && !initializationCompleted) {
+          if (session?.user) {
+            const userData: User = {
+              id: session.user.id,
+              email: session.user.email || '',
+              name: session.user.user_metadata?.name
+            };
+            setUser(userData);
+            console.log('🔐 AuthProvider: Пользователь установлен:', userData.email);
+          } else {
+            setUser(null);
+            console.log('🔐 AuthProvider: Пользователь не найден');
+          }
           setLoading(false);
-          setInitialCheckDone(true);
+          initializationCompleted = true;
         }
       } catch (error) {
-        console.error('Error checking auth status:', error);
-        if (mounted) {
+        console.error('🔐 AuthProvider: Ошибка инициализации:', error);
+        // В случае любой ошибки очищаем состояние
+        clearStoredSession();
+        if (mounted && !initializationCompleted) {
           setUser(null);
           setLoading(false);
-          setInitialCheckDone(true);
+          initializationCompleted = true;
         }
       }
     };
 
-    // Выполняем первоначальную проверку только один раз
-    if (!initialCheckDone) {
-      checkUser();
-    }
+    // Запускаем инициализацию
+    initializeAuth();
 
-    // Настраиваем слушатель изменений состояния аутентификации
-    const { data: authListener } = supabase.auth.onAuthStateChange(
+    // Подписываемся на изменения состояния авторизации
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (mounted) {
-          if (session?.user) {
-            setUser({
-              id: session.user.id,
-              email: session.user.email || '',
-              name: session.user.user_metadata?.name
-            });
-          } else {
+        console.log('🔐 AuthProvider: Auth событие:', event);
+        
+        if (!mounted) return;
+
+        switch (event) {
+          case 'INITIAL_SESSION':
+            // Начальная сессия уже обработана в initializeAuth
+            break;
+            
+          case 'SIGNED_IN':
+            if (session?.user) {
+              const userData: User = {
+                id: session.user.id,
+                email: session.user.email || '',
+                name: session.user.user_metadata?.name
+              };
+              setUser(userData);
+              console.log('🔐 AuthProvider: Пользователь вошел:', userData.email);
+            }
+            if (initializationCompleted) {
+              setLoading(false);
+            }
+            break;
+            
+          case 'SIGNED_OUT':
             setUser(null);
-          }
-          
-          // Устанавливаем loading в false только после первоначальной проверки
-          if (initialCheckDone) {
-            setLoading(false);
-          }
+            clearStoredSession();
+            console.log('🔐 AuthProvider: Пользователь вышел');
+            if (initializationCompleted) {
+              setLoading(false);
+            }
+            break;
+            
+          case 'TOKEN_REFRESHED':
+            console.log('🔐 AuthProvider: Токен обновлен');
+            // Пользователь остается тем же, просто обновился токен
+            break;
+            
+          case 'USER_UPDATED':
+            if (session?.user) {
+              const userData: User = {
+                id: session.user.id,
+                email: session.user.email || '',
+                name: session.user.user_metadata?.name
+              };
+              setUser(userData);
+              console.log('🔐 AuthProvider: Данные пользователя обновлены');
+            }
+            break;
+            
+          default:
+            console.log('🔐 AuthProvider: Неизвестное событие:', event);
         }
       }
     );
 
+    // Cleanup function
     return () => {
       mounted = false;
-      authListener.subscription.unsubscribe();
+      subscription.unsubscribe();
+      console.log('🔐 AuthProvider: Отписка от auth событий');
     };
-  }, [initialCheckDone]);
-
-  // Таймаут для предотвращения бесконечной загрузки
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      if (loading && !initialCheckDone) {
-        setLoading(false);
-        setInitialCheckDone(true);
-      }
-    }, 10000); // 10 секунд максимум на загрузку
-
-    return () => clearTimeout(timeout);
-  }, [loading, initialCheckDone]);
+  }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+    console.log('🔐 AuthProvider: Попытка входа для:', email);
+    const { error } = await supabase.auth.signInWithPassword({ 
+      email, 
+      password 
+    });
+    
+    if (error) {
+      console.error('🔐 AuthProvider: Ошибка входа:', error);
+      throw error;
+    }
+    
+    console.log('🔐 AuthProvider: Вход успешен');
   };
 
   const signUp = async (email: string, password: string, name: string) => {
+    console.log('🔐 AuthProvider: Попытка регистрации для:', email);
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -118,23 +176,53 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         emailRedirectTo: `${window.location.origin}/auth/callback`
       }
     });
-    if (error) throw error;
+    
+    if (error) {
+      console.error('🔐 AuthProvider: Ошибка регистрации:', error);
+      throw error;
+    }
+    
+    console.log('🔐 AuthProvider: Регистрация успешна');
   };
 
   const signOut = async () => {
+    console.log('🔐 AuthProvider: Выход из системы');
     const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    
+    if (error) {
+      console.error('🔐 AuthProvider: Ошибка выхода:', error);
+      throw error;
+    }
+    
+    // Принудительно очищаем состояние
+    clearStoredSession();
+    setUser(null);
+    console.log('🔐 AuthProvider: Выход выполнен');
   };
 
   const resetPassword = async (email: string) => {
+    console.log('🔐 AuthProvider: Сброс пароля для:', email);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
-    if (error) throw error;
+    
+    if (error) {
+      console.error('🔐 AuthProvider: Ошибка сброса пароля:', error);
+      throw error;
+    }
+    
+    console.log('🔐 AuthProvider: Сброс пароля отправлен');
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, resetPassword }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      loading, 
+      signIn, 
+      signUp, 
+      signOut, 
+      resetPassword 
+    }}>
       {children}
     </AuthContext.Provider>
   );
