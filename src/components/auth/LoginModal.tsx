@@ -1,8 +1,9 @@
-// src/components/auth/LoginModal.tsx - ИСПРАВЛЕННАЯ ВЕРСИЯ (убираем toast)
+// src/components/auth/LoginModal.tsx - ОБНОВЛЕННАЯ ВЕРСИЯ с анимированным логотипом
 import { useState } from 'react';
-import { X, Mail, Lock, User, Eye, EyeOff, LogIn, Sparkles, ArrowRight, Loader2 } from 'lucide-react';
+import { X, Mail, Lock, User, Eye, EyeOff, LogIn, Sparkles, ArrowRight } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-hot-toast';
+import CustomLoader from '../ui/CustomLoader';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -64,7 +65,7 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
 
         if (error) throw error;
 
-        // УБРАЛИ toast.success('Добро пожаловать!'); - будет показан в TopBarContext
+        // Toast будет показан в TopBarContext
         onClose();
       }
     } catch (error: any) {
@@ -259,8 +260,10 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
                 <div className="flex items-center justify-center gap-2">
                   {loading ? (
                     <>
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                      {resetPassword ? 'Отправляем...' : (isSignUp ? 'Создаём аккаунт...' : 'Входим...')}
+                      <CustomLoader size="sm" />
+                      <span className="ml-2">
+                        {resetPassword ? 'Отправляем...' : (isSignUp ? 'Создаём аккаунт...' : 'Входим...')}
+                      </span>
                     </>
                   ) : (
                     <>
