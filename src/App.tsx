@@ -1,4 +1,4 @@
-// src/App.tsx - ПОЛНЫЙ ФАЙЛ с роутами миграции и управления пользователями
+// src/App.tsx - ОБНОВЛЕННЫЙ с добавлением диагностики
 import { Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import HomePage from './pages/HomePage';
@@ -17,7 +17,7 @@ import AdminEvents from './pages/admin/AdminEvents';
 import CreateEditEventPage from './pages/admin/CreateEditEventPage';
 import AdminSpeakers from './pages/admin/AdminSpeakers';
 import AdminSpeakersMigration from './pages/admin/AdminSpeakersMigration';
-import AdminUsersManagement from './pages/admin/AdminUsersManagement'; // НОВЫЙ ИМПОРТ
+import AdminUsersManagement from './pages/admin/AdminUsersManagement';
 import AdminRent from './pages/admin/AdminRent';
 import AdminCoworking from './pages/admin/AdminCoworking';
 import AdminAbout from './pages/admin/AdminAbout';
@@ -33,10 +33,17 @@ import AuthCallbackPage from './pages/auth/AuthCallbackPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import ProfilePage from './pages/ProfilePage';
 
+// ДОБАВЛЯЕМ ДИАГНОСТИКУ
+import QuickDiagnostics from './components/QuickDiagnostics';
+
 function App() {
   return (
     <div className="app">
       <Toaster position="top-center" />
+      
+      {/* ДОБАВЛЯЕМ ДИАГНОСТИКУ */}
+      <QuickDiagnostics />
+      
       <Routes>
         {/* Public routes */}
         <Route path="/" element={<HomePage />} />
@@ -73,7 +80,7 @@ function App() {
           <Route path="events/:id/edit" element={<CreateEditEventPage />} />
           <Route path="speakers" element={<AdminSpeakers />} />
           <Route path="speakers-migration" element={<AdminSpeakersMigration />} />
-          <Route path="users" element={<AdminUsersManagement />} /> {/* НОВЫЙ РОУТ */}
+          <Route path="users" element={<AdminUsersManagement />} />
           <Route path="rent" element={<AdminRent />} />
           <Route path="coworking" element={<AdminCoworking />} />
           <Route path="about" element={<AdminAbout />} />
