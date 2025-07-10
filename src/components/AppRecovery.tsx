@@ -1,11 +1,11 @@
-// src/components/AppRecovery.tsx - УПРОЩЕННАЯ ВЕРСИЯ
+// src/components/AppRecovery.tsx - ОБНОВЛЕННАЯ ВЕРСИЯ с анимированным логотипом
 import { useState, useEffect, useRef } from 'react';
-import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { CheckCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import CustomLoader from './ui/CustomLoader';
 
 /**
- * Упрощенный компонент восстановления приложения
- * Работает совместно с AuthContext, не дублирует функциональность
+ * Обновленный компонент восстановления приложения с анимированным логотипом
  */
 const AppRecovery = () => {
   const { forceQuickCheck, loading, isQuickReturn } = useAuth();
@@ -86,7 +86,7 @@ const AppRecovery = () => {
       {showRecovery && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 shadow-lg max-w-sm">
           <div className="flex items-center gap-3">
-            <Loader2 className="w-5 h-5 text-blue-600 animate-spin flex-shrink-0" />
+            <CustomLoader size="sm" />
             <div className="flex-1">
               <h4 className="font-semibold text-blue-800 text-sm">
                 Проверка подключения
