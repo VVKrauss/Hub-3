@@ -186,23 +186,23 @@ const AdminLayout = () => {
         </div>
 
         {/* Ссылка на основной сайт */}
-        <div className="p-2 border-b border-gray-200 dark:border-dark-700">
+        <div className="px-2 py-1 border-b border-gray-200 dark:border-dark-700">
           <a
             href="/"
             target="_blank"
             rel="noopener noreferrer"
             className={`
-              w-full flex items-center gap-3 px-3 py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors font-medium
+              w-full flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-700 rounded-lg transition-colors text-sm
               ${isSidebarCollapsed && !isMobile ? 'justify-center' : ''}
             `}
             title="Перейти на основной сайт"
             onClick={isMobile ? closeMobileMenu : undefined}
           >
-            <Home className="h-5 w-5" />
+            <Home className="h-4 w-4" />
             {(!isSidebarCollapsed || isMobile) && (
               <>
                 <span>Основной сайт</span>
-                <ExternalLink className="h-4 w-4 ml-auto" />
+                <ExternalLink className="h-3 w-3 ml-auto opacity-60" />
               </>
             )}
           </a>
@@ -289,15 +289,15 @@ const AdminLayout = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Ссылка на основной сайт в топбаре для удобства */}
+            {/* Ссылка на основной сайт в топбаре */}
             <a
               href="/"
               target="_blank"
               rel="noopener noreferrer"
-              className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700 text-green-600 dark:text-green-400 flex items-center gap-1"
+              className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700 text-gray-600 dark:text-gray-400 flex items-center gap-1"
               title="Перейти на основной сайт"
             >
-              <Home className="h-5 w-5" />
+              <Home className="h-4 w-4" />
               <ExternalLink className="h-3 w-3" />
             </a>
             
