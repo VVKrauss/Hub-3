@@ -1,87 +1,99 @@
-// src/components/SessionMonitor.tsx
+// src/components/SessionMonitor.tsx - ОПТИМИЗИРОВАННАЯ ВЕРСИЯ
 import { useEffect, useRef } from 'react';
 import { supabase, clearStoredSession } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
-import { 
-  checkNetworkConnection, 
-  setupNetworkEventListeners, 
-  isTokenValid, 
-  forceTokenRefresh 
-} from '../utils/networkUtils';
+import { useAuth } from '../contexts/AuthContext';
 
 /**
- * Компонент для мониторинга состояния сессии Supabase
- * Помогает избежать зависаний при потере соединения
+ * Оптимизированный компонент для мониторинга состояния сессии
+ * Работает совместно с AuthContext, избегая конфликтов
  */
 const SessionMonitor = () => {
+  const { user, loading, isQuickReturn } = useAuth();
   const sessionCheckInterval = useRef<NodeJS.Timeout | null>(null);
   const lastSessionCheck = useRef<number>(Date.now());
   const sessionLostNotificationShown = useRef<boolean>(false);
+  const isMonitoring = useRef<boolean>(false);
 
   useEffect(() => {
+    // Запускаем мониторинг только когда авторизация завершена
+    if (loading || isQuickReturn) {
+      console.log('🔍 SessionMonitor: Ожидание завершения авторизации...');
+      return;
+    }
+
+    // Не запускаем мониторинг если уже работает
+    if (isMonitoring.current) {
+      return;
+    }
+
     console.log('🔍 SessionMonitor: Запуск мониторинга сессии');
+    isMonitoring.current = true;
 
-    // Настраиваем слушатели сетевых событий
-    const cleanupNetworkListeners = setupNetworkEventListeners();
-
-    // Функция проверки состояния сессии
+    // Функция ЛЕГКОЙ проверки состояния сессии (не конфликтует с AuthContext)
     const checkSessionHealth = async () => {
+      // Пропускаем проверку если AuthContext в процессе инициализации
+      if (loading || isQuickReturn) {
+        console.log('🔍 SessionMonitor: Пропускаем проверку - AuthContext занят');
+        return;
+      }
+
       // Проверяем интернет-соединение
-      if (!checkNetworkConnection()) {
+      if (!navigator.onLine) {
         console.log('🔍 SessionMonitor: Нет интернет-соединения, пропускаем проверку');
         return;
       }
 
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+        // ВАЖНО: Используем минимальную проверку через localStorage
+        // чтобы не конфликтовать с AuthContext
+        const storedAuth = localStorage.getItem('sb-auth-token');
         
-        if (error) {
-          console.warn('🔍 SessionMonitor: Ошибка при проверке сессии:', error);
-          
-          // Если ошибка связана с истекшей сессией
-          if (error.message.includes('refresh_token_not_found') || 
-              error.message.includes('invalid_token') ||
-              error.message.includes('JWT expired')) {
-            handleSessionLost();
-          }
+        if (!storedAuth && user) {
+          // Если пользователь есть в контексте, но нет в localStorage - проблема
+          console.warn('🔍 SessionMonitor: Рассинхронизация - пользователь есть, сессии нет');
+          handleSessionLost();
           return;
         }
 
-        // Если сессия есть, обновляем время последней проверки
-        if (session) {
-          lastSessionCheck.current = Date.now();
-          sessionLostNotificationShown.current = false;
-          
-          // Проверяем валидность токена
-          if (session.expires_at && !isTokenValid(session.expires_at)) {
-            console.log('🔍 SessionMonitor: Токен истекает, попытка обновления');
-            const refreshed = await forceTokenRefresh();
+        if (storedAuth) {
+          try {
+            const session = JSON.parse(storedAuth);
+            const expiresAt = session.expires_at ? new Date(session.expires_at).getTime() : 0;
+            const now = Date.now();
             
-            if (!refreshed) {
-              console.error('🔍 SessionMonitor: Не удалось обновить токен');
+            // Проверяем не истек ли токен
+            if (expiresAt > 0 && expiresAt < now) {
+              console.warn('🔍 SessionMonitor: Токен истек');
               handleSessionLost();
               return;
             }
-          }
-        } else {
-          // Если сессии нет, но пользователь должен был быть авторизован
-          const timeSinceLastCheck = Date.now() - lastSessionCheck.current;
-          const fiveMinutes = 5 * 60 * 1000;
-          
-          if (timeSinceLastCheck > fiveMinutes) {
+            
+            // Обновляем время последней успешной проверки
+            lastSessionCheck.current = Date.now();
+            sessionLostNotificationShown.current = false;
+            
+            // Если токен истекает в ближайшие 5 минут - уведомляем AuthContext
+            if (expiresAt > 0 && expiresAt - now < 300000) {
+              console.log('🔍 SessionMonitor: Токен скоро истечет, уведомляем AuthContext');
+              // Не вызываем обновление напрямую - пусть AuthContext сам решает
+            }
+            
+          } catch (parseError) {
+            console.error('🔍 SessionMonitor: Ошибка парсинга сессии:', parseError);
             handleSessionLost();
           }
         }
+
       } catch (error) {
-        console.error('🔍 SessionMonitor: Неожиданная ошибка при проверке сессии:', error);
+        console.error('🔍 SessionMonitor: Ошибка при проверке сессии:', error);
         
-        // Если это ошибка сети, не показываем пользователю
-        if (error instanceof TypeError && error.message.includes('fetch')) {
-          console.log('🔍 SessionMonitor: Ошибка сети, пропускаем обработку');
-          return;
+        // Только критические ошибки обрабатываем
+        if (error instanceof Error && 
+            (error.message.includes('refresh_token_not_found') || 
+             error.message.includes('invalid_token'))) {
+          handleSessionLost();
         }
-        
-        handleSessionLost();
       }
     };
 
@@ -93,60 +105,44 @@ const SessionMonitor = () => {
         // Очищаем поврежденные данные
         clearStoredSession();
         
-        // Показываем уведомление пользователю
+        // Показываем уведомление пользователю (только один раз)
         toast.error('Сессия истекла. Пожалуйста, войдите в систему заново.', {
           duration: 5000,
-          id: 'session-expired' // Предотвращаем дублирование уведомлений
+          id: 'session-expired'
         });
         
         sessionLostNotificationShown.current = true;
         
-        // Принудительно выходим из системы
+        // Деликатный выход из системы
         supabase.auth.signOut().catch(error => {
-          console.error('🔍 SessionMonitor: Ошибка при принудительном выходе:', error);
+          console.error('🔍 SessionMonitor: Ошибка при выходе:', error);
         });
       }
     };
 
-    // Проверяем сессию каждые 30 секунд
-    sessionCheckInterval.current = setInterval(checkSessionHealth, 30000);
+    // Проверяем сессию каждые 60 секунд (реже чем раньше)
+    sessionCheckInterval.current = setInterval(checkSessionHealth, 60000);
     
-    // Выполняем первую проверку сразу
-    checkSessionHealth();
+    // Выполняем первую проверку через 5 секунд (даем AuthContext завершиться)
+    const initialCheckTimeout = setTimeout(checkSessionHealth, 5000);
 
-    // Слушаем события видимости страницы
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        console.log('🔍 SessionMonitor: Страница стала видимой, проверяем сессию');
-        checkSessionHealth();
-      }
-    };
-
-    // Слушаем события focus/blur окна
-    const handleWindowFocus = () => {
-      console.log('🔍 SessionMonitor: Окно получило фокус, проверяем сессию');
-      checkSessionHealth();
-    };
-
-    // Подписываемся на события
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleWindowFocus);
+    // НЕ слушаем visibilitychange - это делает AuthContext
+    // НЕ слушаем focus - это тоже делает AuthContext
 
     // Cleanup функция
     return () => {
       console.log('🔍 SessionMonitor: Остановка мониторинга сессии');
       
+      isMonitoring.current = false;
+      
       if (sessionCheckInterval.current) {
         clearInterval(sessionCheckInterval.current);
+        sessionCheckInterval.current = null;
       }
       
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleWindowFocus);
-      
-      // Очищаем слушатели сетевых событий
-      cleanupNetworkListeners();
+      clearTimeout(initialCheckTimeout);
     };
-  }, []);
+  }, [loading, isQuickReturn, user]); // Зависим от состояния авторизации
 
   // Компонент не рендерит ничего
   return null;
