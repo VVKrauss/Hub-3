@@ -37,7 +37,7 @@ const QuickDiagnostics: React.FC = () => {
     try {
       console.log('🔍 Starting connection check...');
       
-      // Проверяем БД с коротким таймаутом
+      // Проверяем БД с увеличенным таймаутом
       let dbStatus = false;
       let dbError = null;
       
@@ -50,7 +50,7 @@ const QuickDiagnostics: React.FC = () => {
         
         const { data: dbData, error: dbErr } = await withTimeout(
           dbPromise, 
-          3000, // 3 секунды максимум
+          10000, // 10 секунд максимум (было 3000)
           'DB check'
         );
         
@@ -63,7 +63,7 @@ const QuickDiagnostics: React.FC = () => {
         dbError = err;
       }
       
-      // Проверяем авторизацию с коротким таймаутом
+      // Проверяем авторизацию с увеличенным таймаутом
       let authStatus = false;
       let authError = null;
       
@@ -73,7 +73,7 @@ const QuickDiagnostics: React.FC = () => {
         
         const { data: authData, error: authErr } = await withTimeout(
           authPromise,
-          2000, // 2 секунды максимум
+          8000, // 8 секунд максимум (было 2000)
           'Auth check'
         );
         
@@ -110,10 +110,10 @@ const QuickDiagnostics: React.FC = () => {
     }
   };
 
-  // Автоматическая проверка каждые 15 секунд
+  // Автоматическая проверка каждые 30 секунд (было 15 секунд)
   useEffect(() => {
     checkConnections();
-    const interval = setInterval(checkConnections, 15000);
+    const interval = setInterval(checkConnections, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -199,7 +199,7 @@ const QuickDiagnostics: React.FC = () => {
         {/* Индикатор мониторинга */}
         <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
           <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-          <span>Автопроверка каждые 15 сек</span>
+          <span>Автопроверка каждые 30 сек</span>
         </div>
       </div>
     </div>
