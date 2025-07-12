@@ -85,12 +85,12 @@ const RentSection = () => {
   return (
     <section className="section bg-gray-50 dark:bg-dark-800">
       <div className="container mx-auto px-4 md:px-6 max-w-7xl">
-        {/* 🎯 СЕТКА с точным выравниванием высоты - изображение слева */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* 🎯 СЕТКА - изображение слева, текст справа */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
           
-          {/* 🎯 Контейнер изображения - точно под высоту текста - СЛЕВА */}
-          <div className="flex order-2 md:order-1">
-            <div className="w-full rounded-lg overflow-hidden shadow-lg bg-gray-100 dark:bg-gray-700 self-stretch">
+          {/* 🎯 Контейнер изображения с ФИКСИРОВАННОЙ высотой - СЛЕВА */}
+          <div className="order-2 md:order-1">
+            <div className="h-80 w-full rounded-lg overflow-hidden shadow-lg bg-gray-100 dark:bg-gray-700">
               <img 
                 src={getSupabaseImageUrl(data.image)}
                 alt={data.title}
@@ -100,8 +100,8 @@ const RentSection = () => {
             </div>
           </div>
           
-          {/* Текстовый контент - естественная высота - СПРАВА */}
-          <div className="flex flex-col justify-center order-1 md:order-2">
+          {/* Текстовый контент - СПРАВА */}
+          <div className="order-1 md:order-2">
             <h3 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-6">
               {data.title}
             </h3>
