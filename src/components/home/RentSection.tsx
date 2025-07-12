@@ -1,5 +1,4 @@
-
-
+// src/components/home/RentSection.tsx - ИСПРАВЛЕННАЯ ВЕРСИЯ с правильной высотой
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
@@ -20,7 +19,6 @@ const RentSection = () => {
   const [error, setError] = useState<string | null>(null);
   const isMountedRef = useRef(true);
 
-  // ИСПРАВЛЕННАЯ ВЕРСИЯ - только один раз загружаем данные
   useEffect(() => {
     isMountedRef.current = true;
     
@@ -46,7 +44,7 @@ const RentSection = () => {
           console.log('✅ Rent section data loaded');
         }
       } catch (err) {
-        console.error('❌ Error fetching Rent section data:', err);
+        console.error('❌ Error fetching rent section data:', err);
         if (isMountedRef.current) {
           setError('Не удалось загрузить данные');
         }
@@ -62,11 +60,11 @@ const RentSection = () => {
     return () => {
       isMountedRef.current = false;
     };
-  }, []); // КРИТИЧНО: пустой массив зависимостей
+  }, []);
 
   if (isLoading) {
     return (
-      <div className="section bg-white dark:bg-dark-900 min-h-[400px] flex items-center justify-center">
+      <div className="section bg-gray-50 dark:bg-dark-800 min-h-[400px] flex items-center justify-center">
         <div className="animate-pulse">Загрузка...</div>
       </div>
     );
@@ -74,7 +72,7 @@ const RentSection = () => {
 
   if (error) {
     return (
-      <div className="section bg-white dark:bg-dark-900 min-h-[400px] flex items-center justify-center text-red-500">
+      <div className="section bg-gray-50 dark:bg-dark-800 min-h-[400px] flex items-center justify-center text-red-500">
         {error}
       </div>
     );
@@ -85,29 +83,42 @@ const RentSection = () => {
   }
 
   return (
-    <section className="section bg-white dark:bg-dark-900">
-      <div className="container grid-layout items-center">
-        <div className="text-content">
-          <h3 className="mb-6">{data.title}</h3>
-          <div 
-            className="text-base space-y-4 mb-8"
-            dangerouslySetInnerHTML={{ __html: data.description }} 
-          />
-          <Link 
-            to="/rent" 
-            className="inline-flex items-center text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 transition-colors font-medium"
-          >
-            Узнать больше
-            <ArrowRight className="ml-2" />
-          </Link>
-        </div>
-        <div className="image-content mt-8 md:mt-0">
-          <img 
-            src={getSupabaseImageUrl(data.image)} 
-            alt={data.title} 
-            className="w-full h-auto rounded-lg shadow-md"
-            loading="lazy"
-          />
+    <section className="section bg-gray-50 dark:bg-dark-800">
+      <div className="container mx-auto px-4 md:px-6 max-w-7xl">
+        {/* 🎯 ИСПРАВЛЕННАЯ СЕТКА с равной высотой - изображение слева */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+          {/* 🎯 ИСПРАВЛЕННЫЙ контейнер изображения - СЛЕВА */}
+          <div className="relative order-2 md:order-1">
+            {/* Устанавливаем фиксированную высоту для контейнера */}
+            <div className="aspect-[4/3] w-full rounded-lg overflow-hidden shadow-lg bg-gray-100 dark:bg-gray-700">
+              <img 
+                src={getSupabaseImageUrl(data.image)}
+                alt={data.title}
+                className="w-full h-full object-cover object-center transition-transform duration-300 hover:scale-105"
+                loading="lazy"
+              />
+            </div>
+          </div>
+          
+          {/* Текстовый контент - СПРАВА */}
+          <div className="flex flex-col justify-start h-full order-1 md:order-2">
+            <h3 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-6">
+              {data.title}
+            </h3>
+            <div 
+              className="text-base text-gray-600 dark:text-gray-300 space-y-4 mb-8 leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: data.description }}
+            />
+            <div className="mt-auto">
+              <Link 
+                to="/rent" 
+                className="inline-flex items-center text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 transition-colors font-medium text-lg"
+              >
+                Узнать больше
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
     </section>
