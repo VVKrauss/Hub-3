@@ -1,4 +1,4 @@
-// src/pages/EventsPage.tsx - МИНИМАЛЬНЫЕ ИСПРАВЛЕНИЯ только для устранения дёрганья
+// src/pages/EventsPage.tsx - ПОЛНАЯ ОРИГИНАЛЬНАЯ ВЕРСИЯ с минимальными исправлениями
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Calendar, Clock, MapPin, Users, Grid, List, Search, Filter, ChevronDown, X, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -97,29 +97,27 @@ interface EventWithDetails {
   short_description?: string;
   description?: string;
   start_at: string;
-  end_at?: string;
+  end_at: string;
   event_type: string;
   payment_type: string;
   base_price?: number;
   price?: number;
-  currency?: string;
+  currency: string;
   cover_image_url?: string;
   venue_name?: string;
-  location_type?: string;
-  address?: string;
   language_code?: string;
-  age_category?: string;
-  status: string;
+  languages?: string[];
   registrations_count?: number;
-  is_featured?: boolean;
+  status: string;
+  age_category?: string;
 }
 
-// СЛАЙДЕР ИЗБРАННЫХ МЕРОПРИЯТИЙ
-const FeaturedEventsSlider = ({ events }: { events: EventWithDetails[] }) => {
+// КОМПОНЕНТ СЛАЙДШОУ
+const EventsSlideshow = ({ events }: { events: EventWithDetails[] }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
 
-  // Автопрокрутка
+  // Автопрокрутка слайдов
   useEffect(() => {
     if (!isAutoPlaying || events.length <= 1) return;
 
@@ -130,66 +128,64 @@ const FeaturedEventsSlider = ({ events }: { events: EventWithDetails[] }) => {
     return () => clearInterval(interval);
   }, [events.length, isAutoPlaying]);
 
-  const goToSlide = (index: number) => {
-    setCurrentSlide(index);
-    setIsAutoPlaying(false);
-    setTimeout(() => setIsAutoPlaying(true), 10000); // Возобновляем через 10 сек
-  };
-
   const nextSlide = () => {
     setCurrentSlide((prev) => (prev + 1) % events.length);
     setIsAutoPlaying(false);
-    setTimeout(() => setIsAutoPlaying(true), 10000);
   };
 
   const prevSlide = () => {
     setCurrentSlide((prev) => (prev - 1 + events.length) % events.length);
     setIsAutoPlaying(false);
-    setTimeout(() => setIsAutoPlaying(true), 10000);
+  };
+
+  const goToSlide = (index: number) => {
+    setCurrentSlide(index);
+    setIsAutoPlaying(false);
   };
 
   if (events.length === 0) return null;
 
   return (
-    <div className="relative mb-8 overflow-hidden rounded-2xl bg-gradient-to-br from-primary-600 to-secondary-500 shadow-2xl">
-      <div className="relative h-80 md:h-96">
+    <div className="relative w-full h-[400px] overflow-hidden rounded-xl shadow-2xl mb-8">
+      {/* Слайды */}
+      <div className="relative w-full h-full">
         {events.map((event, index) => (
           <div
             key={event.id}
-            className={`absolute inset-0 transition-opacity duration-700 ${
+            className={`absolute inset-0 transition-opacity duration-500 ${
               index === currentSlide ? 'opacity-100' : 'opacity-0'
             }`}
           >
             {/* Фоновое изображение */}
-            <div 
-              className="absolute inset-0 bg-cover bg-center"
-              style={{ 
-                backgroundImage: `url(${getEventImage(event)})`,
-                filter: 'brightness(0.4)'
-              }}
-            />
-            
-            {/* Контент */}
-            <div className="absolute inset-0 flex items-center">
-              <div className="container mx-auto px-6 text-white">
-                <div className="max-w-2xl">
-                  <div className="mb-4">
-                    <span className="inline-block px-3 py-1 bg-white bg-opacity-20 rounded-full text-sm font-medium backdrop-blur-sm">
-                      {getEventTypeLabel(event.event_type)}
-                    </span>
-                  </div>
-                  
-                  <h2 className="text-3xl md:text-4xl font-bold mb-4 leading-tight">
+            <div className="absolute inset-0">
+              <img
+                src={getEventImage(event)}
+                alt={event.title}
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
+              {/* Темный оверлей для читаемости текста */}
+              <div className="absolute inset-0 bg-black bg-opacity-40"></div>
+            </div>
+
+            {/* Контент слайда */}
+            <div className="relative z-10 h-full flex items-end">
+              <div className="w-full p-8 text-white">
+                <div className="max-w-4xl">
+                  {/* Название */}
+                  <h2 className="text-4xl md:text-5xl font-bold mb-4 leading-tight">
                     {event.title}
                   </h2>
                   
+                  {/* Краткое описание */}
                   {event.short_description && (
-                    <p className="text-lg md:text-xl text-gray-200 mb-6 leading-relaxed">
+                    <p className="text-xl md:text-2xl text-gray-200 mb-6 leading-relaxed line-clamp-2">
                       {event.short_description}
                     </p>
                   )}
                   
-                  <div className="flex flex-wrap items-center gap-4 mb-6 text-gray-200">
+                  {/* Информация о событии */}
+                  <div className="flex flex-wrap gap-6 mb-6 text-lg">
                     <div className="flex items-center gap-2">
                       <Calendar className="h-5 w-5" />
                       <span>{formatRussianDate(event.start_at)}</span>
@@ -204,16 +200,22 @@ const FeaturedEventsSlider = ({ events }: { events: EventWithDetails[] }) => {
                         <span>{event.venue_name}</span>
                       </div>
                     )}
+                    <div className="flex items-center gap-2">
+                      <span className="bg-white bg-opacity-20 px-3 py-1 rounded-full text-sm">
+                        {getEventTypeLabel(event.event_type)}
+                      </span>
+                    </div>
                   </div>
                   
+                  {/* Кнопки действий */}
                   <div className="flex items-center gap-4">
                     <Link
                       to={`/events/${event.id}`}
-                      className="bg-white text-primary-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+                      className="bg-primary-600 hover:bg-primary-700 text-white px-8 py-3 rounded-lg font-semibold text-lg transition-colors"
                     >
                       Подробнее
                     </Link>
-                    <span className="text-xl font-bold">
+                    <span className="text-2xl font-bold">
                       {getEventPrice(event)}
                     </span>
                   </div>
@@ -223,19 +225,19 @@ const FeaturedEventsSlider = ({ events }: { events: EventWithDetails[] }) => {
           </div>
         ))}
 
-        {/* Навигация */}
+        {/* Навигационные кнопки */}
         {events.length > 1 && (
           <>
             <button
               onClick={prevSlide}
-              className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-30 hover:bg-opacity-50 text-white p-2 rounded-full transition-all duration-200"
+              className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-30 hover:bg-opacity-50 text-white p-3 rounded-full transition-all duration-200 z-20"
             >
               <ChevronLeft className="h-6 w-6" />
             </button>
             
             <button
               onClick={nextSlide}
-              className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-30 hover:bg-opacity-50 text-white p-2 rounded-full transition-all duration-200"
+              className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-30 hover:bg-opacity-50 text-white p-3 rounded-full transition-all duration-200 z-20"
             >
               <ChevronRight className="h-6 w-6" />
             </button>
@@ -243,9 +245,9 @@ const FeaturedEventsSlider = ({ events }: { events: EventWithDetails[] }) => {
         )}
       </div>
 
-      {/* Индикаторы */}
+      {/* Индикаторы слайдов */}
       {events.length > 1 && (
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2 z-20">
           {events.map((_, index) => (
             <button
               key={index}
@@ -266,7 +268,6 @@ const FeaturedEventsSlider = ({ events }: { events: EventWithDetails[] }) => {
 
 // КОМПОНЕНТ ПРОШЕДШИХ МЕРОПРИЯТИЙ
 const PastEventsPanel = ({ events }: { events: EventWithDetails[] }) => {
-  // Теперь просто показываем события со статусом 'past' - без дополнительных проверок
   if (events.length === 0) return null;
 
   return (
@@ -289,7 +290,7 @@ const PastEventsPanel = ({ events }: { events: EventWithDetails[] }) => {
                 src={getEventImage(event)}
                 alt={event.title}
                 className="w-full h-full object-cover"
-                loading="lazy" 
+                loading="lazy"
               />
             </div>
             
@@ -319,7 +320,6 @@ const PastEventsPanel = ({ events }: { events: EventWithDetails[] }) => {
 
 // КОМПОНЕНТ КАРТОЧКИ СОБЫТИЯ
 const EventCard = ({ event, viewMode }: { event: EventWithDetails; viewMode: ViewMode }) => {
-  // Теперь просто проверяем статус - никаких дополнительных проверок дат!
   const isPastEvent = event.status === 'past';
 
   if (viewMode === 'list') {
@@ -540,7 +540,6 @@ const EventsPage = () => {
 
     } catch (error) {
       console.error('Error in fetchEvents:', error);
-      toast.error('Ошибка загрузки мероприятий');
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -638,7 +637,7 @@ const EventsPage = () => {
     return searchQuery || filters.eventType || filters.paymentType || filters.dateRange || filters.showPast;
   };
 
-  // 👈 ЕДИНСТВЕННОЕ ИЗМЕНЕНИЕ: заменил старый лоадер на CustomLoader
+  // 👈 ЕДИНСТВЕННОЕ ИЗМЕНЕНИЕ: заменил старый лоадер
   if (loading && events.length === 0) {
     return (
       <Layout disablePageTransition={true}>
@@ -665,10 +664,8 @@ const EventsPage = () => {
             </p>
           </div>
 
-          {/* Слайдер избранных мероприятий */}
-          <FeaturedEventsSlider 
-            events={activeEvents.filter(event => event.is_featured).slice(0, 5)} 
-          />
+          {/* 🎯 СЛАЙДШОУ СОБЫТИЙ */}
+          <EventsSlideshow events={activeEvents.slice(0, 5)} />
 
           {/* Основной контент в две колонки */}
           <div className="flex gap-8">
@@ -847,7 +844,7 @@ const EventsPage = () => {
               </div>
             </div>
 
-            {/* ПРАВАЯ КОЛОНКА - ПРОШЕДШИЕ МЕРОПРИЯТИЯ */}
+            {/* 🎯 ПРАВАЯ КОЛОНКА - ПРОШЕДШИЕ МЕРОПРИЯТИЯ */}
             <div className="w-80 flex-shrink-0">
               <PastEventsPanel events={pastEvents} />
             </div>
