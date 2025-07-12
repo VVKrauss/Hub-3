@@ -1,4 +1,4 @@
-// src/components/comments/CommentNotifications.tsx
+// src/components/comments/CommentNotifications.tsx - ИСПРАВЛЕННАЯ ВЕРСИЯ
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { 
@@ -100,12 +100,11 @@ const CommentNotifications: React.FC<CommentNotificationsProps> = ({
     }
   };
 
-  // Получение ссылки на комментарий
+  // ИСПРАВЛЕННАЯ функция получения ссылки на комментарий
   const getNotificationLink = (notification: CommentNotification) => {
-    const eventLink = notification.event_slug 
-      ? `/events/${notification.event_slug}`
-      : `/events/${notification.event_id}`;
-    return `${eventLink}#comment-${notification.comment_id}`;
+    // Используем event_id_for_link (который содержит ID) вместо несуществующего slug
+    const eventId = notification.event_id_for_link || notification.event_id;
+    return `/events/${eventId}#comment-${notification.comment_id}`;
   };
 
   return (
