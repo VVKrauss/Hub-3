@@ -1,4 +1,4 @@
-// src/components/layout/TopBar.tsx
+// src/components/layout/TopBar.tsx - ПОЛНАЯ ВЕРСИЯ с уведомлениями
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu, X, Sun, Moon, LogIn, User, LogOut, Settings, ChevronDown } from 'lucide-react';
@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 import Logo from '../ui/Logo';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useTopBar } from '../../contexts/TopBarContext';
+import NotificationBell from '../comments/NotificationBell';
 import { toast } from 'react-hot-toast';
 import LoginModal from '../auth/LoginModal';
 
@@ -118,7 +119,6 @@ const TopBar = () => {
 
         toast.success('Регистрация успешна! Проверьте email для подтверждения.');
         setRegisterForm({ email: '', password: '', name: '' });
-        setAuthMode('login');
         setLoginModalOpen(false);
       }
     } catch (error: any) {
@@ -131,249 +131,310 @@ const TopBar = () => {
 
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
       setUserDropdownOpen(false);
-    } catch (error) {
-      console.error('Error signing out:', error);
-      toast.error('Ошибка выхода');
+    } catch (error: any) {
+      console.error('Logout error:', error);
+      toast.error('Ошибка при выходе');
     }
   };
 
-  // РЕНДЕР УПРОЩЕННОЙ ВЕРСИИ ПРИ ЗАГРУЗКЕ
-  if (loading || !mounted) {
+  // ПОКАЗЫВАЕМ СКЕЛЕТОН ЕСЛИ ДАННЫХ ЕЩЕ НЕТ
+  if (!mounted) {
     return (
-      <header className="sticky top-0 z-50 bg-white dark:bg-dark-900 shadow-sm">
-        <div className="container mx-auto px-4 flex items-center justify-between py-3">
-          <Link to="/" className="flex items-center">
-            <Logo className="h-10 w-auto" inverted={theme === 'dark'} />
-          </Link>
-          <div className="flex items-center space-x-4">
-            <div className="w-6 h-6 animate-pulse bg-gray-300 rounded"></div>
+      <div className="topbar">
+        <div className="container">
+          <div className="flex items-center justify-between h-16">
+            <div className="animate-pulse bg-gray-200 dark:bg-gray-700 w-32 h-8 rounded"></div>
+            <div className="animate-pulse bg-gray-200 dark:bg-gray-700 w-64 h-8 rounded"></div>
+            <div className="animate-pulse bg-gray-200 dark:bg-gray-700 w-24 h-8 rounded"></div>
           </div>
         </div>
-      </header>
+      </div>
     );
   }
 
-  const visibleNavItems = navItems.filter(item => item.visible);
-  const topbarHeightClass = `topbar-${topbarHeight}`;
-
   return (
     <>
-      <header className={`sticky top-0 z-50 bg-white dark:bg-dark-900 shadow-sm transition-colors duration-200 ${topbarHeightClass}`}>
-        <div className="container mx-auto px-4 flex items-center justify-between py-3">
-          <Link to="/" className="flex items-center" onClick={() => setMobileMenuOpen(false)}>
-            <Logo className="h-10 w-auto" inverted={theme === 'dark'} />
-          </Link>
-          
-          {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center justify-center flex-1 space-x-8">
-            {visibleNavItems.map(item => (
-              <Link 
-                key={item.id}
-                to={item.path} 
-                className={`font-medium relative py-4 transition-colors duration-200 ${
-                  location.pathname === item.path 
-                    ? 'text-primary-600 dark:text-primary-400' 
-                    : 'text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400'
-                }`}
-              >
-                {item.label || item.name}
-                {location.pathname === item.path && (
-                  <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary-600 dark:bg-primary-400"></span>
-                )}
-              </Link>
-            ))}
+      <div className={`topbar topbar-${topbarHeight}`}>
+        <div className="container">
+          {/* Левая часть - логотип */}
+          <div className="flex items-center">
+            <Link to="/" className="flex items-center space-x-2">
+              <Logo className="h-8 w-8" />
+              <span className="text-xl font-bold text-gray-900 dark:text-white">
+                Science Hub
+              </span>
+            </Link>
+          </div>
+
+          {/* Центральная часть - навигация для десктопа */}
+          <nav className="hidden lg:flex items-center space-x-8">
+            {navItems
+              .filter(item => item.visible)
+              .sort((a, b) => a.order - b.order)
+              .map((item) => (
+                <Link
+                  key={item.id}
+                  to={item.path}
+                  className={`text-sm font-medium transition-colors ${
+                    location.pathname === item.path
+                      ? 'text-primary-600 dark:text-primary-400'
+                      : 'text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400'
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              ))}
           </nav>
 
-          {/* Right Side Actions */}
+          {/* Правая часть - авторизация и пользователь */}
           <div className="flex items-center space-x-4">
-            {/* Theme Toggle */}
+            {/* Переключатель темы */}
             <button
               onClick={toggleTheme}
-              className="p-2 rounded-lg bg-gray-100 dark:bg-dark-700 hover:bg-gray-200 dark:hover:bg-dark-600 transition-colors"
-              title={theme === 'dark' ? 'Светлая тема' : 'Темная тема'}
+              className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-dark-700 rounded-lg transition-colors"
+              title={theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
             >
               {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>
 
-            {/* User Menu */}
-            {user ? (
-              <div className="relative" ref={userDropdownRef}>
+            {!user ? (
+              // Кнопки авторизации для неавторизованных пользователей
+              <div className="flex items-center space-x-2">
                 <button
-                  onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                  className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700 transition-colors"
+                  onClick={() => {
+                    setAuthMode('login');
+                    setLoginModalOpen(true);
+                  }}
+                  className="flex items-center space-x-2 px-4 py-2 text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium transition-colors"
                 >
-                  {user.avatar ? (
-                    <img 
-                      src={user.avatar} 
-                      alt={user.name || user.email}
-                      className="w-8 h-8 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center">
-                      <User className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+                  <LogIn className="h-4 w-4" />
+                  <span className="hidden sm:block">Войти</span>
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setAuthMode('register');
+                    setLoginModalOpen(true);
+                  }}
+                  className="flex items-center space-x-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  <User className="h-4 w-4" />
+                  <span className="hidden sm:block">Регистрация</span>
+                </button>
+              </div>
+            ) : (
+              // Меню для авторизованных пользователей
+              <div className="flex items-center space-x-2">
+                {/* НОВЫЙ КОМПОНЕНТ: Уведомления */}
+                <NotificationBell />
+
+                {/* Dropdown пользователя */}
+                <div className="relative" ref={userDropdownRef}>
+                  <button
+                    onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                    className="flex items-center space-x-2 p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-dark-700 rounded-lg transition-colors"
+                  >
+                    <div className="w-8 h-8 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center">
+                      {user.avatar ? (
+                        <img 
+                          src={user.avatar} 
+                          alt={user.name || user.email} 
+                          className="w-8 h-8 rounded-full object-cover"
+                        />
+                      ) : (
+                        <User className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+                      )}
+                    </div>
+                    <span className="hidden md:block font-medium">
+                      {user.name || user.email?.split('@')[0]}
+                    </span>
+                    <ChevronDown className="h-4 w-4" />
+                  </button>
+
+                  {/* Dropdown меню пользователя */}
+                  {userDropdownOpen && (
+                    <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-dark-800 rounded-lg shadow-lg border border-gray-200 dark:border-dark-600 py-1 z-50">
+                      <Link
+                        to="/profile"
+                        className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-700 transition-colors"
+                        onClick={() => setUserDropdownOpen(false)}
+                      >
+                        <User className="h-4 w-4 mr-3" />
+                        Профиль
+                      </Link>
+                      
+                      {(user.role === 'admin' || user.role === 'Administrator') && (
+                        <Link
+                          to="/admin"
+                          className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-700 transition-colors"
+                          onClick={() => setUserDropdownOpen(false)}
+                        >
+                          <Settings className="h-4 w-4 mr-3" />
+                          Админ-панель
+                        </Link>
+                      )}
+                      
+                      <hr className="my-1 border-gray-200 dark:border-dark-600" />
+                      
+                      <button
+                        onClick={handleLogout}
+                        className="flex items-center w-full px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                      >
+                        <LogOut className="h-4 w-4 mr-3" />
+                        Выйти
+                      </button>
                     </div>
                   )}
-                  <span className="hidden md:block font-medium text-gray-900 dark:text-white">
-                    {user.name || 'Пользователь'}
-                  </span>
-                  <ChevronDown className="h-4 w-4 text-gray-500" />
-                </button>
+                </div>
+              </div>
+            )}
 
-                {userDropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-dark-800 rounded-lg shadow-lg border border-gray-200 dark:border-dark-700 py-2 z-50">
-                    <div className="px-4 py-3 border-b border-gray-200 dark:border-dark-700">
-                      <p className="font-medium text-gray-900 dark:text-white">{user.name || 'Пользователь'}</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
+            {/* Кнопка мобильного меню */}
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="lg:hidden p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-dark-700 rounded-lg transition-colors"
+            >
+              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
+          </div>
+        </div>
+
+        {/* Мобильное меню */}
+        {mobileMenuOpen && (
+          <div 
+            ref={menuRef}
+            className={`lg:hidden bg-white dark:bg-dark-800 border-t border-gray-200 dark:border-dark-700 shadow-lg mobile-menu mobile-menu-${topbarHeight}`}
+          >
+            <div className="container py-4">
+              <nav className="space-y-2">
+                {navItems
+                  .filter(item => item.visible)
+                  .sort((a, b) => a.order - b.order)
+                  .map((item) => (
+                    <Link
+                      key={item.id}
+                      to={item.path}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className={`block px-4 py-3 text-base font-medium rounded-lg transition-colors ${
+                        location.pathname === item.path
+                          ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400'
+                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-700'
+                      }`}
+                    >
+                      {item.label}
+                    </Link>
+                  ))}
+              </nav>
+
+              {/* Мобильные кнопки авторизации */}
+              {!user && (
+                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-dark-700 space-y-2">
+                  <button
+                    onClick={() => {
+                      setAuthMode('login');
+                      setLoginModalOpen(true);
+                      setMobileMenuOpen(false);
+                    }}
+                    className="w-full flex items-center justify-center space-x-2 px-4 py-3 text-primary-600 dark:text-primary-400 border border-primary-600 dark:border-primary-400 rounded-lg font-medium transition-colors hover:bg-primary-50 dark:hover:bg-primary-900/20"
+                  >
+                    <LogIn className="h-4 w-4" />
+                    <span>Войти</span>
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      setAuthMode('register');
+                      setLoginModalOpen(true);
+                      setMobileMenuOpen(false);
+                    }}
+                    className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-colors"
+                  >
+                    <User className="h-4 w-4" />
+                    <span>Регистрация</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Мобильное пользовательское меню */}
+              {user && (
+                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-dark-700">
+                  <div className="flex items-center space-x-3 px-4 py-3 bg-gray-50 dark:bg-dark-700 rounded-lg mb-3">
+                    <div className="w-10 h-10 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center">
+                      {user.avatar ? (
+                        <img 
+                          src={user.avatar} 
+                          alt={user.name || user.email} 
+                          className="w-10 h-10 rounded-full object-cover"
+                        />
+                      ) : (
+                        <User className="h-5 w-5 text-primary-600 dark:text-primary-400" />
+                      )}
                     </div>
-                    
+                    <div>
+                      <div className="font-medium text-gray-900 dark:text-white">
+                        {user.name || user.email?.split('@')[0]}
+                      </div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        {user.email}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
                     <Link
                       to="/profile"
-                      className="flex items-center px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-700 transition-colors"
-                      onClick={() => setUserDropdownOpen(false)}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-700 rounded-lg transition-colors"
                     >
                       <User className="h-4 w-4 mr-3" />
                       Профиль
                     </Link>
-                    
-                    {user.role === 'Admin' && (
+
+                    {(user.role === 'admin' || user.role === 'Administrator') && (
                       <Link
                         to="/admin"
-                        className="flex items-center px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-700 transition-colors"
-                        onClick={() => setUserDropdownOpen(false)}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="flex items-center px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-700 rounded-lg transition-colors"
                       >
                         <Settings className="h-4 w-4 mr-3" />
-                        Панель управления
+                        Админ-панель
                       </Link>
                     )}
-                    
+
                     <button
-                      onClick={handleLogout}
-                      className="flex items-center w-full px-4 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                      onClick={() => {
+                        handleLogout();
+                        setMobileMenuOpen(false);
+                      }}
+                      className="w-full flex items-center px-4 py-3 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                     >
                       <LogOut className="h-4 w-4 mr-3" />
                       Выйти
                     </button>
                   </div>
-                )}
-              </div>
-            ) : (
-              <button
-                onClick={() => setLoginModalOpen(true)}
-                className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
-              >
-                <LogIn className="h-4 w-4" />
-                <span>Войти</span>
-              </button>
-            )}
-
-            {/* Mobile Menu Toggle */}
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700 transition-colors"
-            >
-              {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile Menu */}
-        {mobileMenuOpen && (
-          <div 
-            ref={menuRef}
-            className="md:hidden bg-white dark:bg-dark-900 border-t border-gray-200 dark:border-dark-700 shadow-lg"
-          >
-            <nav className="container mx-auto px-4 py-4 space-y-2">
-              {visibleNavItems.map(item => (
-                <Link
-                  key={item.id}
-                  to={item.path}
-                  className={`block py-2 px-3 rounded-lg transition-colors ${
-                    location.pathname === item.path
-                      ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-700'
-                  }`}
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  {item.label || item.name}
-                </Link>
-              ))}
-              
-              {user ? (
-                <div className="space-y-2 pt-4 border-t border-gray-200 dark:border-dark-700">
-                  <div className="flex items-center space-x-3 py-2">
-                    {user.avatar ? (
-                      <img 
-                        src={user.avatar} 
-                        alt={user.name || user.email}
-                        className="w-8 h-8 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center">
-                        <User className="h-4 w-4 text-primary-600 dark:text-primary-400" />
-                      </div>
-                    )}
-                    <div>
-                      <p className="font-medium text-gray-900 dark:text-white">
-                        {user.name || 'Пользователь'}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">{user.email}</p>
-                    </div>
-                  </div>
-                  
-                  <Link
-                    to="/profile"
-                    className="flex items-center py-2 text-gray-700 dark:text-gray-300"
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    <User className="h-4 w-4 mr-3" />
-                    Профиль
-                  </Link>
-                  
-                  {user.role === 'Admin' && (
-                    <Link
-                      to="/admin"
-                      className="flex items-center py-2 text-gray-700 dark:text-gray-300"
-                      onClick={() => setMobileMenuOpen(false)}
-                    >
-                      <Settings className="h-4 w-4 mr-3" />
-                      Панель управления
-                    </Link>
-                  )}
-                  
-                  <button
-                    onClick={() => {
-                      handleLogout();
-                      setMobileMenuOpen(false);
-                    }}
-                    className="flex items-center py-2 text-red-600 w-full text-left"
-                  >
-                    <LogOut className="h-4 w-4 mr-3" />
-                    Выйти
-                  </button>
                 </div>
-              ) : (
-                <button
-                  onClick={() => {
-                    setLoginModalOpen(true);
-                    setMobileMenuOpen(false);
-                  }}
-                  className="flex items-center space-x-2 w-full px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
-                >
-                  <LogIn className="h-4 w-4" />
-                  <span>Войти</span>
-                </button>
               )}
-            </nav>
+            </div>
           </div>
         )}
-      </header>
+      </div>
 
-      {/* Модальное окно авторизации вынесено за пределы header */}
-      <LoginModal 
-        isOpen={loginModalOpen} 
-        onClose={() => setLoginModalOpen(false)} 
+      {/* Modal для авторизации */}
+      <LoginModal
+        isOpen={loginModalOpen}
+        onClose={() => setLoginModalOpen(false)}
+        mode={authMode}
+        onModeChange={setAuthMode}
+        loginForm={loginForm}
+        onLoginFormChange={setLoginForm}
+        registerForm={registerForm}
+        onRegisterFormChange={setRegisterForm}
+        onLogin={handleLogin}
+        onRegister={handleRegister}
+        loading={authLoading}
       />
     </>
   );
