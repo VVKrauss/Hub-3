@@ -1,4 +1,4 @@
-// src/components/layout/Layout.tsx - ОБНОВЛЕННАЯ ВЕРСИЯ с плавными переходами
+// src/components/layout/Layout.tsx - Оптимизированная версия с единым лоадером
 import { ReactNode, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import TopBar from './TopBar';
@@ -10,29 +10,31 @@ interface LayoutProps {
   children: ReactNode;
   showTransition?: boolean;
   transitionDuration?: number;
+  disablePageTransition?: boolean;
 }
 
 const Layout = ({ 
   children, 
   showTransition = true,
-  transitionDuration = 200 
+  transitionDuration = 150,
+  disablePageTransition = false
 }: LayoutProps) => {
   const location = useLocation();
   const [isPageLoading, setIsPageLoading] = useState(false);
 
-  // Эффект плавной загрузки при смене роута
+  // Эффект для быстрой загрузки при смене роута
   useEffect(() => {
-    if (showTransition) {
+    if (showTransition && !disablePageTransition) {
       setIsPageLoading(true);
       
-      // Имитируем время загрузки для плавности
+      // Быстрая загрузка для лучшего UX
       const timer = setTimeout(() => {
         setIsPageLoading(false);
       }, transitionDuration);
 
       return () => clearTimeout(timer);
     }
-  }, [location.pathname, showTransition, transitionDuration]);
+  }, [location.pathname, showTransition, transitionDuration, disablePageTransition]);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-900 flex flex-col transition-colors duration-200">
@@ -41,8 +43,11 @@ const Layout = ({
       
       {/* Main Content */}
       <main className="flex-1 relative">
-        {showTransition ? (
-          <PageTransition duration={transitionDuration}>
+        {showTransition && !disablePageTransition ? (
+          <PageTransition 
+            duration={transitionDuration}
+            disableTransition={disablePageTransition}
+          >
             <div className="animate-fade-in">
               {children}
             </div>
@@ -53,10 +58,10 @@ const Layout = ({
           </div>
         )}
 
-        {/* Overlay загрузки для быстрых переходов */}
-        {isPageLoading && (
-          <div className="absolute inset-0 bg-white/70 dark:bg-gray-900/70 backdrop-blur-sm flex items-center justify-center z-30">
-            <CustomLoader size="md" showText text="Загружаем..." />
+        {/* Минимальный overlay для быстрых переходов */}
+        {isPageLoading && showTransition && (
+          <div className="absolute inset-0 bg-gray-500/30 dark:bg-dark-600/30 backdrop-blur-sm flex items-center justify-center z-30">
+            <CustomLoader size="sm" />
           </div>
         )}
       </main>
