@@ -1,4 +1,4 @@
-// src/components/home/RentSection.tsx - ИСПРАВЛЕННАЯ ВЕРСИЯ с правильной высотой
+// src/components/home/RentSection.tsx - ВЕРСИЯ с равной высотой контейнеров
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
@@ -85,12 +85,12 @@ const RentSection = () => {
   return (
     <section className="section bg-gray-50 dark:bg-dark-800">
       <div className="container mx-auto px-4 md:px-6 max-w-7xl">
-        {/* 🎯 ИСПРАВЛЕННАЯ СЕТКА с равной высотой - изображение слева */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-          {/* 🎯 ИСПРАВЛЕННЫЙ контейнер изображения - СЛЕВА */}
-          <div className="relative order-2 md:order-1">
-            {/* Устанавливаем фиксированную высоту для контейнера */}
-            <div className="aspect-[4/3] w-full rounded-lg overflow-hidden shadow-lg bg-gray-100 dark:bg-gray-700">
+        {/* 🎯 СЕТКА с одинаковой высотой контейнеров - изображение слева */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch">
+          
+          {/* 🎯 Контейнер изображения - повторяет высоту текста - СЛЕВА */}
+          <div className="flex order-2 md:order-1">
+            <div className="w-full rounded-lg overflow-hidden shadow-lg bg-gray-100 dark:bg-gray-700">
               <img 
                 src={getSupabaseImageUrl(data.image)}
                 alt={data.title}
@@ -100,13 +100,13 @@ const RentSection = () => {
             </div>
           </div>
           
-          {/* Текстовый контент - СПРАВА */}
-          <div className="flex flex-col justify-start h-full order-1 md:order-2">
+          {/* Текстовый контент - определяет высоту - СПРАВА */}
+          <div className="flex flex-col order-1 md:order-2">
             <h3 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-6">
               {data.title}
             </h3>
             <div 
-              className="text-base text-gray-600 dark:text-gray-300 space-y-4 mb-8 leading-relaxed"
+              className="text-base text-gray-600 dark:text-gray-300 space-y-4 mb-8 leading-relaxed flex-grow"
               dangerouslySetInnerHTML={{ __html: data.description }}
             />
             <div className="mt-auto">
@@ -119,6 +119,7 @@ const RentSection = () => {
               </Link>
             </div>
           </div>
+          
         </div>
       </div>
     </section>
