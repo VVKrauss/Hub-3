@@ -1,4 +1,4 @@
-// src/pages/EventDetailsPage.tsx - ИСПРАВЛЕННАЯ ВЕРСИЯ без дёрганья
+// src/pages/EventDetailsPage.tsx - ПОЛНАЯ ВЕРСИЯ с комментариями
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
@@ -22,6 +22,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useFavoriteEvents } from '../hooks/useFavorites';
 import FavoriteButton from '../components/favorites/FavoriteButton';
 import RegistrationModal from '../components/events/RegistrationModal';
+import CommentSection from '../components/comments/CommentSection';
 import { getEventById } from '../api/events';
 import { UnifiedLoadingPageWrapper } from '../components/ui/UnifiedLoading';
 import type { EventWithDetails } from '../types/database';
@@ -33,7 +34,7 @@ const EventDetailsPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   
-  // 🎯 ЕДИНОЕ состояние загрузки - ключ к решению проблемы
+  // Единое состояние загрузки
   const [pageState, setPageState] = useState<{
     event: EventWithDetails | null;
     loading: boolean;
@@ -57,10 +58,9 @@ const EventDetailsPage = () => {
     loading: favLoading 
   } = useFavoriteEvents(user?.id);
 
-  // 🚀 Оптимизированная загрузка с единым состоянием
+  // Оптимизированная загрузка с единым состоянием
   const fetchEvent = useCallback(async (eventId: string) => {
     try {
-      // НЕ показываем множественные лоадеры
       setPageState(prev => ({ 
         ...prev, 
         loading: true, 
@@ -81,7 +81,7 @@ const EventDetailsPage = () => {
 
       console.log('Event loaded successfully:', result.data);
       
-      // ✅ ЕДИНОЕ обновление состояния без дёрганья
+      // Единое обновление состояния без дёрганья
       setPageState(prev => ({
         ...prev,
         event: result.data,
@@ -106,7 +106,7 @@ const EventDetailsPage = () => {
     }
   }, [id, fetchEvent]);
 
-  // 🎨 Мемоизированные функции для изображений
+  // Мемоизированные функции для изображений
   const eventImages = useMemo(() => {
     if (!pageState.event) return [];
     
@@ -155,81 +155,107 @@ const EventDetailsPage = () => {
     }));
   }, [eventImages.length]);
 
-  // Обработчик регистрации
+  // Обработчики регистрации
   const openRegistration = useCallback(() => {
-    setPageState(prev => ({ ...prev, isRegistering: true }));
+    setPageState(prev => ({
+      ...prev,
+      isRegistering: true
+    }));
   }, []);
 
   const closeRegistration = useCallback(() => {
-    setPageState(prev => ({ ...prev, isRegistering: false }));
+    setPageState(prev => ({
+      ...prev,
+      isRegistering: false
+    }));
   }, []);
 
-  // 🎯 ЕДИНЫЙ компонент загрузки вместо множественных
   return (
-    <Layout disablePageTransition={true}>
-      <UnifiedLoadingPageWrapper
-        loading={pageState.loading}
-        error={pageState.error}
-        loadingText="Загружаем мероприятие..."
-      >
+    <Layout>
+      <UnifiedLoadingPageWrapper loading={pageState.loading} error={pageState.error}>
         {pageState.event && (
-          <div className="animate-fade-in">
-            {/* Кнопка "Назад" */}
-            <div className="bg-white dark:bg-dark-900 sticky top-16 z-30 border-b border-gray-200 dark:border-dark-700">
-              <div className="max-w-7xl mx-auto px-4 py-3">
-                <button
-                  onClick={() => navigate(-1)}
-                  className="flex items-center text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
-                >
-                  <ArrowLeft className="h-5 w-5 mr-2" />
-                  Назад
-                </button>
+          <div className="min-h-screen bg-gray-50 dark:bg-dark-900">
+            {/* Хлебные крошки и навигация */}
+            <div className="bg-white dark:bg-dark-800 border-b border-gray-200 dark:border-dark-700">
+              <div className="container mx-auto px-4 py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <button
+                      onClick={() => navigate(-1)}
+                      className="flex items-center space-x-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+                    >
+                      <ArrowLeft className="h-5 w-5" />
+                      <span>Назад</span>
+                    </button>
+                    
+                    <nav className="flex items-center space-x-2 text-sm">
+                      <Link to="/events" className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
+                        Мероприятия
+                      </Link>
+                      <span className="text-gray-400 dark:text-gray-500">/</span>
+                      <span className="text-gray-900 dark:text-white font-medium truncate max-w-xs">
+                        {pageState.event.title}
+                      </span>
+                    </nav>
+                  </div>
+
+                  {/* Кнопка в избранное */}
+                  {user && (
+                    <FavoriteButton
+                      isFavorite={isFavoriteEvent(pageState.event.id)}
+                      onToggle={() => toggleFavoriteEvent(pageState.event.id)}
+                      loading={favLoading}
+                      variant="outline"
+                      size="sm"
+                    />
+                  )}
+                </div>
               </div>
             </div>
 
             {/* Основное изображение */}
             {eventImages.length > 0 && (
-              <div className="relative h-96 md:h-[500px] overflow-hidden">
+              <div className="relative h-96 lg:h-[500px] overflow-hidden">
                 <img
                   src={eventImages[0]}
                   alt={pageState.event.title}
-                  className="w-full h-full object-cover cursor-pointer"
-                  onClick={() => openGallery(0)}
-                  loading="eager" // Главное изображение загружаем сразу
+                  className="w-full h-full object-cover"
                 />
-                <div className="absolute inset-0 bg-black bg-opacity-40" />
+                <div className="absolute inset-0 bg-black bg-opacity-40"></div>
                 
-                {/* Информация поверх изображения */}
-                <div className="absolute bottom-0 left-0 right-0 p-6 md:p-8">
-                  <div className="max-w-7xl mx-auto flex justify-between items-end">
-                    <div className="text-white">
-                      <h1 className="text-3xl md:text-5xl font-bold mb-4">
+                {/* Заголовок поверх изображения */}
+                <div className="absolute bottom-0 left-0 right-0 p-8">
+                  <div className="container mx-auto">
+                    <div className="max-w-4xl">
+                      <h1 className="text-4xl lg:text-5xl font-bold text-white mb-4">
                         {pageState.event.title}
                       </h1>
+                      
                       {pageState.event.short_description && (
-                        <p className="text-lg text-gray-200 max-w-3xl">
+                        <p className="text-xl text-gray-200 max-w-2xl">
                           {pageState.event.short_description}
                         </p>
                       )}
                     </div>
-                    {user && (
-                      <FavoriteButton
-                        eventId={pageState.event.id}
-                        isFavorite={isFavoriteEvent(pageState.event.id)}
-                        onToggle={() => toggleFavoriteEvent(pageState.event.id)}
-                        loading={favLoading}
-                        className="bg-white/20 backdrop-blur-sm"
-                      />
-                    )}
                   </div>
                 </div>
+
+                {/* Индикатор множественных изображений */}
+                {eventImages.length > 1 && (
+                  <button
+                    onClick={() => openGallery(0)}
+                    className="absolute top-4 right-4 bg-black bg-opacity-50 text-white px-3 py-2 rounded-lg hover:bg-opacity-70 transition-all"
+                  >
+                    <span className="text-sm">+{eventImages.length - 1} фото</span>
+                  </button>
+                )}
               </div>
             )}
 
             {/* Контент */}
-            <div className="max-w-7xl mx-auto px-4 py-8">
+            <div className="container mx-auto px-4 py-8">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Основная информация */}
+                {/* Основной контент */}
                 <div className="lg:col-span-2 space-y-8">
                   {/* Информация о мероприятии */}
                   <div className="bg-white dark:bg-dark-800 rounded-xl shadow-lg p-6">
@@ -273,6 +299,40 @@ const EventDetailsPage = () => {
                           )}
                         </div>
                       </div>
+
+                      {/* Количество участников */}
+                      {pageState.event.max_attendees && (
+                        <div className="flex items-start space-x-3">
+                          <div className="flex-shrink-0 w-10 h-10 bg-primary-100 dark:bg-primary-900/30 rounded-lg flex items-center justify-center">
+                            <Users className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900 dark:text-white">
+                              Участников
+                            </p>
+                            <p className="text-gray-600 dark:text-gray-400">
+                              {pageState.event.current_registration_count || 0} / {pageState.event.max_attendees}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Стоимость */}
+                      <div className="flex items-start space-x-3">
+                        <div className="flex-shrink-0 w-10 h-10 bg-primary-100 dark:bg-primary-900/30 rounded-lg flex items-center justify-center">
+                          <DollarSign className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900 dark:text-white">
+                            {pageState.event.payment_type === 'free' ? 'Бесплатно' : 'Платно'}
+                          </p>
+                          {pageState.event.payment_type !== 'free' && pageState.event.base_price && (
+                            <p className="text-gray-600 dark:text-gray-400">
+                              {pageState.event.base_price} {pageState.event.currency || 'RSD'}
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -309,6 +369,13 @@ const EventDetailsPage = () => {
                       </div>
                     </div>
                   )}
+
+                  {/* НОВАЯ СЕКЦИЯ: Комментарии */}
+                  <CommentSection 
+                    eventId={pageState.event.id}
+                    eventTitle={pageState.event.title}
+                    className="mt-8"
+                  />
                 </div>
 
                 {/* Боковая панель */}
@@ -318,54 +385,60 @@ const EventDetailsPage = () => {
                     <div className="text-center">
                       <div className="mb-4">
                         <span className="text-3xl font-bold text-primary-600 dark:text-primary-400">
-                          {pageState.event.payment_type === 'free' ? 'Бесплатно' : 
-                           `${pageState.event.base_price?.toLocaleString()} ${pageState.event.currency || 'RUB'}`}
+                          {pageState.event.payment_type === 'free' ? 'Бесплатно' : `${pageState.event.base_price} ${pageState.event.currency || 'RSD'}`}
                         </span>
                       </div>
-                      
+
+                      {pageState.event.max_attendees && (
+                        <div className="mb-4">
+                          <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
+                            <span>Участников</span>
+                            <span>{pageState.event.current_registration_count || 0} / {pageState.event.max_attendees}</span>
+                          </div>
+                          <div className="mt-2 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                            <div 
+                              className="bg-primary-600 h-2 rounded-full"
+                              style={{ 
+                                width: `${Math.min(100, ((pageState.event.current_registration_count || 0) / pageState.event.max_attendees) * 100)}%` 
+                              }}
+                            ></div>
+                          </div>
+                        </div>
+                      )}
+
                       <button
                         onClick={openRegistration}
-                        className="w-full btn-primary text-lg py-3 mb-4"
+                        className="w-full bg-primary-600 hover:bg-primary-700 text-white py-3 px-6 rounded-lg font-medium transition-colors"
                       >
-                        Зарегистрироваться
+                        {pageState.event.payment_type === 'free' ? 'Записаться бесплатно' : 'Купить билет'}
                       </button>
-                      
-                      {pageState.event.registrations_count !== undefined && (
-                        <p className="text-gray-600 dark:text-gray-400 text-sm">
-                          <Users className="h-4 w-4 inline mr-1" />
-                          {pageState.event.registrations_count} участников
-                        </p>
-                      )}
-                    </div>
-                  </div>
 
-                  {/* Дополнительная информация */}
-                  <div className="bg-white dark:bg-dark-800 rounded-xl shadow-lg p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                      Детали
-                    </h3>
-                    <div className="space-y-3 text-sm">
-                      {pageState.event.event_type && (
-                        <div className="flex items-center">
-                          <Tag className="h-4 w-4 mr-2 text-gray-400" />
-                          <span className="text-gray-600 dark:text-gray-400">Тип:</span>
-                          <span className="ml-2 text-gray-900 dark:text-white">
-                            {pageState.event.event_type}
-                          </span>
-                        </div>
-                      )}
-                      
-                      {pageState.event.language_code && (
-                        <div className="flex items-center">
-                          <Globe className="h-4 w-4 mr-2 text-gray-400" />
-                          <span className="text-gray-600 dark:text-gray-400">Язык:</span>
-                          <span className="ml-2 text-gray-900 dark:text-white">
-                            {pageState.event.language_code === 'ru' ? 'Русский' : 
-                             pageState.event.language_code === 'en' ? 'Английский' : 
-                             pageState.event.language_code}
-                          </span>
-                        </div>
-                      )}
+                      <div className="mt-4 space-y-2">
+                        {pageState.event.tags && pageState.event.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {pageState.event.tags.map((tag, index) => (
+                              <span 
+                                key={index}
+                                className="inline-flex items-center px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs rounded-full"
+                              >
+                                <Tag className="w-3 h-3 mr-1" />
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {pageState.event.language_code && (
+                          <div className="text-sm text-gray-600 dark:text-gray-400">
+                            <span className="font-medium">Язык: </span>
+                            <span>
+                              {pageState.event.language_code === 'ru' ? 'Русский' : 
+                               pageState.event.language_code === 'en' ? 'Английский' : 
+                               pageState.event.language_code}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
