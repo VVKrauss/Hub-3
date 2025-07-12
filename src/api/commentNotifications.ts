@@ -1,4 +1,4 @@
-// src/api/commentNotifications.ts
+// src/api/commentNotifications.ts - ИСПРАВЛЕННАЯ ВЕРСИЯ
 import { supabase } from '../lib/supabase';
 
 export interface CommentNotification {
@@ -15,7 +15,7 @@ export interface CommentNotification {
   sender_avatar?: string;
   comment_content?: string;
   event_title?: string;
-  event_slug?: string;
+  event_id_for_link?: string; // Изменено с event_slug
 }
 
 export interface NotificationFilters {
@@ -50,8 +50,8 @@ export const getUserNotifications = async (
           content
         ),
         event:event_id (
-          title,
-          slug
+          id,
+          title
         )
       `)
       .eq('recipient_user_id', userId)
@@ -80,7 +80,7 @@ export const getUserNotifications = async (
       sender_avatar: notification.sender?.avatar,
       comment_content: notification.comment?.content,
       event_title: notification.event?.title,
-      event_slug: notification.event?.slug
+      event_id_for_link: notification.event?.id // Используем ID вместо slug
     })) || [];
 
     return { 
@@ -132,7 +132,7 @@ export const markNotificationAsRead = async (
       .from('comment_notifications')
       .update({ is_read: true })
       .eq('id', notificationId)
-      .eq('recipient_user_id', user.id); // Дополнительная проверка безопасности
+      .eq('recipient_user_id', user.id);
 
     if (error) {
       console.error('Error marking notification as read:', error);
@@ -190,7 +190,7 @@ export const deleteNotification = async (
       .from('comment_notifications')
       .delete()
       .eq('id', notificationId)
-      .eq('recipient_user_id', user.id); // Дополнительная проверка безопасности
+      .eq('recipient_user_id', user.id);
 
     if (error) {
       console.error('Error deleting notification:', error);
@@ -205,16 +205,25 @@ export const deleteNotification = async (
 };
 
 // Подписка на новые уведомления в реальном времени
+let activeSubscription: any = null;
+
 export const subscribeToNotifications = (
   userId: string,
   onNewNotification: (notification: CommentNotification) => void,
   onError?: (error: any) => void
 ) => {
   try {
+    // Отписываемся от предыдущей подписки если есть
+    if (activeSubscription) {
+      supabase.removeChannel(activeSubscription);
+      activeSubscription = null;
+    }
+
     console.log('Subscribing to notifications for user:', userId);
 
+    const channelName = `notifications_${userId}_${Date.now()}`;
     const subscription = supabase
-      .channel(`notifications:${userId}`)
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -240,8 +249,8 @@ export const subscribeToNotifications = (
                   content
                 ),
                 event:event_id (
-                  title,
-                  slug
+                  id,
+                  title
                 )
               `)
               .eq('id', payload.new.id)
@@ -259,7 +268,7 @@ export const subscribeToNotifications = (
               sender_avatar: data.sender?.avatar,
               comment_content: data.comment?.content,
               event_title: data.event?.title,
-              event_slug: data.event?.slug
+              event_id_for_link: data.event?.id
             };
 
             onNewNotification(transformedNotification);
@@ -276,6 +285,7 @@ export const subscribeToNotifications = (
         }
       });
 
+    activeSubscription = subscription;
     return subscription;
   } catch (error) {
     console.error('Error setting up notification subscription:', error);
@@ -285,12 +295,16 @@ export const subscribeToNotifications = (
 };
 
 // Отписка от уведомлений
-export const unsubscribeFromNotifications = (subscription: any) => {
+export const unsubscribeFromNotifications = (subscription?: any) => {
   try {
     if (subscription) {
       supabase.removeChannel(subscription);
-      console.log('Unsubscribed from notifications');
     }
+    if (activeSubscription) {
+      supabase.removeChannel(activeSubscription);
+      activeSubscription = null;
+    }
+    console.log('Unsubscribed from notifications');
   } catch (error) {
     console.error('Error unsubscribing from notifications:', error);
   }
@@ -314,8 +328,8 @@ export const getRecentNotifications = async (
           content
         ),
         event:event_id (
-          title,
-          slug
+          id,
+          title
         )
       `)
       .eq('recipient_user_id', userId)
@@ -333,7 +347,7 @@ export const getRecentNotifications = async (
       sender_avatar: notification.sender?.avatar,
       comment_content: notification.comment?.content,
       event_title: notification.event?.title,
-      event_slug: notification.event?.slug
+      event_id_for_link: notification.event?.id
     })) || [];
 
     return { data: transformedData, error: null };
