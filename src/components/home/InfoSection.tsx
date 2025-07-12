@@ -88,36 +88,32 @@ const InfoSection = () => {
         {/* 🎯 СЕТКА с одинаковой высотой контейнеров */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch">
           
-          {/* Текстовый контент - определяет высоту */}
-          <div className="flex flex-col">
+          {/* Текстовый контент - естественная высота БЕЗ растягивания */}
+          <div>
             <h3 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-6">
               {data.title}
             </h3>
             <div 
-              className="text-base text-gray-600 dark:text-gray-300 space-y-4 mb-8 leading-relaxed flex-grow"
+              className="text-base text-gray-600 dark:text-gray-300 space-y-4 mb-8 leading-relaxed"
               dangerouslySetInnerHTML={{ __html: data.description }}
             />
-            <div className="mt-auto">
-              <Link 
-                to="/about" 
-                className="inline-flex items-center text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 transition-colors font-medium text-lg"
-              >
-                Подробнее
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Link>
-            </div>
+            <Link 
+              to="/about" 
+              className="inline-flex items-center text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 transition-colors font-medium text-lg"
+            >
+              Подробнее
+              <ArrowRight className="ml-2 h-5 w-5" />
+            </Link>
           </div>
           
-          {/* 🎯 Контейнер изображения - повторяет высоту текста */}
-          <div className="flex">
-            <div className="w-full rounded-lg overflow-hidden shadow-lg bg-gray-100 dark:bg-gray-800">
-              <img 
-                src={getSupabaseImageUrl(data.image)}
-                alt={data.title}
-                className="w-full h-full object-cover object-center transition-transform duration-300 hover:scale-105"
-                loading="lazy"
-              />
-            </div>
+          {/* 🎯 Контейнер изображения - кадрируется под высоту текста */}
+          <div className="w-full rounded-lg overflow-hidden shadow-lg bg-gray-100 dark:bg-gray-800">
+            <img 
+              src={getSupabaseImageUrl(data.image)}
+              alt={data.title}
+              className="w-full h-full object-cover object-center transition-transform duration-300 hover:scale-105"
+              loading="lazy"
+            />
           </div>
           
         </div>
