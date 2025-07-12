@@ -42,7 +42,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
   const [showReplyForm, setShowReplyForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
   const [selectedText, setSelectedText] = useState('');
-  const [isDeleting, setIsDeleting] = useState(false);
+ // const [isDeleting, setIsDeleting] = useState(false);
 
   const {
     getReplies,
