@@ -1,4 +1,4 @@
-// src/components/home/InfoSection.tsx - ИСПРАВЛЕННАЯ ВЕРСИЯ с правильной высотой
+// src/components/home/InfoSection.tsx - ВЕРСИЯ с равной высотой контейнеров
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
@@ -19,7 +19,6 @@ const InfoSection = () => {
   const [error, setError] = useState<string | null>(null);
   const isMountedRef = useRef(true);
 
-  // ИСПРАВЛЕННАЯ ВЕРСИЯ - только один раз загружаем данные
   useEffect(() => {
     isMountedRef.current = true;
     
@@ -61,7 +60,7 @@ const InfoSection = () => {
     return () => {
       isMountedRef.current = false;
     };
-  }, []); // КРИТИЧНО: пустой массив зависимостей
+  }, []);
 
   if (isLoading) {
     return (
@@ -86,15 +85,16 @@ const InfoSection = () => {
   return (
     <section className="section bg-white dark:bg-dark-900">
       <div className="container mx-auto px-4 md:px-6 max-w-7xl">
-        {/* 🎯 ИСПРАВЛЕННАЯ СЕТКА с равной высотой */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-          {/* Текстовый контент */}
-          <div className="flex flex-col justify-start h-full">
+        {/* 🎯 СЕТКА с одинаковой высотой контейнеров */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch">
+          
+          {/* Текстовый контент - определяет высоту */}
+          <div className="flex flex-col">
             <h3 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-6">
               {data.title}
             </h3>
             <div 
-              className="text-base text-gray-600 dark:text-gray-300 space-y-4 mb-8 leading-relaxed"
+              className="text-base text-gray-600 dark:text-gray-300 space-y-4 mb-8 leading-relaxed flex-grow"
               dangerouslySetInnerHTML={{ __html: data.description }}
             />
             <div className="mt-auto">
@@ -108,10 +108,9 @@ const InfoSection = () => {
             </div>
           </div>
           
-          {/* 🎯 ИСПРАВЛЕННЫЙ контейнер изображения */}
-          <div className="relative">
-            {/* Устанавливаем фиксированную высоту для контейнера */}
-            <div className="aspect-[4/3] w-full rounded-lg overflow-hidden shadow-lg bg-gray-100 dark:bg-gray-800">
+          {/* 🎯 Контейнер изображения - повторяет высоту текста */}
+          <div className="flex">
+            <div className="w-full rounded-lg overflow-hidden shadow-lg bg-gray-100 dark:bg-gray-800">
               <img 
                 src={getSupabaseImageUrl(data.image)}
                 alt={data.title}
@@ -120,6 +119,7 @@ const InfoSection = () => {
               />
             </div>
           </div>
+          
         </div>
       </div>
     </section>
