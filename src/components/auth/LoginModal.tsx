@@ -1,25 +1,29 @@
+// src/components/auth/LoginModal.tsx - ОБНОВЛЕННАЯ ВЕРСИЯ с анимированным логотипом
 import { useState } from 'react';
-import { Mail, Lock, User, AlertCircle, Eye, EyeOff, Loader2, ArrowRight, Sparkles, LogIn } from 'lucide-react';
-import { toast } from 'react-hot-toast';
+import { X, Mail, Lock, User, Eye, EyeOff, LogIn, Sparkles, ArrowRight } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { toast } from 'react-hot-toast';
+import CustomLoader from '../ui/CustomLoader';
 
-type LoginModalProps = {
+interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
-};
+}
 
 const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
+  const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resetPassword, setResetPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleSubmit = async (e?: React.FormEvent | React.KeyboardEvent) => {
-    if (e) e.preventDefault();
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loading) return;
+
     setLoading(true);
     setError(null);
 
@@ -31,27 +35,28 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
 
         if (error) throw error;
 
-        toast.success('Инструкции по сбросу пароля отправлены на вашу почту');
+        toast.success('Инструкции отправлены на почту');
         setResetPassword(false);
+        setEmail('');
+        onClose();
       } else if (isSignUp) {
-        if (!name.trim()) {
-          setError('Имя обязательно для заполнения');
-          setLoading(false);
-          return;
-        }
-
         const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
             data: { name },
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
+            emailRedirectTo: `${window.location.origin}/auth/callback`
           }
         });
 
         if (error) throw error;
 
-        toast.success('Регистрация успешна! Проверьте почту для подтверждения.');
+        toast.success('Аккаунт создан! Проверьте почту для подтверждения.');
+        setEmail('');
+        setPassword('');
+        setName('');
+        setIsSignUp(false);
+        onClose();
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
@@ -60,7 +65,7 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
 
         if (error) throw error;
 
-        toast.success('Добро пожаловать!');
+        // Toast будет показан в TopBarContext
         onClose();
       }
     } catch (error: any) {
@@ -95,7 +100,7 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
       
       {/* Modal */}
       <div className="flex min-h-screen items-center justify-center p-4">
-        <div className="relative w-full max-w-md transform overflow-hidden rounded-2xl bg-white dark:bg-gray-900 shadow-2xl transition-all">
+        <div className="relative w-full max-w-md transform overflow-hidden rounded-2xl bg-white dark:bg-dark-900 shadow-2xl transition-all">
           {/* Header с градиентом */}
           <div className="relative bg-gradient-to-br from-primary-600 via-primary-700 to-secondary-600 px-8 py-8 text-white">
             {/* Декоративные элементы */}
@@ -125,27 +130,37 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
                 {resetPassword 
                   ? 'Введите email для получения инструкций' 
                   : isSignUp 
-                    ? 'Создайте аккаунт для доступа к платформе'
-                    : 'Войдите в свой аккаунт Science Hub'
+                    ? 'Создайте новый аккаунт для доступа' 
+                    : 'Войдите в свой аккаунт'
                 }
               </p>
             </div>
+
+            {/* Close button */}
+            <button
+              onClick={() => {
+                onClose();
+                resetForm();
+              }}
+              className="absolute right-4 top-4 p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
 
           {/* Form */}
-          <div className="px-8 py-8">
+          <div className="p-8">
             {error && (
-              <div className="mb-6 flex items-start gap-3 rounded-xl bg-red-50 dark:bg-red-900/20 p-4 text-red-700 dark:text-red-300">
-                <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
-                <span className="text-sm">{error}</span>
+              <div className="mb-6 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4">
+                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
               </div>
             )}
 
-            <div className="space-y-6">
-              {/* Name field (only for signup) */}
-              {!resetPassword && isSignUp && (
-                <div className="space-y-2">
-                  <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Name field (только для регистрации) */}
+              {isSignUp && !resetPassword && (
+                <div>
+                  <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Полное имя
                   </label>
                   <div className="relative">
@@ -157,18 +172,18 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
                       id="name"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 py-3 pl-12 pr-4 text-gray-900 dark:text-white placeholder-gray-500 transition-all focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 dark:focus:border-primary-400"
+                      className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-800 py-3 pl-12 pr-4 text-dark-900 dark:text-white placeholder-dark-500 transition-all focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 dark:focus:border-primary-400"
                       placeholder="Введите ваше имя"
-                      onKeyDown={(e) => e.key === 'Enter' && handleSubmit(e)}
+                      required
                     />
                   </div>
                 </div>
               )}
 
               {/* Email field */}
-              <div className="space-y-2">
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Email адрес
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Email
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 flex items-center pl-4">
@@ -180,26 +195,30 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 py-3 pl-12 pr-4 text-gray-900 dark:text-white placeholder-gray-500 transition-all focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 dark:focus:border-primary-400"
-                    placeholder="your@email.com"
+                    placeholder="Введите email"
+                    required
                     onKeyDown={(e) => e.key === 'Enter' && handleSubmit(e)}
                   />
                 </div>
               </div>
 
-              {/* Password field */}
+              {/* Password field (не показываем для сброса пароля) */}
               {!resetPassword && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
                     <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                       Пароль
                     </label>
                     {!isSignUp && (
                       <button
                         type="button"
-                        onClick={() => setResetPassword(true)}
+                        onClick={() => {
+                          setResetPassword(true);
+                          setError(null);
+                        }}
                         className="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
                       >
-                        Забыли?
+                        Забыли пароль?
                       </button>
                     )}
                   </div>
@@ -241,8 +260,10 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
                 <div className="flex items-center justify-center gap-2">
                   {loading ? (
                     <>
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                      {resetPassword ? 'Отправляем...' : (isSignUp ? 'Создаём аккаунт...' : 'Входим...')}
+                      <CustomLoader size="sm" />
+                      <span className="ml-2">
+                        {resetPassword ? 'Отправляем...' : (isSignUp ? 'Создаём аккаунт...' : 'Входим...')}
+                      </span>
                     </>
                   ) : (
                     <>
@@ -285,7 +306,7 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
                   </button>
                 )}
               </div>
-            </div>
+            </form>
 
             {/* Additional info */}
             <div className="mt-8 border-t border-gray-200 dark:border-gray-700 pt-6">
