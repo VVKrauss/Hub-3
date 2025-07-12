@@ -1,14 +1,93 @@
-// src/pages/EventsPage.tsx - ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ без дёрганья
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+// src/pages/EventsPage.tsx - МИНИМАЛЬНЫЕ ИСПРАВЛЕНИЯ только для устранения дёрганья
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, Clock, MapPin, Users, Grid, List, Search, Filter, ChevronDown, X } from 'lucide-react';
+import { Calendar, Clock, MapPin, Users, Grid, List, Search, Filter, ChevronDown, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { supabase } from '../lib/supabase';
-import { UnifiedLoadingPageWrapper, LoadingSpinner } from '../components/ui/UnifiedLoading';
 import { formatRussianDate, formatTimeFromTimestamp } from '../utils/dateTimeUtils';
 import { getSupabaseImageUrl } from '../utils/imageUtils';
+import { LoadingSpinner } from '../components/ui/UnifiedLoading'; // 👈 ЕДИНСТВЕННОЕ ИЗМЕНЕНИЕ ИМПОРТА
 
-// Типы
+// ЛЕЙБЛЫ ДЛЯ ПРАВИЛЬНОГО ОТОБРАЖЕНИЯ
+const EVENT_TYPE_LABELS: Record<string, string> = {
+  'lecture': 'Лекция',
+  'workshop': 'Мастер-класс',
+  'discussion': 'Дискуссия',
+  'conference': 'Конференция',
+  'seminar': 'Семинар',
+  'festival': 'Фестиваль',
+  'concert': 'Концерт',
+  'standup': 'Стенд-ап',
+  'excursion': 'Экскурсия',
+  'quiz': 'Квиз',
+  'swap': 'Своп',
+  'meetup': 'Митап',
+  'webinar': 'Вебинар',
+  'training': 'Тренинг',
+  'other': 'Другое',
+};
+
+// ФУНКЦИИ ДЛЯ ПРАВИЛЬНОГО ОТОБРАЖЕНИЯ ДАННЫХ
+const getEventPrice = (event: any): string => {
+  if (event.payment_type === 'free') return 'Бесплатно';
+  if (event.payment_type === 'donation') return 'Донейшн';
+  
+  if (event.payment_type === 'paid') {
+    if (event.base_price && event.base_price > 0) {
+      return `${event.base_price} ${event.currency || 'RSD'}`;
+    }
+    if (event.price && event.price > 0) {
+      return `${event.price} ${event.currency || 'RSD'}`;
+    }
+    return 'Цена уточняется';
+  }
+  
+  if (event.price === 0 || event.price === null) return 'Бесплатно';
+  if (event.price && event.price > 0) {
+    return `${event.price} ${event.currency || 'RSD'}`;
+  }
+  return 'Бесплатно';
+};
+
+const getEventTypeLabel = (eventType: string): string => {
+  return EVENT_TYPE_LABELS[eventType] || eventType;
+};
+
+// ФУНКЦИЯ ДЛЯ ПОЛУЧЕНИЯ ЯЗЫКА
+const getEventLanguage = (event: any): string => {
+  if (event.language_code) {
+    const languageMap: Record<string, string> = {
+      'ru': 'РУ',
+      'en': 'EN', 
+      'sr': 'СР',
+      'de': 'DE',
+      'fr': 'FR',
+      'es': 'ES'
+    };
+    return languageMap[event.language_code] || event.language_code.toUpperCase();
+  }
+  if (event.languages && event.languages.length > 0) {
+    return event.languages.join(', ').toUpperCase();
+  }
+  return 'РУ'; // По умолчанию
+};
+
+// ФУНКЦИЯ ДЛЯ ПОЛУЧЕНИЯ ВОЗРАСТНОЙ КАТЕГОРИИ
+const getAgeCategory = (event: any): string => {
+  if (event.age_category) {
+    return event.age_category;
+  }
+  return '18+'; // По умолчанию
+};
+
+// ФУНКЦИЯ ДЛЯ ПОЛУЧЕНИЯ ИЗОБРАЖЕНИЯ СОБЫТИЯ
+const getEventImage = (event: any): string => {
+  if (event.cover_image_url) {
+    return getSupabaseImageUrl(event.cover_image_url);
+  }
+  return 'https://via.placeholder.com/400x200?text=No+Image';
+};
+
 type ViewMode = 'grid' | 'list';
 type SortBy = 'date' | 'title' | 'price' | 'popularity';
 
@@ -35,60 +114,220 @@ interface EventWithDetails {
   is_featured?: boolean;
 }
 
-// Константы
-const EVENT_TYPE_LABELS: Record<string, string> = {
-  'lecture': 'Лекция',
-  'workshop': 'Мастер-класс',
-  'discussion': 'Дискуссия',
-  'conference': 'Конференция',
-  'seminar': 'Семинар',
-  'festival': 'Фестиваль',
-  'concert': 'Концерт',
-  'standup': 'Стенд-ап',
-  'excursion': 'Экскурсия',
-  'quiz': 'Квиз',
-  'swap': 'Своп',
-  'meetup': 'Митап',
-  'webinar': 'Вебинар',
-  'training': 'Тренинг',
-  'other': 'Другое',
+// СЛАЙДЕР ИЗБРАННЫХ МЕРОПРИЯТИЙ
+const FeaturedEventsSlider = ({ events }: { events: EventWithDetails[] }) => {
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [isAutoPlaying, setIsAutoPlaying] = useState(true);
+
+  // Автопрокрутка
+  useEffect(() => {
+    if (!isAutoPlaying || events.length <= 1) return;
+
+    const interval = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % events.length);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [events.length, isAutoPlaying]);
+
+  const goToSlide = (index: number) => {
+    setCurrentSlide(index);
+    setIsAutoPlaying(false);
+    setTimeout(() => setIsAutoPlaying(true), 10000); // Возобновляем через 10 сек
+  };
+
+  const nextSlide = () => {
+    setCurrentSlide((prev) => (prev + 1) % events.length);
+    setIsAutoPlaying(false);
+    setTimeout(() => setIsAutoPlaying(true), 10000);
+  };
+
+  const prevSlide = () => {
+    setCurrentSlide((prev) => (prev - 1 + events.length) % events.length);
+    setIsAutoPlaying(false);
+    setTimeout(() => setIsAutoPlaying(true), 10000);
+  };
+
+  if (events.length === 0) return null;
+
+  return (
+    <div className="relative mb-8 overflow-hidden rounded-2xl bg-gradient-to-br from-primary-600 to-secondary-500 shadow-2xl">
+      <div className="relative h-80 md:h-96">
+        {events.map((event, index) => (
+          <div
+            key={event.id}
+            className={`absolute inset-0 transition-opacity duration-700 ${
+              index === currentSlide ? 'opacity-100' : 'opacity-0'
+            }`}
+          >
+            {/* Фоновое изображение */}
+            <div 
+              className="absolute inset-0 bg-cover bg-center"
+              style={{ 
+                backgroundImage: `url(${getEventImage(event)})`,
+                filter: 'brightness(0.4)'
+              }}
+            />
+            
+            {/* Контент */}
+            <div className="absolute inset-0 flex items-center">
+              <div className="container mx-auto px-6 text-white">
+                <div className="max-w-2xl">
+                  <div className="mb-4">
+                    <span className="inline-block px-3 py-1 bg-white bg-opacity-20 rounded-full text-sm font-medium backdrop-blur-sm">
+                      {getEventTypeLabel(event.event_type)}
+                    </span>
+                  </div>
+                  
+                  <h2 className="text-3xl md:text-4xl font-bold mb-4 leading-tight">
+                    {event.title}
+                  </h2>
+                  
+                  {event.short_description && (
+                    <p className="text-lg md:text-xl text-gray-200 mb-6 leading-relaxed">
+                      {event.short_description}
+                    </p>
+                  )}
+                  
+                  <div className="flex flex-wrap items-center gap-4 mb-6 text-gray-200">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-5 w-5" />
+                      <span>{formatRussianDate(event.start_at)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-5 w-5" />
+                      <span>{formatTimeFromTimestamp(event.start_at)}</span>
+                    </div>
+                    {event.venue_name && (
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-5 w-5" />
+                        <span>{event.venue_name}</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex items-center gap-4">
+                    <Link
+                      to={`/events/${event.id}`}
+                      className="bg-white text-primary-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+                    >
+                      Подробнее
+                    </Link>
+                    <span className="text-xl font-bold">
+                      {getEventPrice(event)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {/* Навигация */}
+        {events.length > 1 && (
+          <>
+            <button
+              onClick={prevSlide}
+              className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-30 hover:bg-opacity-50 text-white p-2 rounded-full transition-all duration-200"
+            >
+              <ChevronLeft className="h-6 w-6" />
+            </button>
+            
+            <button
+              onClick={nextSlide}
+              className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-30 hover:bg-opacity-50 text-white p-2 rounded-full transition-all duration-200"
+            >
+              <ChevronRight className="h-6 w-6" />
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Индикаторы */}
+      {events.length > 1 && (
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
+          {events.map((_, index) => (
+            <button
+              key={index}
+              onClick={() => goToSlide(index)}
+              className={`w-3 h-3 rounded-full transition-all duration-200 ${
+                index === currentSlide
+                  ? 'bg-white scale-110'
+                  : 'bg-white bg-opacity-50 hover:bg-opacity-75'
+              }`}
+              aria-label={`Перейти к слайду ${index + 1}`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 };
 
-// Утилиты
-const getEventPrice = (event: EventWithDetails): string => {
-  if (event.payment_type === 'free') return 'Бесплатно';
-  if (event.payment_type === 'donation') return 'Донейшн';
-  
-  if (event.payment_type === 'paid') {
-    if (event.base_price && event.base_price > 0) {
-      return `${event.base_price} ${event.currency || 'RSD'}`;
-    }
-    if (event.price && event.price > 0) {
-      return `${event.price} ${event.currency || 'RSD'}`;
-    }
-    return 'Цена уточняется';
-  }
-  
-  return 'Бесплатно';
+// КОМПОНЕНТ ПРОШЕДШИХ МЕРОПРИЯТИЙ
+const PastEventsPanel = ({ events }: { events: EventWithDetails[] }) => {
+  // Теперь просто показываем события со статусом 'past' - без дополнительных проверок
+  if (events.length === 0) return null;
+
+  return (
+    <div className="bg-white dark:bg-dark-800 rounded-xl shadow-lg p-6">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+        <Clock className="h-5 w-5 text-gray-500" />
+        Завершённые мероприятия
+      </h3>
+      
+      <div className="space-y-3">
+        {events.slice(0, 10).map((event) => (
+          <Link
+            key={event.id}
+            to={`/events/${event.id}`}
+            className="flex gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors group"
+          >
+            {/* Миниатюра */}
+            <div className="w-16 h-12 flex-shrink-0 overflow-hidden rounded-md">
+              <img
+                src={getEventImage(event)}
+                alt={event.title}
+                className="w-full h-full object-cover"
+                loading="lazy" 
+              />
+            </div>
+            
+            {/* Информация */}
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+                {event.title}
+              </h4>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {formatRussianDate(event.start_at)}
+              </p>
+            </div>
+          </Link>
+        ))}
+      </div>
+      
+      {events.length > 10 && (
+        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
+            И ещё {events.length - 10} мероприятий...
+          </p>
+        </div>
+      )}
+    </div>
+  );
 };
 
-const getEventTypeLabel = (eventType: string): string => {
-  return EVENT_TYPE_LABELS[eventType] || eventType;
-};
+// КОМПОНЕНТ КАРТОЧКИ СОБЫТИЯ
+const EventCard = ({ event, viewMode }: { event: EventWithDetails; viewMode: ViewMode }) => {
+  // Теперь просто проверяем статус - никаких дополнительных проверок дат!
+  const isPastEvent = event.status === 'past';
 
-const getEventImage = (event: EventWithDetails): string => {
-  if (event.cover_image_url) {
-    return getSupabaseImageUrl(event.cover_image_url);
-  }
-  return 'https://via.placeholder.com/400x200?text=No+Image';
-};
-
-// Компонент карточки события
-const EventCard = React.memo(({ event, viewMode }: { event: EventWithDetails; viewMode: ViewMode }) => {
   if (viewMode === 'list') {
     return (
       <Link to={`/events/${event.id}`} className="block">
-        <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 overflow-hidden">
+        <div className={`bg-white dark:bg-dark-800 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 overflow-hidden ${
+          isPastEvent ? 'opacity-75' : ''
+        }`}>
           <div className="flex">
             <div className="w-48 h-32 flex-shrink-0">
               <img
@@ -103,9 +342,16 @@ const EventCard = React.memo(({ event, viewMode }: { event: EventWithDetails; vi
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-1">
                   {event.title}
                 </h3>
-                <span className="text-sm text-gray-500 dark:text-gray-400">
-                  {formatRussianDate(event.start_at)}
-                </span>
+                <div className="flex items-center gap-2">
+                  {isPastEvent && (
+                    <span className="px-2 py-1 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs rounded-full">
+                      Прошло
+                    </span>
+                  )}
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    {formatRussianDate(event.start_at)}
+                  </span>
+                </div>
               </div>
               
               {event.short_description && (
@@ -140,14 +386,23 @@ const EventCard = React.memo(({ event, viewMode }: { event: EventWithDetails; vi
 
   return (
     <Link to={`/events/${event.id}`} className="block group">
-      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 overflow-hidden">
-        <div className="aspect-video overflow-hidden">
+      <div className={`bg-white dark:bg-dark-800 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 overflow-hidden ${
+        isPastEvent ? 'opacity-75' : ''
+      }`}>
+        <div className="aspect-video overflow-hidden relative">
           <img
             src={getEventImage(event)}
             alt={event.title}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
             loading="lazy"
           />
+          {isPastEvent && (
+            <div className="absolute top-2 right-2">
+              <span className="px-2 py-1 bg-black bg-opacity-75 text-white text-xs rounded-full">
+                Прошло
+              </span>
+            </div>
+          )}
         </div>
         
         <div className="p-6">
@@ -199,28 +454,17 @@ const EventCard = React.memo(({ event, viewMode }: { event: EventWithDetails; vi
       </div>
     </Link>
   );
-});
+};
 
-// Основной компонент
 const EventsPage = () => {
-  // 🎯 ЕДИНОЕ состояние для устранения дёрганья
-  const [pageState, setPageState] = useState<{
-    events: EventWithDetails[];
-    loading: boolean;
-    loadingMore: boolean;
-    error: string | null;
-    hasMore: boolean;
-    page: number;
-  }>({
-    events: [],
-    loading: true,
-    loadingMore: false,
-    error: null,
-    hasMore: true,
-    page: 1
-  });
-
-  // UI состояния
+  const [events, setEvents] = useState<EventWithDetails[]>([]);
+  const [activeEvents, setActiveEvents] = useState<EventWithDetails[]>([]);
+  const [pastEvents, setPastEvents] = useState<EventWithDetails[]>([]);
+  const [filteredAndSortedEvents, setFilteredAndSortedEvents] = useState<EventWithDetails[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(1);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [sortBy, setSortBy] = useState<SortBy>('date');
   const [searchQuery, setSearchQuery] = useState('');
@@ -232,14 +476,11 @@ const EventsPage = () => {
   });
   const [showFilters, setShowFilters] = useState(false);
 
-  // 🚀 Оптимизированная функция загрузки
-  const fetchEvents = useCallback(async (pageNum: number = 1, append: boolean = false) => {
+  // Загрузка событий
+  const fetchEvents = async (pageNum: number = 1, append: boolean = false) => {
     try {
-      if (pageNum === 1 && !append) {
-        setPageState(prev => ({ ...prev, loading: true, error: null }));
-      } else {
-        setPageState(prev => ({ ...prev, loadingMore: true }));
-      }
+      if (pageNum === 1) setLoading(true);
+      else setLoadingMore(true);
 
       let query = supabase
         .from('sh_events')
@@ -259,45 +500,77 @@ const EventsPage = () => {
       const { data: newEvents, error } = await query;
 
       if (error) {
-        console.error('Error fetching events:', error);
-        throw new Error('Ошибка загрузки мероприятий');
+        console.error('Error fetching from sh_events:', error);
+        // Fallback к старой таблице events
+        let legacyQuery = supabase
+          .from('events')
+          .select('*')
+          .order('start_at', { ascending: false })
+          .range((pageNum - 1) * 20, pageNum * 20 - 1);
+
+        const { data: legacyEvents, error: legacyError } = await legacyQuery;
+        
+        if (legacyError) {
+          throw legacyError;
+        }
+
+        const eventsData = legacyEvents || [];
+        
+        if (append) {
+          setEvents(prev => [...prev, ...eventsData]);
+        } else {
+          setEvents(eventsData);
+        }
+        
+        setHasMore(eventsData.length === 20);
+        setPage(pageNum);
+        
+      } else {
+        const eventsData = newEvents || [];
+        
+        if (append) {
+          setEvents(prev => [...prev, ...eventsData]);
+        } else {
+          setEvents(eventsData);
+        }
+        
+        setHasMore(eventsData.length === 20);
+        setPage(pageNum);
       }
 
-      const eventsData = newEvents || [];
-      
-      // ✅ ЕДИНОЕ обновление состояния
-      setPageState(prev => ({
-        ...prev,
-        events: append ? [...prev.events, ...eventsData] : eventsData,
-        loading: false,
-        loadingMore: false,
-        hasMore: eventsData.length === 20,
-        page: pageNum,
-        error: null
-      }));
-
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error in fetchEvents:', error);
-      setPageState(prev => ({
-        ...prev,
-        loading: false,
-        loadingMore: false,
-        error: error.message || 'Ошибка загрузки мероприятий'
-      }));
+      toast.error('Ошибка загрузки мероприятий');
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
     }
-  }, [filters.showPast]);
+  };
 
-  // 🎨 Мемоизированная фильтрация и сортировка
-  const filteredAndSortedEvents = useMemo(() => {
-    let filtered = [...pageState.events];
+  // Сепарация событий по статусам
+  const separateEventsByStatus = (allEvents: EventWithDetails[]) => {
+    const active = allEvents.filter(event => event.status === 'active');
+    const past = allEvents.filter(event => event.status === 'past');
+    
+    setActiveEvents(active);
+    setPastEvents(past);
+  };
+
+  // Фильтрация и сортировка
+  const filterAndSortEvents = () => {
+    let filtered = [...events];
+
+    // Фильтр по статусу
+    if (!filters.showPast) {
+      filtered = filtered.filter(event => event.status !== 'past');
+    }
 
     // Поиск
     if (searchQuery) {
-      const query = searchQuery.toLowerCase();
       filtered = filtered.filter(event =>
-        event.title.toLowerCase().includes(query) ||
-        event.short_description?.toLowerCase().includes(query) ||
-        event.description?.toLowerCase().includes(query)
+        event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        event.short_description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        event.description?.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
 
@@ -327,23 +600,30 @@ const EventsPage = () => {
       }
     });
 
-    return filtered;
-  }, [pageState.events, searchQuery, filters, sortBy]);
+    setFilteredAndSortedEvents(filtered);
+  };
 
   // Эффекты
   useEffect(() => {
-    fetchEvents(1, false);
-  }, [fetchEvents]);
+    fetchEvents();
+  }, [filters.showPast]);
+
+  useEffect(() => {
+    separateEventsByStatus(events);
+  }, [events]);
+
+  useEffect(() => {
+    filterAndSortEvents();
+  }, [events, searchQuery, filters, sortBy]);
 
   // Обработчики
-  const handleLoadMore = useCallback(() => {
-    if (!pageState.loadingMore && pageState.hasMore) {
-      const nextPage = pageState.page + 1;
-      fetchEvents(nextPage, true);
-    }
-  }, [fetchEvents, pageState.loadingMore, pageState.hasMore, pageState.page]);
+  const handleLoadMore = () => {
+    const nextPage = page + 1;
+    setPage(nextPage);
+    fetchEvents(nextPage, true);
+  };
 
-  const clearFilters = useCallback(() => {
+  const clearFilters = () => {
     setSearchQuery('');
     setFilters({
       eventType: '',
@@ -352,205 +632,228 @@ const EventsPage = () => {
       showPast: false
     });
     setSortBy('date');
-  }, []);
+  };
 
   const hasActiveFilters = () => {
     return searchQuery || filters.eventType || filters.paymentType || filters.dateRange || filters.showPast;
   };
 
-  // 🎯 ЕДИНЫЙ лоадер вместо множественных
-  return (
-    <Layout disablePageTransition={true}>
-      <UnifiedLoadingPageWrapper
-        loading={pageState.loading && pageState.events.length === 0}
-        error={pageState.error}
-        loadingText="Загружаем мероприятия..."
-      >
-        <main className="min-h-screen bg-gray-50 dark:bg-dark-900">
+  // 👈 ЕДИНСТВЕННОЕ ИЗМЕНЕНИЕ: заменил старый лоадер на CustomLoader
+  if (loading && events.length === 0) {
+    return (
+      <Layout disablePageTransition={true}>
+        <main className="min-h-screen bg-gray-500 dark:bg-dark-600">
           <div className="container mx-auto px-4 py-8">
-            {/* Header */}
-            <div className="mb-8">
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-                Мероприятия
-              </h1>
-              <p className="text-gray-600 dark:text-gray-400">
-                Присоединяйтесь к увлекательным событиям нашего сообщества
-              </p>
-            </div>
-
-            {/* Фильтры и поиск */}
-            <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-6 mb-8">
-              <div className="flex flex-col lg:flex-row gap-4">
-                {/* Поиск */}
-                <div className="flex-1">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-                    <input
-                      type="text"
-                      placeholder="Поиск мероприятий..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
-                </div>
-
-                {/* Кнопки управления */}
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setShowFilters(!showFilters)}
-                    className={`px-4 py-2 rounded-lg border transition-colors flex items-center gap-2 ${
-                      showFilters || hasActiveFilters()
-                        ? 'bg-primary-600 text-white border-primary-600' 
-                        : 'bg-white dark:bg-dark-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-dark-600 hover:bg-gray-50 dark:hover:bg-dark-600'
-                    }`}
-                  >
-                    <Filter className="h-4 w-4" />
-                    Фильтры
-                    {hasActiveFilters() && (
-                      <span className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                        !
-                      </span>
-                    )}
-                  </button>
-
-                  <div className="flex rounded-lg border border-gray-300 dark:border-dark-600 overflow-hidden">
-                    <button
-                      onClick={() => setViewMode('grid')}
-                      className={`p-2 transition-colors ${
-                        viewMode === 'grid' 
-                          ? 'bg-primary-600 text-white' 
-                          : 'bg-white dark:bg-dark-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-dark-600'
-                      }`}
-                    >
-                      <Grid className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => setViewMode('list')}
-                      className={`p-2 transition-colors ${
-                        viewMode === 'list' 
-                          ? 'bg-primary-600 text-white' 
-                          : 'bg-white dark:bg-dark-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-dark-600'
-                      }`}
-                    >
-                      <List className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Расширенные фильтры */}
-              {showFilters && (
-                <div className="mt-6 pt-6 border-t border-gray-200 dark:border-dark-700">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <select
-                      value={filters.eventType}
-                      onChange={(e) => setFilters(prev => ({ ...prev, eventType: e.target.value }))}
-                      className="px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
-                    >
-                      <option value="">Все типы</option>
-                      {Object.entries(EVENT_TYPE_LABELS).map(([value, label]) => (
-                        <option key={value} value={value}>{label}</option>
-                      ))}
-                    </select>
-
-                    <select
-                      value={filters.paymentType}
-                      onChange={(e) => setFilters(prev => ({ ...prev, paymentType: e.target.value }))}
-                      className="px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
-                    >
-                      <option value="">Все цены</option>
-                      <option value="free">Бесплатные</option>
-                      <option value="paid">Платные</option>
-                      <option value="donation">Донейшн</option>
-                    </select>
-
-                    <select
-                      value={sortBy}
-                      onChange={(e) => setSortBy(e.target.value as SortBy)}
-                      className="px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
-                    >
-                      <option value="date">По дате</option>
-                      <option value="title">По названию</option>
-                      <option value="price">По цене</option>
-                    </select>
-                  </div>
-
-                  <div className="mt-4 flex items-center justify-between">
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={filters.showPast}
-                        onChange={(e) => setFilters(prev => ({ ...prev, showPast: e.target.checked }))}
-                        className="mr-2"
-                      />
-                      <span className="text-gray-700 dark:text-gray-300">Показать прошедшие</span>
-                    </label>
-
-                    {hasActiveFilters() && (
-                      <button
-                        onClick={clearFilters}
-                        className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                      >
-                        Сбросить фильтры
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* События */}
-            {filteredAndSortedEvents.length === 0 && !pageState.loading ? (
-              <div className="text-center py-16">
-                <Calendar className="w-24 h-24 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                  Мероприятия не найдены
-                </h3>
-                <p className="text-gray-600 dark:text-gray-400 mb-4">
-                  Попробуйте изменить параметры поиска или фильтры
-                </p>
-                {hasActiveFilters() && (
-                  <button
-                    onClick={clearFilters}
-                    className="btn-primary"
-                  >
-                    Сбросить фильтры
-                  </button>
-                )}
-              </div>
-            ) : (
-              <>
-                <div className={`animate-fade-in ${
-                  viewMode === 'grid' 
-                    ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' 
-                    : 'space-y-4'
-                }`}>
-                  {filteredAndSortedEvents.map((event) => (
-                    <EventCard key={event.id} event={event} viewMode={viewMode} />
-                  ))}
-                </div>
-
-                {/* Кнопка "Загрузить еще" */}
-                {pageState.hasMore && filteredAndSortedEvents.length > 0 && (
-                  <div className="mt-8 text-center">
-                    {pageState.loadingMore ? (
-                      <LoadingSpinner text="Загружаем еще..." />
-                    ) : (
-                      <button
-                        onClick={handleLoadMore}
-                        className="btn-outline"
-                      >
-                        Загрузить еще
-                      </button>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
+            <LoadingSpinner text="Загружаем мероприятия..." className="py-32" />
           </div>
         </main>
-      </UnifiedLoadingPageWrapper>
+      </Layout>
+    );
+  }
+
+  return (
+    <Layout disablePageTransition={true}> {/* 👈 ОТКЛЮЧАЕМ конфликтующие переходы */}
+      <main className="min-h-screen bg-gray-50 dark:bg-dark-900">
+        <div className="container mx-auto px-4 py-8">
+          {/* Заголовок */}
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+              Мероприятия
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400">
+              Присоединяйтесь к увлекательным событиям нашего сообщества
+            </p>
+          </div>
+
+          {/* Слайдер избранных мероприятий */}
+          <FeaturedEventsSlider 
+            events={activeEvents.filter(event => event.is_featured).slice(0, 5)} 
+          />
+
+          {/* Основной контент в две колонки */}
+          <div className="flex gap-8">
+            {/* ЛЕВАЯ КОЛОНКА - ОСНОВНЫЕ МЕРОПРИЯТИЯ */}
+            <div className="flex-1">
+              {/* Фильтры и поиск */}
+              <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-6 mb-8">
+                <div className="flex flex-col lg:flex-row gap-4">
+                  {/* Поиск */}
+                  <div className="flex-1">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                      <input
+                        type="text"
+                        placeholder="Поиск мероприятий..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Кнопки управления */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowFilters(!showFilters)}
+                      className={`px-4 py-2 rounded-lg border transition-colors flex items-center gap-2 ${
+                        showFilters || hasActiveFilters()
+                          ? 'bg-primary-600 text-white border-primary-600' 
+                          : 'bg-white dark:bg-dark-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-dark-600 hover:bg-gray-50 dark:hover:bg-dark-600'
+                      }`}
+                    >
+                      <Filter className="h-4 w-4" />
+                      Фильтры
+                      {hasActiveFilters() && (
+                        <span className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                          !
+                        </span>
+                      )}
+                    </button>
+
+                    <div className="flex rounded-lg border border-gray-300 dark:border-dark-600 overflow-hidden">
+                      <button
+                        onClick={() => setViewMode('grid')}
+                        className={`p-2 transition-colors ${
+                          viewMode === 'grid' 
+                            ? 'bg-primary-600 text-white' 
+                            : 'bg-white dark:bg-dark-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-dark-600'
+                        }`}
+                      >
+                        <Grid className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => setViewMode('list')}
+                        className={`p-2 transition-colors ${
+                          viewMode === 'list' 
+                            ? 'bg-primary-600 text-white' 
+                            : 'bg-white dark:bg-dark-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-dark-600'
+                        }`}
+                      >
+                        <List className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Расширенные фильтры */}
+                {showFilters && (
+                  <div className="mt-6 pt-6 border-t border-gray-200 dark:border-dark-700">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <select
+                        value={filters.eventType}
+                        onChange={(e) => setFilters(prev => ({ ...prev, eventType: e.target.value }))}
+                        className="px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="">Все типы</option>
+                        {Object.entries(EVENT_TYPE_LABELS).map(([value, label]) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
+                      </select>
+
+                      <select
+                        value={filters.paymentType}
+                        onChange={(e) => setFilters(prev => ({ ...prev, paymentType: e.target.value }))}
+                        className="px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="">Все цены</option>
+                        <option value="free">Бесплатные</option>
+                        <option value="paid">Платные</option>
+                        <option value="donation">Донейшн</option>
+                      </select>
+
+                      <select
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value as SortBy)}
+                        className="px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="date">По дате</option>
+                        <option value="title">По названию</option>
+                        <option value="price">По цене</option>
+                        <option value="popularity">По популярности</option>
+                      </select>
+                    </div>
+
+                    <div className="mt-4 flex items-center justify-between">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={filters.showPast}
+                          onChange={(e) => setFilters(prev => ({ ...prev, showPast: e.target.checked }))}
+                          className="mr-2"
+                        />
+                        <span className="text-gray-700 dark:text-gray-300">Показать прошедшие</span>
+                      </label>
+
+                      {hasActiveFilters() && (
+                        <button
+                          onClick={clearFilters}
+                          className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                        >
+                          Сбросить фильтры
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* События */}
+              <div>
+                {filteredAndSortedEvents.length > 0 ? (
+                  <>
+                    <div className={`animate-fade-in ${
+                      viewMode === 'grid' 
+                        ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6' 
+                        : 'space-y-4'
+                    }`}>
+                      {filteredAndSortedEvents.map((event) => (
+                        <EventCard key={event.id} event={event} viewMode={viewMode} />
+                      ))}
+                    </div>
+
+                    {hasMore && (
+                      <div className="mt-8 text-center">
+                        <button
+                          onClick={handleLoadMore}
+                          disabled={loadingMore}
+                          className="inline-flex items-center px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {loadingMore ? (
+                            <LoadingSpinner text="Загрузка..." />
+                          ) : (
+                            'Загрузить еще'
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="text-center py-12">
+                    <Calendar className="h-16 w-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                      Мероприятия не найдены
+                    </h3>
+                    <p className="text-gray-500 dark:text-gray-400 mb-4">
+                      Попробуйте изменить фильтры или поисковый запрос
+                    </p>
+                    <button
+                      onClick={clearFilters}
+                      className="inline-flex items-center px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                    >
+                      Очистить фильтры
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ПРАВАЯ КОЛОНКА - ПРОШЕДШИЕ МЕРОПРИЯТИЯ */}
+            <div className="w-80 flex-shrink-0">
+              <PastEventsPanel events={pastEvents} />
+            </div>
+          </div>
+        </div>
+      </main>
     </Layout>
   );
 };
