@@ -268,51 +268,62 @@ const EventsSlideshow = ({ events }: { events: EventWithDetails[] }) => {
 
 // КОМПОНЕНТ ПРОШЕДШИХ МЕРОПРИЯТИЙ
 const PastEventsPanel = ({ events }: { events: EventWithDetails[] }) => {
-  if (events.length === 0) return null;
-
+  console.log('📋 PastEventsPanel rendered with events:', events.length);
+  
   return (
     <div className="bg-white dark:bg-dark-800 rounded-xl shadow-lg p-6">
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
         <Clock className="h-5 w-5 text-gray-500" />
-        Завершённые мероприятия
+        Завершённые мероприятия ({events.length})
       </h3>
       
-      <div className="space-y-3">
-        {events.slice(0, 10).map((event) => (
-          <Link
-            key={event.id}
-            to={`/events/${event.id}`}
-            className="flex gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors group"
-          >
-            {/* Миниатюра */}
-            <div className="w-16 h-12 flex-shrink-0 overflow-hidden rounded-md">
-              <img
-                src={getEventImage(event)}
-                alt={event.title}
-                className="w-full h-full object-cover"
-                loading="lazy"
-              />
-            </div>
-            
-            {/* Информация */}
-            <div className="flex-1 min-w-0">
-              <h4 className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
-                {event.title}
-              </h4>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {formatRussianDate(event.start_at)}
-              </p>
-            </div>
-          </Link>
-        ))}
-      </div>
-      
-      {events.length > 10 && (
-        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-          <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
-            И ещё {events.length - 10} мероприятий...
+      {events.length === 0 ? (
+        <div className="text-center py-8">
+          <Calendar className="h-12 w-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+          <p className="text-gray-500 dark:text-gray-400 text-sm">
+            Пока нет завершённых мероприятий
           </p>
         </div>
+      ) : (
+        <>
+          <div className="space-y-3">
+            {events.slice(0, 10).map((event) => (
+              <Link
+                key={event.id}
+                to={`/events/${event.id}`}
+                className="flex gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors group"
+              >
+                {/* Миниатюра */}
+                <div className="w-16 h-12 flex-shrink-0 overflow-hidden rounded-md">
+                  <img
+                    src={getEventImage(event)}
+                    alt={event.title}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                </div>
+                
+                {/* Информация */}
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+                    {event.title}
+                  </h4>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {formatRussianDate(event.start_at)}
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
+          
+          {events.length > 10 && (
+            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
+                И ещё {events.length - 10} мероприятий...
+              </p>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -538,21 +549,78 @@ const EventsPage = () => {
         setPage(pageNum);
       }
 
+      // 🎯 ИСПРАВЛЕНИЕ: Загружаем активные и прошедшие события только при первой загрузке
+      if (pageNum === 1) {
+        try {
+          // Загружаем активные события для слайдшоу
+          const { data: activeEventsData } = await supabase
+            .from('sh_events')
+            .select(`
+              id, title, short_description, description, start_at, end_at,
+              event_type, payment_type, base_price, currency, cover_image_url,
+              venue_name, language_code, status, age_category
+            `)
+            .eq('status', 'active')
+            .eq('is_public', true)
+            .order('start_at', { ascending: true })
+            .limit(5);
+
+          setActiveEvents(activeEventsData || []);
+          console.log('🎬 Loaded active events for slideshow:', activeEventsData?.length || 0);
+
+          // 🔍 ИСПРАВЛЕНИЕ: Загружаем прошедшие события
+          const { data: pastEventsData } = await supabase
+            .from('sh_events')
+            .select(`
+              id, title, short_description, start_at, end_at, cover_image_url, status,
+              event_type, payment_type, base_price, currency, venue_name
+            `)
+            .eq('is_public', true)
+            .eq('status', 'past')
+            .order('start_at', { ascending: false })
+            .limit(15);
+
+          setPastEvents(pastEventsData || []);
+          console.log('📋 Loaded past events:', pastEventsData?.length || 0);
+
+          // 🆘 FALLBACK: Если нет прошедших со статусом 'past', создаем их из старой логики
+          if (!pastEventsData || pastEventsData.length === 0) {
+            console.log('🔄 No past events found by status, trying date-based fallback...');
+            
+            const now = new Date().toISOString();
+            const { data: dateBasedPastEvents } = await supabase
+              .from('sh_events')
+              .select(`
+                id, title, short_description, start_at, end_at, cover_image_url, status,
+                event_type, payment_type, base_price, currency, venue_name
+              `)
+              .eq('is_public', true)
+              .lt('end_at', now) // События, которые уже закончились
+              .order('start_at', { ascending: false })
+              .limit(15);
+
+            if (dateBasedPastEvents && dateBasedPastEvents.length > 0) {
+              // Помечаем их как прошедшие для отображения
+              const pastEventsWithStatus = dateBasedPastEvents.map(event => ({
+                ...event,
+                status: 'past' as const
+              }));
+              setPastEvents(pastEventsWithStatus);
+              console.log('📋 Fallback: Created past events from date logic:', pastEventsWithStatus.length);
+            }
+          }
+
+        } catch (separateError) {
+          console.error('Error loading active/past events:', separateError);
+        }
+      }
+
     } catch (error) {
       console.error('Error in fetchEvents:', error);
     } finally {
       setLoading(false);
       setLoadingMore(false);
     }
-  };
-
-  // Сепарация событий по статусам
-  const separateEventsByStatus = (allEvents: EventWithDetails[]) => {
-    const active = allEvents.filter(event => event.status === 'active');
-    const past = allEvents.filter(event => event.status === 'past');
-    
-    setActiveEvents(active);
-    setPastEvents(past);
   };
 
   // Фильтрация и сортировка
@@ -606,10 +674,6 @@ const EventsPage = () => {
   useEffect(() => {
     fetchEvents();
   }, [filters.showPast]);
-
-  useEffect(() => {
-    separateEventsByStatus(events);
-  }, [events]);
 
   useEffect(() => {
     filterAndSortEvents();
