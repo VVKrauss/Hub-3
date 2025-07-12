@@ -1,4 +1,4 @@
-// src/pages/ProfilePage.tsx - ПОЛНАЯ ПЕРЕПИСАННАЯ ВЕРСИЯ с комментариями
+// src/pages/ProfilePage.tsx - ИСПРАВЛЕННАЯ ВЕРСИЯ с правильными запросами к БД
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -165,20 +165,21 @@ const ProfilePage = () => {
     fetchProfile();
   }, [currentUser]);
 
-  // Загрузка избранных данных
+  // ИСПРАВЛЕННАЯ загрузка избранных данных
   useEffect(() => {
     const fetchFavorites = async () => {
       if (!currentUser) return;
       
       setLoadingFavorites(true);
       try {
-        // Параллельная загрузка избранных спикеров и событий
+        // Проверяем какие таблицы существуют и используем правильные имена
         const [speakersResult, eventsResult] = await Promise.all([
+          // Пробуем сначала speakers, потом sh_speakers
           supabase
             .from('user_favorite_speakers')
             .select(`
               speaker_id,
-              sh_speakers (
+              speakers (
                 id,
                 name,
                 description,
@@ -186,13 +187,44 @@ const ProfilePage = () => {
                 photos
               )
             `)
-            .eq('user_id', currentUser.id),
+            .eq('user_id', currentUser.id)
+            .then(result => {
+              if (result.error && result.error.message.includes('speakers')) {
+                // Если speakers не работает, пробуем sh_speakers через прямой запрос
+                return supabase
+                  .from('user_favorite_speakers')
+                  .select('speaker_id')
+                  .eq('user_id', currentUser.id)
+                  .then(async (favResult) => {
+                    if (favResult.error) return favResult;
+                    if (!favResult.data || favResult.data.length === 0) {
+                      return { data: [], error: null };
+                    }
+                    
+                    // Получаем спикеров отдельно
+                    const speakerIds = favResult.data.map(item => item.speaker_id);
+                    const speakersData = await supabase
+                      .from('sh_speakers')
+                      .select('id, name, description, field_of_expertise, photos')
+                      .in('id', speakerIds);
+                    
+                    if (speakersData.error) return speakersData;
+                    
+                    return {
+                      data: speakersData.data?.map(speaker => ({ speakers: speaker })) || [],
+                      error: null
+                    };
+                  });
+              }
+              return result;
+            }),
           
+          // Для событий используем events
           supabase
             .from('user_favorite_events')
             .select(`
               event_id,
-              events:event_id (
+              events (
                 id,
                 title,
                 description,
@@ -206,14 +238,20 @@ const ProfilePage = () => {
         ]);
 
         // Обработка спикеров
-        if (speakersResult.error) throw speakersResult.error;
-        const favoriteSpeakers = speakersResult.data?.map(item => item.sh_speakers).filter(Boolean) as FavoriteSpeaker[] || [];
-        setFavoriteSpeakersData(favoriteSpeakers);
+        if (speakersResult.error) {
+          console.error('Error fetching favorite speakers:', speakersResult.error);
+        } else {
+          const favoriteSpeakers = speakersResult.data?.map(item => item.speakers).filter(Boolean) as FavoriteSpeaker[] || [];
+          setFavoriteSpeakersData(favoriteSpeakers);
+        }
 
         // Обработка событий
-        if (eventsResult.error) throw eventsResult.error;
-        const favoriteEvents = eventsResult.data?.map(item => item.events).filter(Boolean) as FavoriteEvent[] || [];
-        setFavoriteEventsData(favoriteEvents);
+        if (eventsResult.error) {
+          console.error('Error fetching favorite events:', eventsResult.error);
+        } else {
+          const favoriteEvents = eventsResult.data?.map(item => item.events).filter(Boolean) as FavoriteEvent[] || [];
+          setFavoriteEventsData(favoriteEvents);
+        }
 
       } catch (error) {
         console.error('Error fetching favorites:', error);
@@ -691,7 +729,7 @@ const ProfilePage = () => {
             </div>
           </div>
 
-          {/* Дополнительная информация или действия */}
+          {/* Дополнительная информация */}
           <div className="mt-8 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
@@ -704,15 +742,13 @@ const ProfilePage = () => {
               </div>
               <div className="flex flex-col sm:flex-row gap-3">
                 <button
-                  onClick={() => {/* TODO: Добавить настройки уведомлений */}}
-                  className="px-4 py-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 border border-blue-300 dark:border-blue-600 rounded-lg transition-colors text-sm font-medium"
+                  className="px-4 py-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 border border-blue-300 dark:border-blue-600 rounded-lg transition-colors text-sm font-medium opacity-50 cursor-not-allowed"
                   disabled
                 >
                   Настройки уведомлений
                 </button>
                 <button
-                  onClick={() => {/* TODO: Добавить экспорт данных */}}
-                  className="px-4 py-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 border border-blue-300 dark:border-blue-600 rounded-lg transition-colors text-sm font-medium"
+                  className="px-4 py-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 border border-blue-300 dark:border-blue-600 rounded-lg transition-colors text-sm font-medium opacity-50 cursor-not-allowed"
                   disabled
                 >
                   Экспорт данных
