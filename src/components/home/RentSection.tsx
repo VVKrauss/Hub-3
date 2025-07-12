@@ -85,21 +85,23 @@ const RentSection = () => {
   return (
     <section className="section bg-gray-50 dark:bg-dark-800">
       <div className="container mx-auto px-4 md:px-6 max-w-7xl">
-        {/* 🎯 СЕТКА с одинаковой высотой контейнеров - изображение слева */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch">
+        {/* 🎯 СЕТКА с точным выравниванием высоты - изображение слева */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           
-          {/* 🎯 Контейнер изображения - кадрируется под высоту текста - СЛЕВА */}
-          <div className="w-full rounded-lg overflow-hidden shadow-lg bg-gray-100 dark:bg-gray-700 order-2 md:order-1">
-            <img 
-              src={getSupabaseImageUrl(data.image)}
-              alt={data.title}
-              className="w-full h-full object-cover object-center transition-transform duration-300 hover:scale-105"
-              loading="lazy"
-            />
+          {/* 🎯 Контейнер изображения - точно под высоту текста - СЛЕВА */}
+          <div className="flex order-2 md:order-1">
+            <div className="w-full rounded-lg overflow-hidden shadow-lg bg-gray-100 dark:bg-gray-700 self-stretch">
+              <img 
+                src={getSupabaseImageUrl(data.image)}
+                alt={data.title}
+                className="w-full h-full object-cover object-center transition-transform duration-300 hover:scale-105"
+                loading="lazy"
+              />
+            </div>
           </div>
           
-          {/* Текстовый контент - естественная высота БЕЗ растягивания - СПРАВА */}
-          <div className="order-1 md:order-2">
+          {/* Текстовый контент - естественная высота - СПРАВА */}
+          <div className="flex flex-col justify-center order-1 md:order-2">
             <h3 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-6">
               {data.title}
             </h3>
